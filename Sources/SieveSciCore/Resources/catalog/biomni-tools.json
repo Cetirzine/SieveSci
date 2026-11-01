@@ -1,0 +1,2961 @@
+{
+"commit": "400c1f366b96a35ca253e13c9b06c5076af41d65",
+"data_lake": {
+"BindingDB_All_202409.tsv": "Measured binding affinities between proteins and small molecules for drug discovery.",
+"DepMap_CRISPRGeneDependency.csv": "Gene dependency probability estimates for cancer cell lines, including all DepMap models.",
+"DepMap_CRISPRGeneEffect.csv": "Genome-wide CRISPR gene effect estimates for cancer cell lines, including all DepMap models.",
+"DepMap_Model.csv": "Metadata describing all cancer models/cell lines which are referenced by a dataset contained within the DepMap portal.",
+"DepMap_OmicsExpressionProteinCodingGenesTPMLogp1.csv": "Gene expression in TPMs for cancer cell lines, including all DepMap models.",
+"DisGeNET.parquet": "Gene-disease associations from multiple sources.",
+"McPAS-TCR.parquet": "T-cell receptor sequences and specificity data from McPAS database.",
+"Virus-Host_PPI_P-HIPSTER_2020.parquet": "Virus-host protein-protein interactions from P-HIPSTER.",
+"affinity_capture-ms.parquet": "Protein-protein interactions detected via affinity capture and mass spectrometry.",
+"affinity_capture-rna.parquet": "Protein-RNA interactions detected by affinity capture.",
+"broad_repurposing_hub_molecule_with_smiles.parquet": "Molecules from Broad Institute's Drug Repurposing Hub with SMILES annotations.",
+"broad_repurposing_hub_phase_moa_target_info.parquet": "Drug phases, mechanisms of action, and target information from Broad Institute.",
+"co-fractionation.parquet": "Protein-protein interactions from co-fractionation experiments.",
+"czi_census_datasets_v4.parquet": "Datasets from the Chan Zuckerberg Initiative's Cell Census.",
+"ddinter_alimentary_tract_metabolism.csv": "Drug-drug interactions for alimentary tract and metabolism drugs from DDInter 2.0 database.",
+"ddinter_antineoplastic.csv": "Drug-drug interactions for antineoplastic and immunomodulating agents from DDInter 2.0 database.",
+"ddinter_antiparasitic.csv": "Drug-drug interactions for antiparasitic products from DDInter 2.0 database.",
+"ddinter_blood_organs.csv": "Drug-drug interactions for blood and blood forming organs drugs from DDInter 2.0 database.",
+"ddinter_dermatological.csv": "Drug-drug interactions for dermatological drugs from DDInter 2.0 database.",
+"ddinter_hormonal.csv": "Drug-drug interactions for systemic hormonal preparations from DDInter 2.0 database.",
+"ddinter_respiratory.csv": "Drug-drug interactions for respiratory system drugs from DDInter 2.0 database.",
+"ddinter_various.csv": "Drug-drug interactions for various drugs from DDInter 2.0 database.",
+"dosage_growth_defect.parquet": "Gene dosage changes affecting growth.",
+"enamine_cloud_library_smiles.pkl": "Compounds from Enamine REAL library with SMILES annotations.",
+"evebio_assay_table.csv": "Assay metadata with one row per assay from EveBio pharmome mapping.",
+"evebio_bundle_table.csv": "Target subfamily bundles used for screening-to-profiling progression.",
+"evebio_compound_table.csv": "Compound metadata with common identifiers from EveBio screening.",
+"evebio_control_table.csv": "Control datapoints for all screening and profiling plates.",
+"evebio_detailed_result_table.csv": "Expanded results on evebio_summary_result_table with curve fit parameters and phase categories.",
+"evebio_observed_points_table.csv": "Raw observed datapoints from all screening and profiling experiments.",
+"evebio_summary_result_table.csv": "Succinct summary of results for each assay-compound combination.",
+"evebio_target_table.csv": "Target metadata with common identifiers from EveBio screening.",
+"gene_info.parquet": "Comprehensive gene information.",
+"genebass_missense_LC_filtered.pkl": "Filtered missense variants from GeneBass.",
+"genebass_pLoF_filtered.pkl": "Predicted loss-of-function variants from GeneBass.",
+"genebass_synonymous_filtered.pkl": "Filtered synonymous variants from GeneBass.",
+"genetic_interaction.parquet": "Genetic interactions between genes.",
+"go-plus.json": "Gene ontology data for functional gene annotations.",
+"gtex_tissue_gene_tpm.parquet": "Gene expression (TPM) across human tissues from GTEx.",
+"gwas_catalog.pkl": "Genome-wide association studies (GWAS) results.",
+"hp.obo": "Official HPO release in obographs format",
+"kg.csv": "Precision medicine knowledge graph with 17,080 diseases and 4+ million relationships across biological scales.",
+"marker_celltype.parquet": "Cell type marker genes for identification.",
+"miRDB_v6.0_results.parquet": "Predicted microRNA targets from miRDB.",
+"miRTarBase_MicroRNA_Target_Sites.parquet": "Binding sites of microRNAs on target genes from miRTarBase.",
+"miRTarBase_microRNA_target_interaction.parquet": "Experimentally validated microRNA-target interactions from miRTarBase.",
+"miRTarBase_microRNA_target_interaction_pubmed_abtract.txt": "PubMed abstracts for microRNA-target interactions in miRTarBase.",
+"mousemine_m1_positional_geneset.parquet": "Positional gene sets from MouseMine.",
+"mousemine_m2_curated_geneset.parquet": "Curated gene sets from MouseMine.",
+"mousemine_m3_regulatory_target_geneset.parquet": "Regulatory target gene sets from MouseMine.",
+"mousemine_m5_ontology_geneset.parquet": "Ontology-based gene sets from MouseMine.",
+"mousemine_m8_celltype_signature_geneset.parquet": "Cell type signature gene sets from MouseMine.",
+"mousemine_mh_hallmark_geneset.parquet": "Hallmark gene sets from MouseMine.",
+"msigdb_human_c1_positional_geneset.parquet": "Human positional gene sets from MSigDB.",
+"msigdb_human_c2_curated_geneset.parquet": "Curated human gene sets from MSigDB.",
+"msigdb_human_c3_regulatory_target_geneset.parquet": "Regulatory target gene sets from MSigDB.",
+"msigdb_human_c3_subset_transcription_factor_targets_from_GTRD.parquet": "Transcription factor targets from GTRD/MSigDB.",
+"msigdb_human_c4_computational_geneset.parquet": "Computationally derived gene sets from MSigDB.",
+"msigdb_human_c5_ontology_geneset.parquet": "Ontology-based gene sets from MSigDB.",
+"msigdb_human_c6_oncogenic_signature_geneset.parquet": "Oncogenic signatures from MSigDB.",
+"msigdb_human_c7_immunologic_signature_geneset.parquet": "Immunologic signatures from MSigDB.",
+"msigdb_human_c8_celltype_signature_geneset.parquet": "Cell type signatures from MSigDB.",
+"msigdb_human_h_hallmark_geneset.parquet": "Hallmark gene sets from MSigDB.",
+"omim.parquet": "Genetic disorders and associated genes from OMIM.",
+"proteinatlas.tsv": "Protein expression data from Human Protein Atlas.",
+"proximity_label-ms.parquet": "Protein interactions via proximity labeling and mass spectrometry.",
+"reconstituted_complex.parquet": "Protein complexes reconstituted in vitro.",
+"sgRNA_KO_SP_human.txt": "sgRNA knockout data for human.",
+"sgRNA_KO_SP_mouse.txt": "sgRNA knockout data for mouse.",
+"synthetic_growth_defect.parquet": "Synthetic growth defects from genetic interactions.",
+"synthetic_lethality.parquet": "Synthetic lethal interactions.",
+"synthetic_rescue.parquet": "Genetic interactions rescuing phenotypes.",
+"two-hybrid.parquet": "Protein-protein interactions detected by yeast two-hybrid assays.",
+"txgnn_name_mapping.pkl": "Name mapping for TXGNN.",
+"txgnn_prediction.pkl": "Prediction data for TXGNN.",
+"variant_table.parquet": "Annotated genetic variants table."
+},
+"license": "Apache-2.0",
+"source": "https://github.com/snap-stanford/Biomni",
+"tools": [
+{
+"description": "Analyzes circular dichroism (CD) spectroscopy data to determine secondary structure and thermal stability.",
+"module": "biomni.tool.biochemistry",
+"name": "analyze_circular_dichroism_spectra",
+"optional": [
+"temperature_data:list or numpy.ndarray",
+"thermal_cd_data:list or numpy.ndarray",
+"output_dir:str"
+],
+"required": [
+"sample_name:str",
+"sample_type:str",
+"wavelength_data:list or numpy.ndarray",
+"cd_signal_data:list or numpy.ndarray"
+]
+},
+{
+"description": "Calculate numeric values for various structural features of an RNA secondary structure.",
+"module": "biomni.tool.biochemistry",
+"name": "analyze_rna_secondary_structure_features",
+"optional": [
+"sequence:str"
+],
+"required": [
+"dot_bracket_structure:str"
+]
+},
+{
+"description": "Analyze protease kinetics data from fluorogenic peptide cleavage assays, fit the data to Michaelis-Menten kinetics, and determine key kinetic parameters.",
+"module": "biomni.tool.biochemistry",
+"name": "analyze_protease_kinetics",
+"optional": [
+"output_prefix:str",
+"output_dir:str"
+],
+"required": [
+"time_points:numpy.ndarray",
+"fluorescence_data:numpy.ndarray",
+"substrate_concentrations:numpy.ndarray",
+"enzyme_concentration:float"
+]
+},
+{
+"description": "Performs in vitro enzyme kinetics assay and analyzes the dose-dependent effects of modulators.",
+"module": "biomni.tool.biochemistry",
+"name": "analyze_enzyme_kinetics_assay",
+"optional": [
+"modulators:dict",
+"time_points:list or numpy.ndarray",
+"output_dir:str"
+],
+"required": [
+"enzyme_name:str",
+"substrate_concentrations:list or numpy.ndarray",
+"enzyme_concentration:float"
+]
+},
+{
+"description": "Analyzes isothermal titration calorimetry (ITC) data to determine binding affinity and thermodynamic parameters.",
+"module": "biomni.tool.biochemistry",
+"name": "analyze_itc_binding_thermodynamics",
+"optional": [
+"itc_data_path:str",
+"itc_data:numpy.ndarray",
+"temperature:float",
+"protein_concentration:float",
+"ligand_concentration:float"
+],
+"required": []
+},
+{
+"description": "Perform multiple sequence alignment and phylogenetic analysis to identify conserved protein regions.",
+"module": "biomni.tool.biochemistry",
+"name": "analyze_protein_conservation",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"protein_sequences:list of str"
+]
+},
+{
+"description": "Analyze cell migration metrics from time-lapse microscopy images.",
+"module": "biomni.tool.bioengineering",
+"name": "analyze_cell_migration_metrics",
+"optional": [
+"pixel_size_um:float",
+"time_interval_min:float",
+"min_track_length:int",
+"output_dir:str"
+],
+"required": [
+"image_sequence_path:str"
+]
+},
+{
+"description": "Simulates CRISPR-Cas9 genome editing process including guide RNA design, delivery, and analysis.",
+"module": "biomni.tool.bioengineering",
+"name": "perform_crispr_cas9_genome_editing",
+"optional": [],
+"required": [
+"guide_rna_sequences:List[str]",
+"target_genomic_loci:str",
+"cell_tissue_type:str"
+]
+},
+{
+"description": "Analyze calcium imaging data to quantify neuronal activity metrics including cell counts, event rates, decay times, and signal-to-noise ratios.",
+"module": "biomni.tool.bioengineering",
+"name": "analyze_calcium_imaging_data",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"image_stack_path:str"
+]
+},
+{
+"description": "Analyzes in vitro drug release kinetics from biomaterial formulations.",
+"module": "biomni.tool.bioengineering",
+"name": "analyze_in_vitro_drug_release_kinetics",
+"optional": [
+"drug_name:str",
+"total_drug_loaded:float",
+"output_dir:str"
+],
+"required": [
+"time_points:List[float] or numpy.ndarray",
+"concentration_data:List[float] or numpy.ndarray"
+]
+},
+{
+"description": "Quantifies morphological properties of myofibers in microscopy images of tissue sections.",
+"module": "biomni.tool.bioengineering",
+"name": "analyze_myofiber_morphology",
+"optional": [
+"nuclei_channel:int",
+"myofiber_channel:int",
+"threshold_method:str",
+"output_dir:str"
+],
+"required": [
+"image_path:str"
+]
+},
+{
+"description": "Model neural activity trajectories and decode behavioral variables.",
+"module": "biomni.tool.bioengineering",
+"name": "decode_behavior_from_neural_trajectories",
+"optional": [
+"n_components:int",
+"output_dir:str"
+],
+"required": [
+"neural_data:numpy.ndarray",
+"behavioral_data:numpy.ndarray"
+]
+},
+{
+"description": "Simulate a whole-cell model represented as a system of ordinary differential equations (ODEs).",
+"module": "biomni.tool.bioengineering",
+"name": "simulate_whole_cell_ode_model",
+"optional": [
+"ode_function:callable",
+"time_span:tuple",
+"time_points:int",
+"method:str"
+],
+"required": [
+"initial_conditions:dict or array-like",
+"parameters:dict"
+]
+},
+{
+"description": "Split a 4D NIfTI file into separate modality files for nnUNet processing. Handles BRATS dataset format with FLAIR, T1w, t1gd, and T2w modalities.",
+"module": "biomni.tool.bioimaging",
+"name": "split_modalities",
+"optional": [
+"case_name:str"
+],
+"required": [
+"input_file:str",
+"output_dir:str"
+]
+},
+{
+"description": "Prepare input data for nnUNet by handling both 4D and pre-split modality files. Automatically detects file format and prepares data accordingly.",
+"module": "biomni.tool.bioimaging",
+"name": "prepare_input_for_nnunet",
+"optional": [
+"case_name:str"
+],
+"required": [
+"input_path:str",
+"output_dir:str"
+]
+},
+{
+"description": "Segment images using nnUNet with proper environment setup. Supports brain tumor segmentation and other medical image segmentation tasks.",
+"module": "biomni.tool.bioimaging",
+"name": "segment_with_nn_unet",
+"optional": [
+"model_type:str",
+"folds:list",
+"use_tta:bool",
+"num_threads:int",
+"mixed_precision:bool",
+"verbose:bool",
+"auto_prepare_input:bool",
+"results_folder:str"
+],
+"required": [
+"image_path:str",
+"output_dir:str",
+"task_id:str"
+]
+},
+{
+"description": "Create and save visualization of segmentation results using nilearn. Generates overlay plots and multiple anatomical views.",
+"module": "biomni.tool.bioimaging",
+"name": "create_segmentation_visualization",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"original_mri:str",
+"segmentation:str"
+]
+},
+{
+"description": "Perform rigid image registration between two medical images using SimpleITK. Rigid registration handles translation and rotation only, preserving shape and size. Includes preprocessing, similarity metrics calculation, and visualization generation.",
+"module": "biomni.tool.bioimaging",
+"name": "quick_rigid_registration",
+"optional": [
+"metric:str",
+"optimizer:str",
+"preprocess:bool",
+"create_visualizations:bool",
+"learning_rate:float",
+"number_of_iterations:int",
+"gradient_convergence_tolerance:float"
+],
+"required": [
+"fixed_image_path:str",
+"moving_image_path:str",
+"output_dir:str"
+]
+},
+{
+"description": "Perform affine image registration between two medical images using SimpleITK. Affine registration handles translation, rotation, scaling, and shearing. More flexible than rigid registration but still preserves parallel lines.",
+"module": "biomni.tool.bioimaging",
+"name": "quick_affine_registration",
+"optional": [
+"metric:str",
+"optimizer:str",
+"preprocess:bool",
+"create_visualizations:bool",
+"learning_rate:float",
+"number_of_iterations:int",
+"gradient_convergence_tolerance:float"
+],
+"required": [
+"fixed_image_path:str",
+"moving_image_path:str",
+"output_dir:str"
+]
+},
+{
+"description": "Perform deformable (B-spline) image registration between two medical images using SimpleITK. Deformable registration allows for local non-linear transformations, handling complex deformations. Most flexible but computationally intensive registration method.",
+"module": "biomni.tool.bioimaging",
+"name": "quick_deformable_registration",
+"optional": [
+"metric:str",
+"optimizer:str",
+"preprocess:bool",
+"create_visualizations:bool",
+"learning_rate:float",
+"number_of_iterations:int",
+"gradient_convergence_tolerance:float",
+"number_of_control_points:int"
+],
+"required": [
+"fixed_image_path:str",
+"moving_image_path:str",
+"output_dir:str"
+]
+},
+{
+"description": "Perform batch registration of multiple images to a single reference image. Automatically processes all medical image files in a directory and registers them to the fixed reference. Supports rigid, affine, or deformable registration for all images.",
+"module": "biomni.tool.bioimaging",
+"name": "batch_register_images",
+"optional": [
+"transform_type:str",
+"metric:str",
+"optimizer:str",
+"preprocess:bool",
+"create_visualizations:bool",
+"learning_rate:float",
+"number_of_iterations:int",
+"gradient_convergence_tolerance:float"
+],
+"required": [
+"fixed_image_path:str",
+"moving_images_dir:str",
+"output_dir:str"
+]
+},
+{
+"description": "Calculate similarity metrics between two medical images. Supports mutual information, mean squared error, correlation, and normalized cross correlation.",
+"module": "biomni.tool.bioimaging",
+"name": "calculate_similarity_metrics",
+"optional": [],
+"required": [
+"image1_path:str",
+"image2_path:str"
+]
+},
+{
+"description": "Create visualization plots for registration results. Generates comparison plots, difference images, overlays, and metric charts.",
+"module": "biomni.tool.bioimaging",
+"name": "create_registration_visualization",
+"optional": [
+"prefix:str"
+],
+"required": [
+"fixed_image_path:str",
+"moving_image_path:str",
+"registered_image_path:str",
+"output_dir:str"
+]
+},
+{
+"description": "Predicts intrinsically disordered regions (IDRs) in a protein sequence using IUPred2A.",
+"module": "biomni.tool.biophysics",
+"name": "predict_protein_disorder_regions",
+"optional": [
+"threshold:float",
+"output_file:str"
+],
+"required": [
+"protein_sequence:str"
+]
+},
+{
+"description": "Quantifies cell morphology and cytoskeletal organization from fluorescence microscopy images.",
+"module": "biomni.tool.biophysics",
+"name": "analyze_cell_morphology_and_cytoskeleton",
+"optional": [
+"output_dir:str",
+"threshold_method:str"
+],
+"required": [
+"image_path:str"
+]
+},
+{
+"description": "Quantify tissue deformation and flow dynamics from microscopy image sequence.",
+"module": "biomni.tool.biophysics",
+"name": "analyze_tissue_deformation_flow",
+"optional": [
+"output_dir:str",
+"pixel_scale:float"
+],
+"required": [
+"image_sequence:list or numpy.ndarray"
+]
+},
+{
+"description": "Analyze DNA Damage Response (DDR) network alterations and dependencies in cancer samples.",
+"module": "biomni.tool.cancer_biology",
+"name": "analyze_ddr_network_in_cancer",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"expression_data_path:str",
+"mutation_data_path:str"
+]
+},
+{
+"description": "Analyze flow cytometry data to quantify senescent and apoptotic cell populations.",
+"module": "biomni.tool.cancer_biology",
+"name": "analyze_cell_senescence_and_apoptosis",
+"optional": [],
+"required": [
+"fcs_file_path:str"
+]
+},
+{
+"description": "Detects and annotates somatic mutations in tumor samples compared to matched normal samples using GATK Mutect2 for variant calling, GATK FilterMutectCalls for filtering, and SnpEff for functional annotation.",
+"module": "biomni.tool.cancer_biology",
+"name": "detect_and_annotate_somatic_mutations",
+"optional": [
+"snpeff_database:str"
+],
+"required": [
+"tumor_bam:str",
+"normal_bam:str",
+"reference_genome:str",
+"output_prefix:str"
+]
+},
+{
+"description": "Detects and characterizes structural variations (SVs) in genomic sequencing data using LUMPY for SV detection followed by annotation with COSMIC and/or ClinVar databases.",
+"module": "biomni.tool.cancer_biology",
+"name": "detect_and_characterize_structural_variations",
+"optional": [
+"cosmic_db_path:str",
+"clinvar_db_path:str"
+],
+"required": [
+"bam_file_path:str",
+"reference_genome_path:str",
+"output_dir:str"
+]
+},
+{
+"description": "Performs Non-negative Matrix Factorization (NMF) on gene expression data to extract metagenes and their associated sample weights for tumor subtype identification.",
+"module": "biomni.tool.cancer_biology",
+"name": "perform_gene_expression_nmf_analysis",
+"optional": [
+"n_components:int",
+"normalize:bool",
+"output_dir:str",
+"random_state:int"
+],
+"required": [
+"expression_data_path:str"
+]
+},
+{
+"description": "CNVkit-based copy number workflow performing CNV segmentation, purity & ploidy approximation, simplified HRD-style metrics, and focal amplification/deletion detection in selected genes.",
+"module": "biomni.tool.cancer_biology",
+"name": "analyze_copy_number_purity_ploidy_and_focal_events",
+"optional": [
+"normal_bam:str",
+"output_dir:str",
+"targets_bed:str",
+"antitargets_bed:str",
+"gene_bed:str",
+"focal_genes:list[str]",
+"log2_amp_threshold:float",
+"log2_del_threshold:float"
+],
+"required": [
+"tumor_bam:str",
+"reference_genome:str"
+]
+},
+{
+"description": "Quantify the percentage of cells in each cell cycle phase using Calcofluor white stained microscopy images.",
+"module": "biomni.tool.cell_biology",
+"name": "quantify_cell_cycle_phases_from_microscopy",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"image_paths:List[str]"
+]
+},
+{
+"description": "Quantify cell motility features from time-lapse microscopy images and cluster cells based on motility patterns.",
+"module": "biomni.tool.cell_biology",
+"name": "quantify_and_cluster_cell_motility",
+"optional": [
+"output_dir:str",
+"num_clusters:int"
+],
+"required": [
+"image_sequence_path:str"
+]
+},
+{
+"description": "Performs Fluorescence-Activated Cell Sorting (FACS) to enrich cell populations based on fluorescence characteristics.",
+"module": "biomni.tool.cell_biology",
+"name": "perform_facs_cell_sorting",
+"optional": [
+"threshold_min:float",
+"threshold_max:float",
+"output_file:str"
+],
+"required": [
+"cell_suspension_data:str",
+"fluorescence_parameter:str"
+]
+},
+{
+"description": "Analyze flow cytometry data to identify and quantify specific cell populations based on surface markers.",
+"module": "biomni.tool.cell_biology",
+"name": "analyze_flow_cytometry_immunophenotyping",
+"optional": [
+"compensation_matrix:numpy.ndarray",
+"output_dir:str"
+],
+"required": [
+"fcs_file_path:str",
+"gating_strategy:dict"
+]
+},
+{
+"description": "Quantifies metrics of mitochondrial morphology and membrane potential from fluorescence microscopy images.",
+"module": "biomni.tool.cell_biology",
+"name": "analyze_mitochondrial_morphology_and_potential",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"morphology_image_path:str",
+"potential_image_path:str"
+]
+},
+{
+"description": "Query the UniProt REST API using either natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_uniprot",
+"optional": [
+"endpoint:str",
+"max_results:int"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the AlphaFold Database API for protein structure predictions or metadata; optionally download structures.",
+"module": "biomni.tool.database",
+"name": "query_alphafold",
+"optional": [
+"endpoint:str",
+"residue_range:str",
+"download:bool",
+"output_dir:str",
+"file_format:str",
+"model_version:str",
+"model_number:int"
+],
+"required": [
+"uniprot_id:str"
+]
+},
+{
+"description": "Query the InterPro REST API using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_interpro",
+"optional": [
+"endpoint:str",
+"max_results:int"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the RCSB PDB database using natural language or a direct structured query.",
+"module": "biomni.tool.database",
+"name": "query_pdb",
+"optional": [
+"query:dict",
+"max_results:int"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Retrieve detailed data and/or download files for PDB identifiers.",
+"module": "biomni.tool.database",
+"name": "query_pdb_identifiers",
+"optional": [
+"return_type:str",
+"download:bool",
+"attributes:List[str]"
+],
+"required": [
+"identifiers:List[str]"
+]
+},
+{
+"description": "Take a natural language prompt and convert it to a structured KEGG API query.",
+"module": "biomni.tool.database",
+"name": "query_kegg",
+"optional": [
+"endpoint:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the STRING protein interaction database using natural language or direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_stringdb",
+"optional": [
+"endpoint:str",
+"download_image:bool",
+"output_dir:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the IUCN Red List API using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_iucn",
+"optional": [
+"prompt:str",
+"endpoint:str",
+"verbose:bool"
+],
+"required": [
+"token:str"
+]
+},
+{
+"description": "Query the Paleobiology Database (PBDB) API using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_paleobiology",
+"optional": [
+"endpoint:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the JASPAR REST API for transcription factor binding profiles.",
+"module": "biomni.tool.database",
+"name": "query_jaspar",
+"optional": [
+"endpoint:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the World Register of Marine Species (WoRMS) REST API using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_worms",
+"optional": [
+"endpoint:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the cBioPortal REST API using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_cbioportal",
+"optional": [
+"endpoint:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Convert a natural language prompt into a structured ClinVar search query and run it.",
+"module": "biomni.tool.database",
+"name": "query_clinvar",
+"optional": [
+"search_term:str",
+"max_results:int"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the NCBI GEO database (GDS/GEOPROFILES) using natural language or direct search term.",
+"module": "biomni.tool.database",
+"name": "query_geo",
+"optional": [
+"search_term:str",
+"max_results:int"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the NCBI dbSNP database using natural language or direct search term.",
+"module": "biomni.tool.database",
+"name": "query_dbsnp",
+"optional": [
+"search_term:str",
+"max_results:int"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the UCSC Genome Browser API using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_ucsc",
+"optional": [
+"endpoint:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the Ensembl REST API using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_ensembl",
+"optional": [
+"endpoint:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the OpenTargets Platform API using natural language or a direct GraphQL query.",
+"module": "biomni.tool.database",
+"name": "query_opentarget",
+"optional": [
+"query:str",
+"variables:dict",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the Monarch Initiative API using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_monarch",
+"optional": [
+"endpoint:str",
+"max_results:int",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the OpenFDA API using natural language or direct parameters.",
+"module": "biomni.tool.database",
+"name": "query_openfda",
+"optional": [
+"endpoint:str",
+"max_results:int",
+"verbose:bool",
+"search_params:dict",
+"sort_params:dict",
+"count_params:str",
+"skip_results:int"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the GWAS Catalog API using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_gwas_catalog",
+"optional": [
+"endpoint:str",
+"max_results:int"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query gnomAD for variants in a gene using natural language or direct gene symbol.",
+"module": "biomni.tool.database",
+"name": "query_gnomad",
+"optional": [
+"gene_symbol:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Identify a DNA or protein sequence using NCBI BLAST.",
+"module": "biomni.tool.database",
+"name": "blast_sequence",
+"optional": [],
+"required": [
+"sequence:str",
+"database:str",
+"program:str"
+]
+},
+{
+"description": "Query the Reactome database using natural language or a direct endpoint; optionally download pathway diagrams.",
+"module": "biomni.tool.database",
+"name": "query_reactome",
+"optional": [
+"endpoint:str",
+"download:bool",
+"output_dir:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the RegulomeDB database using natural language or direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_regulomedb",
+"optional": [
+"endpoint:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the PRIDE proteomics database using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_pride",
+"optional": [
+"endpoint:str",
+"max_results:int"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the Guide to PHARMACOLOGY (GtoPdb) database using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_gtopdb",
+"optional": [
+"endpoint:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the ReMap database for regulatory elements and transcription factor binding.",
+"module": "biomni.tool.database",
+"name": "query_remap",
+"optional": [
+"endpoint:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the Mouse Phenome Database (MPD) using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_mpd",
+"optional": [
+"endpoint:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the Electron Microscopy Data Bank (EMDB) using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_emdb",
+"optional": [
+"endpoint:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query Synapse REST API for biomedical datasets/files using natural language or structured search parameters. Supports optional authentication via SYNAPSE_AUTH_TOKEN.",
+"module": "biomni.tool.database",
+"name": "query_synapse",
+"optional": [
+"query_term:str|list[str]",
+"return_fields:list[str]",
+"max_results:int",
+"query_type:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the PubChem PUG-REST API using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_pubchem",
+"optional": [
+"endpoint:str",
+"max_results:int",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the ChEMBL REST API via natural language, direct endpoint, or identifiers (chembl_id, smiles, molecule_name).",
+"module": "biomni.tool.database",
+"name": "query_chembl",
+"optional": [
+"endpoint:str",
+"chembl_id:str",
+"smiles:str",
+"molecule_name:str",
+"max_results:int",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the UniChem 2.0 REST API using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_unichem",
+"optional": [
+"endpoint:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the ClinicalTrials.gov API v2 using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_clinicaltrials",
+"optional": [
+"endpoint:str",
+"max_results:int",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the DailyMed RESTful API using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_dailymed",
+"optional": [
+"endpoint:str",
+"format:str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the QuickGO API using natural language or a direct endpoint.",
+"module": "biomni.tool.database",
+"name": "query_quickgo",
+"optional": [
+"endpoint:str",
+"max_results:int",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Query the ENCODE Portal API to locate functional genomics data (experiments, files, biosamples, datasets).",
+"module": "biomni.tool.database",
+"name": "query_encode",
+"optional": [
+"endpoint:str",
+"max_results:int|str",
+"verbose:bool"
+],
+"required": [
+"prompt:str"
+]
+},
+{
+"description": "Given genomic coordinates, retrieve intersecting ENCODE SCREEN cCREs.",
+"module": "biomni.tool.database",
+"name": "region_to_ccre_screen",
+"optional": [
+"assembly:str"
+],
+"required": [
+"coord_chrom:str",
+"coord_start:int",
+"coord_end:int"
+]
+},
+{
+"description": "Given a cCRE accession, return k nearest genes sorted by distance.",
+"module": "biomni.tool.database",
+"name": "get_genes_near_ccre",
+"optional": [
+"k:int"
+],
+"required": [
+"accession:str",
+"assembly:str",
+"chromosome:str"
+]
+},
+{
+"description": "Perform liftover of genomic coordinates between hg19 and hg38 formats with detailed intermediate steps.",
+"module": "biomni.tool.genetics",
+"name": "liftover_coordinates",
+"optional": [],
+"required": [
+"chromosome:str",
+"position:int",
+"input_format:str",
+"output_format:str",
+"data_path:str"
+]
+},
+{
+"description": "Performs Bayesian fine-mapping from GWAS summary statistics using deep variational inference to compute posterior inclusion probabilities and credible sets for putative causal variants.",
+"module": "biomni.tool.genetics",
+"name": "bayesian_finemapping_with_deep_vi",
+"optional": [
+"n_iterations:int",
+"learning_rate:float",
+"hidden_dim:int",
+"credible_threshold:float"
+],
+"required": [
+"gwas_summary_path:str",
+"ld_matrix:numpy.ndarray"
+]
+},
+{
+"description": "Analyzes and categorizes mutations induced by Cas9 at target sites.",
+"module": "biomni.tool.genetics",
+"name": "analyze_cas9_mutation_outcomes",
+"optional": [
+"cell_line_info:dict",
+"output_prefix:str"
+],
+"required": [
+"reference_sequences:dict",
+"edited_sequences:dict"
+]
+},
+{
+"description": "Analyzes CRISPR-Cas9 genome editing results by comparing original and edited sequences.",
+"module": "biomni.tool.genetics",
+"name": "analyze_crispr_genome_editing",
+"optional": [
+"repair_template:str"
+],
+"required": [
+"original_sequence:str",
+"edited_sequence:str",
+"guide_rna:str"
+]
+},
+{
+"description": "Simulate DNA sequences with specified demographic and coalescent histories using msprime.",
+"module": "biomni.tool.genetics",
+"name": "simulate_demographic_history",
+"optional": [
+"num_samples:int",
+"sequence_length:int",
+"recombination_rate:float",
+"mutation_rate:float",
+"demographic_model:str",
+"demographic_params:dict",
+"coalescent_model:str",
+"beta_coalescent_param:float",
+"random_seed:int",
+"output_file:str"
+],
+"required": []
+},
+{
+"description": "Identifies binding sites for a specific transcription factor in a genomic sequence.",
+"module": "biomni.tool.genetics",
+"name": "identify_transcription_factor_binding_sites",
+"optional": [
+"threshold:float",
+"output_file:str"
+],
+"required": [
+"sequence:str",
+"tf_name:str"
+]
+},
+{
+"description": "Fit a linear mixed model for genomic prediction using genotype and phenotype data.",
+"module": "biomni.tool.genetics",
+"name": "fit_genomic_prediction_model",
+"optional": [
+"fixed_effects:numpy.ndarray",
+"model_type:str",
+"output_file:str"
+],
+"required": [
+"genotypes:numpy.ndarray",
+"phenotypes:numpy.ndarray"
+]
+},
+{
+"description": "Performs PCR amplification of a target transgene and visualizes results using agarose gel electrophoresis.",
+"module": "biomni.tool.genetics",
+"name": "perform_pcr_and_gel_electrophoresis",
+"optional": [
+"forward_primer:str",
+"reverse_primer:str",
+"target_region:tuple",
+"annealing_temp:float",
+"extension_time:int",
+"cycles:int",
+"gel_percentage:float",
+"output_prefix:str"
+],
+"required": [
+"genomic_dna:str"
+]
+},
+{
+"description": "Perform phylogenetic analysis on a set of protein sequences. This function aligns sequences, constructs a phylogenetic tree, and visualizes evolutionary relationships.",
+"module": "biomni.tool.genetics",
+"name": "analyze_protein_phylogeny",
+"optional": [
+"output_dir:str",
+"alignment_method:str",
+"tree_method:str"
+],
+"required": [
+"fasta_sequences:str"
+]
+},
+{
+"description": "Annotate cell types based on gene markers and transferred labels using LLM. After leiden clustering, annotate clusters using differentially expressed genes and optionally incorporate transferred labels from reference datasets.",
+"module": "biomni.tool.genomics",
+"name": "annotate_celltype_scRNA",
+"optional": [
+"cluster:str",
+"llm:str",
+"composition:pd.DataFrame"
+],
+"required": [
+"adata_filename:str",
+"data_dir:str",
+"data_info:str",
+"data_lake_path:str"
+]
+},
+{
+"description": "Perform cell type annotation of single-cell RNA-seq data using Panhuman Azimuth Neural Network. This function implements the Panhuman Azimuth workflow for cell type annotation using the panhumanpy package, providing hierarchical cell type labels for tissues across the human body. ",
+"module": "biomni.tool.genomics",
+"name": "annotate_celltype_with_panhumanpy",
+"optional": [
+"feature_names_col:str",
+"refine:bool",
+"umap:bool",
+"output_dir:str"
+],
+"required": [
+"adata_path:str"
+]
+},
+{
+"description": "Create scVI and scANVI embeddings for single-cell RNA-seq data, saving the results to an AnnData object.",
+"module": "biomni.tool.genomics",
+"name": "create_scvi_embeddings_scRNA",
+"optional": [],
+"required": [
+"adata_filename:str",
+"batch_key:str",
+"label_key:str",
+"data_dir:str"
+]
+},
+{
+"description": "Performs batch integration on single-cell RNA-seq data using Harmony and saves the integrated embeddings.",
+"module": "biomni.tool.genomics",
+"name": "create_harmony_embeddings_scRNA",
+"optional": [],
+"required": [
+"adata_filename:str",
+"batch_key:str",
+"data_dir:str"
+]
+},
+{
+"description": "Generate UCE embeddings for single-cell RNA-seq data and map them to a reference dataset for cell type annotation.",
+"module": "biomni.tool.genomics",
+"name": "get_uce_embeddings_scRNA",
+"optional": [
+"DATA_ROOT:str",
+"custom_args:List[str]"
+],
+"required": [
+"adata_filename:str",
+"data_dir:str"
+]
+},
+{
+"description": "Map cell embeddings from the input dataset to the Integrated Megascale Atlas reference dataset using UCE embeddings.",
+"module": "biomni.tool.genomics",
+"name": "map_to_ima_interpret_scRNA",
+"optional": [
+"custom_args:dict"
+],
+"required": [
+"adata_filename:str",
+"data_dir:str"
+]
+},
+{
+"description": "Given a gene name, fetch RNA-seq expression data showing the top K tissues with highest transcripts-per-million (TPM) values.",
+"module": "biomni.tool.genomics",
+"name": "get_rna_seq_archs4",
+"optional": [
+"K:int"
+],
+"required": [
+"gene_name:str"
+]
+},
+{
+"description": "Returns a list of supported databases for gene set enrichment analysis.",
+"module": "biomni.tool.genomics",
+"name": "get_gene_set_enrichment_analysis_supported_database_list",
+"optional": [],
+"required": []
+},
+{
+"description": "Perform enrichment analysis for a list of genes, with optional background gene set and plotting functionality.",
+"module": "biomni.tool.genomics",
+"name": "gene_set_enrichment_analysis",
+"optional": [
+"top_k:int",
+"database:str",
+"background_list:list",
+"plot:bool"
+],
+"required": [
+"genes:list"
+]
+},
+{
+"description": "Analyze chromatin interactions from Hi-C data to identify enhancer-promoter interactions and TADs.",
+"module": "biomni.tool.genomics",
+"name": "analyze_chromatin_interactions",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"hic_file_path:str",
+"regulatory_elements_bed:str"
+]
+},
+{
+"description": "Perform comparative genomics and haplotype analysis on multiple genome samples. Aligns genome samples to a reference, identifies variants, analyzes shared and unique genomic regions, and determines haplotype structure.",
+"module": "biomni.tool.genomics",
+"name": "analyze_comparative_genomics_and_haplotypes",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"sample_fasta_files:List[str]",
+"reference_genome_path:str"
+]
+},
+{
+"description": "Perform ChIP-seq peak calling using MACS2 to identify genomic regions with significant binding.",
+"module": "biomni.tool.genomics",
+"name": "perform_chipseq_peak_calling_with_macs2",
+"optional": [
+"output_name:str",
+"genome_size:str",
+"q_value:float"
+],
+"required": [
+"chip_seq_file:str",
+"control_file:str"
+]
+},
+{
+"description": "Find DNA sequence motifs enriched in genomic regions using the HOMER motif discovery software.",
+"module": "biomni.tool.genomics",
+"name": "find_enriched_motifs_with_homer",
+"optional": [
+"genome:str",
+"background_file:str",
+"motif_length:str",
+"output_dir:str",
+"num_motifs:int",
+"threads:int"
+],
+"required": [
+"peak_file:str"
+]
+},
+{
+"description": "Analyze overlaps between two or more sets of genomic regions.",
+"module": "biomni.tool.genomics",
+"name": "analyze_genomic_region_overlap",
+"optional": [
+"output_prefix:str"
+],
+"required": [
+"region_sets:list"
+]
+},
+{
+"description": "Transfer cell type labels from an annotated reference scRNA-seq dataset to an unannotated query dataset using popV. Loads both AnnData .h5ad files, prepares count layers for scVI, processes the query against the reference, and runs selected annotation methods (default: SCANVI_POPV). Saves predictions to 'output_folder/popv_output/predictions.csv'. This function allows you to use different annotaiton methods i.e. CELLTYPIST, KNN_BBKNN, KNN_HARMONY, KNN_SCANORAMA, KNN_SCVI, ONCLASS, Random_Forest, SCANVI_POPV, Support_Vector, XGboost. Based on you transfer task you can select the multiple best annotation methods. Beware each annotation method adds computational requirements for running the tool. By default it uses SCANVI_POPV method.",
+"module": "biomni.tool.genomics",
+"name": "unsupervised_celltype_transfer_between_scRNA_datasets",
+"optional": [
+"query_batch_key:str",
+"ref_batch_key:str",
+"CELLTYPIST:bool",
+"KNN_BBKNN:bool",
+"KNN_HARMONY:bool",
+"KNN_SCANORAMA:bool",
+"KNN_SCVI:bool",
+"ONCLASS:bool",
+"Random_Forest:bool",
+"SCANVI_POPV:bool",
+"Support_Vector:bool",
+"XGboost:bool",
+"n_jobs:int",
+"output_folder:str",
+"n_samples_per_label:int"
+],
+"required": [
+"path_to_annotated_h5ad:str",
+"path_to_not_annotated_h5ad:str",
+"ref_labels_key:str"
+]
+},
+{
+"description": "Generate State embeddings for single-cell RNA-seq data using the SE-600M model. This function downloads the SE-600M model from Hugging Face, installs required dependencies (git-lfs, uv, arc-state), and generates embeddings for the input AnnData object. The SE-600M model is a state-of-the-art embedding model for single-cell data that can capture complex biological patterns and cell states. Features include real-time streaming output, automatic retry with reduced batch size on failure, GPU detection and warnings, and input validation.",
+"module": "biomni.tool.genomics",
+"name": "generate_embeddings_with_state",
+"optional": [
+"output_filename:str",
+"checkpoint:str",
+"embed_key:str",
+"protein_embeddings:str",
+"batch_size:int"
+],
+"required": [
+"adata_filename:str",
+"data_dir:str",
+"model_folder:str"
+]
+},
+{
+"description": "Convert ENSEMBL gene IDs between different species using BioMart homology mapping. This function converts a list of ENSEMBL gene IDs from one species to their homologous counterparts in another species using the Ensembl BioMart database. The conversion is based on one-to-one ortholog mappings between species.",
+"module": "biomni.tool.genomics",
+"name": "interspecies_gene_conversion",
+"optional": [],
+"required": [
+"gene_list:list[str]",
+"source_species:str",
+"target_species:str"
+]
+},
+{
+"description": "Generate average protein embeddings for a list of Ensembl gene IDs using ESM (Evolutionary Scale Modeling) protein language models. This function fetches all protein isoform sequences for each gene, computes embeddings for each isoform using the specified ESM model and layer, then averages the embeddings across all isoforms to create a single representative embedding per gene. The embeddings are saved as PyTorch tensors for future use. Memory-friendly implementation with rolling averages, small batch processing, and automatic memory management. Automatically handles GPU/CPU device selection and includes error recovery for out-of-memory situations by falling back to single-sequence processing.",
+"module": "biomni.tool.genomics",
+"name": "generate_gene_embeddings_with_ESM_models",
+"optional": [
+"model_name:str",
+"layer:int",
+"save_path:str",
+"batch_size:int",
+"max_sequence_length:int"
+],
+"required": [
+"ensembl_gene_ids:List[str]"
+]
+},
+{
+"description": "Generate Transcriptformer embeddings for single-cell RNA-seq data. This function downloads model checkpoints, prepares the AnnData object with required fields (ensembl_id, raw counts, assay metadata), and runs inference to generate cell or gene embeddings. Transcriptformer is a transformer-based model that can learn rich representations of single-cell gene expression data. The function automatically handles Ensembl ID pattern detection, model downloading, data preprocessing, and creates missing assay metadata columns with 'unknown' values if needed.",
+"module": "biomni.tool.genomics",
+"name": "generate_transcriptformer_embeddings",
+"optional": [
+"output_filename:str",
+"model_type:str",
+"checkpoint_path:str",
+"batch_size:int",
+"precision:str",
+"clip_counts:int",
+"embedding_layer_index:int",
+"num_gpus:int",
+"n_data_workers:int",
+"gene_col_name:str",
+"pretrained_embedding:str",
+"filter_to_vocabs:bool",
+"use_raw:str",
+"emb_type:str",
+"remove_duplicate_genes:bool",
+"oom_dataloader:bool"
+],
+"required": [
+"adata_filename:str",
+"data_dir:str"
+]
+},
+{
+"description": "Scan a protein sequence for canonical N-glycosylation sequons (N-X-[S/T], X\u2260P). Returns positions and motifs.",
+"module": "biomni.tool.glycoengineering",
+"name": "find_n_glycosylation_motifs",
+"optional": [
+"allow_overlap:bool"
+],
+"required": [
+"sequence:str"
+]
+},
+{
+"description": "Heuristic O-glycosite hotspot prediction using local S/T density (lightweight baseline; see NetOGlyc 4.0 for SOTA).",
+"module": "biomni.tool.glycoengineering",
+"name": "predict_o_glycosylation_hotspots",
+"optional": [
+"window:int",
+"min_st_fraction:float",
+"disallow_proline_next:bool"
+],
+"required": [
+"sequence:str"
+]
+},
+{
+"description": "Curated list of external glycoengineering tools and resources (links and notes) as referenced in issue #198.",
+"module": "biomni.tool.glycoengineering",
+"name": "list_glycoengineering_resources",
+"optional": [],
+"required": []
+},
+{
+"description": "Perform ATAC-seq peak calling and differential accessibility analysis using MACS2.",
+"module": "biomni.tool.immunology",
+"name": "analyze_atac_seq_differential_accessibility",
+"optional": [
+"output_dir:str",
+"genome_size:str",
+"q_value:float",
+"name_prefix:str"
+],
+"required": [
+"treatment_bam:str",
+"control_bam:str"
+]
+},
+{
+"description": "Analyzes bacterial growth curve data to determine growth parameters such as doubling time, growth rate, and lag phase.",
+"module": "biomni.tool.immunology",
+"name": "analyze_bacterial_growth_curve",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"time_points:List or numpy.ndarray",
+"od_values:List or numpy.ndarray",
+"strain_name:str"
+]
+},
+{
+"description": "Simulates the isolation and purification of immune cells from tissue samples.",
+"module": "biomni.tool.immunology",
+"name": "isolate_purify_immune_cells",
+"optional": [
+"enzyme_type:str",
+"macs_antibody:str",
+"digestion_time_min:int"
+],
+"required": [
+"tissue_type:str",
+"target_cell_type:str"
+]
+},
+{
+"description": "Estimate cell cycle phase durations using dual-nucleoside pulse labeling data and mathematical modeling.",
+"module": "biomni.tool.immunology",
+"name": "estimate_cell_cycle_phase_durations",
+"optional": [],
+"required": [
+"flow_cytometry_data:dict",
+"initial_estimates:dict"
+]
+},
+{
+"description": "Track immune cells under flow conditions and classify their behaviors.",
+"module": "biomni.tool.immunology",
+"name": "track_immune_cells_under_flow",
+"optional": [
+"output_dir:str",
+"pixel_size_um:float",
+"time_interval_sec:float",
+"flow_direction:str"
+],
+"required": [
+"image_sequence_path:str"
+]
+},
+{
+"description": "Analyze CFSE-labeled cell samples to quantify cell division and proliferation.",
+"module": "biomni.tool.immunology",
+"name": "analyze_cfse_cell_proliferation",
+"optional": [
+"cfse_channel:str",
+"lymphocyte_gate:tuple or None"
+],
+"required": [
+"fcs_file_path:str"
+]
+},
+{
+"description": "Analyze cytokine production (IFN-\u03b3, IL-17) in CD4+ T cells after antigen stimulation.",
+"module": "biomni.tool.immunology",
+"name": "analyze_cytokine_production_in_cd4_tcells",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"fcs_files_dict:dict"
+]
+},
+{
+"description": "Analyze ELISA data to quantify EBV antibody titers in plasma/serum samples.",
+"module": "biomni.tool.immunology",
+"name": "analyze_ebv_antibody_titers",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"raw_od_data:dict",
+"standard_curve_data:dict",
+"sample_metadata:dict"
+]
+},
+{
+"description": "Analyzes histological images of CNS lesions to quantify immune cell infiltration, demyelination, and tissue damage.",
+"module": "biomni.tool.immunology",
+"name": "analyze_cns_lesion_histology",
+"optional": [
+"output_dir:str",
+"stain_type:str"
+],
+"required": [
+"image_path:str"
+]
+},
+{
+"description": "Analyzes immunohistochemistry images to quantify protein expression and spatial distribution.",
+"module": "biomni.tool.immunology",
+"name": "analyze_immunohistochemistry_image",
+"optional": [
+"protein_name:str",
+"output_dir:str"
+],
+"required": [
+"image_path:str"
+]
+},
+{
+"description": "Test a PyLabRobot script based on the script content.",
+"module": "biomni.tool.lab_automation",
+"name": "test_pylabrobot_script",
+"optional": [
+"enable_tracking:bool",
+"timeout_seconds:int",
+"save_test_report:bool",
+"test_report_dir:str"
+],
+"required": [
+"script_input:str"
+]
+},
+{
+"description": "Get the documentation for the liquid handling section of the PyLabRobot tutorial.",
+"module": "biomni.tool.lab_automation",
+"name": "get_pylabrobot_documentation_liquid",
+"optional": [],
+"required": []
+},
+{
+"description": "Get the documentation for the material handling section of the PyLabRobot tutorial.",
+"module": "biomni.tool.lab_automation",
+"name": "get_pylabrobot_documentation_material",
+"optional": [],
+"required": []
+},
+{
+"description": "Fetches supplementary information for a paper given its DOI and saves it to a specified directory.",
+"module": "biomni.tool.literature",
+"name": "fetch_supplementary_info_from_doi",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"doi:str"
+]
+},
+{
+"description": "Query arXiv for papers based on the provided search query.",
+"module": "biomni.tool.literature",
+"name": "query_arxiv",
+"optional": [
+"max_papers:int"
+],
+"required": [
+"query:str"
+]
+},
+{
+"description": "Query Google Scholar for papers based on the provided search query and return the first search result.",
+"module": "biomni.tool.literature",
+"name": "query_scholar",
+"optional": [],
+"required": [
+"query:str"
+]
+},
+{
+"description": "Query PubMed for papers based on the provided search query.",
+"module": "biomni.tool.literature",
+"name": "query_pubmed",
+"optional": [
+"max_papers:int",
+"max_retries:int"
+],
+"required": [
+"query:str"
+]
+},
+{
+"description": "Search using Google search and return formatted results.",
+"module": "biomni.tool.literature",
+"name": "search_google",
+"optional": [
+"num_results:int",
+"language:str"
+],
+"required": [
+"query:str"
+]
+},
+{
+"description": "Extract the text content of a webpage using requests and BeautifulSoup.",
+"module": "biomni.tool.literature",
+"name": "extract_url_content",
+"optional": [],
+"required": [
+"url:str"
+]
+},
+{
+"description": "Extract text content from a PDF file.",
+"module": "biomni.tool.literature",
+"name": "extract_pdf_content",
+"optional": [],
+"required": [
+"url:str"
+]
+},
+{
+"description": "Initiate an advanced web search by launching a specialized agent to collect relevant information and citations through multiple rounds of web searches for a given query.",
+"module": "biomni.tool.literature",
+"name": "advanced_web_search_claude",
+"optional": [
+"max_searches:int",
+"max_retries:int"
+],
+"required": [
+"query:str"
+]
+},
+{
+"description": "Optimize anaerobic digestion process conditions to maximize VFA production or methane yield.",
+"module": "biomni.tool.microbiology",
+"name": "optimize_anaerobic_digestion_process",
+"optional": [
+"target_output:str",
+"optimization_method:str"
+],
+"required": [
+"waste_characteristics:dict",
+"operational_parameters:dict"
+]
+},
+{
+"description": "Analyzes arsenic speciation in liquid samples using HPLC-ICP-MS technique. Returns a research log summarizing analysis steps and results.",
+"module": "biomni.tool.microbiology",
+"name": "analyze_arsenic_speciation_hplc_icpms",
+"optional": [
+"sample_name:str",
+"calibration_data:dict"
+],
+"required": [
+"sample_data:dict"
+]
+},
+{
+"description": "Count bacterial colonies from an image of agar plate using computer vision techniques.",
+"module": "biomni.tool.microbiology",
+"name": "count_bacterial_colonies",
+"optional": [
+"dilution_factor:float",
+"plate_area_cm2:float",
+"output_dir:str"
+],
+"required": [
+"image_path:str"
+]
+},
+{
+"description": "Annotate a bacterial genome using Prokka to identify genes, proteins, and functional features.",
+"module": "biomni.tool.microbiology",
+"name": "annotate_bacterial_genome",
+"optional": [
+"output_dir:str",
+"genus:str",
+"species:str",
+"strain:str",
+"prefix:str"
+],
+"required": [
+"genome_file_path:str"
+]
+},
+{
+"description": "Quantify bacterial concentration (CFU/mL) using serial dilutions and spot plating.",
+"module": "biomni.tool.microbiology",
+"name": "enumerate_bacterial_cfu_by_serial_dilution",
+"optional": [
+"initial_sample_volume_ml:float",
+"estimated_concentration:float",
+"dilution_factor:int",
+"num_dilutions:int",
+"spots_per_dilution:int",
+"output_file:str"
+],
+"required": []
+},
+{
+"description": "Model bacterial population dynamics over time using ordinary differential equations.",
+"module": "biomni.tool.microbiology",
+"name": "model_bacterial_growth_dynamics",
+"optional": [
+"simulation_time:float",
+"time_step:float"
+],
+"required": [
+"initial_population:float",
+"growth_rate:float",
+"clearance_rate:float",
+"niche_size:float"
+]
+},
+{
+"description": "Quantifies biofilm biomass using crystal violet staining assay data and returns a detailed research log.",
+"module": "biomni.tool.microbiology",
+"name": "quantify_biofilm_biomass_crystal_violet",
+"optional": [
+"sample_names:List[str]",
+"control_index:int",
+"save_path:str"
+],
+"required": [
+"od_values:List[float] or numpy.ndarray"
+]
+},
+{
+"description": "Perform automated cell segmentation and quantify morphological metrics from fluorescence microscopy images.",
+"module": "biomni.tool.microbiology",
+"name": "segment_and_analyze_microbial_cells",
+"optional": [
+"output_dir:str",
+"min_cell_size:int"
+],
+"required": [
+"image_path:str"
+]
+},
+{
+"description": "Perform cell segmentation on fluorescence microscopy images using deep learning with pre-trained models from the Cellpose/Omnipose library.",
+"module": "biomni.tool.microbiology",
+"name": "segment_cells_with_deep_learning",
+"optional": [
+"model_type:str",
+"diameter:float",
+"save_dir:str"
+],
+"required": [
+"image_path:str"
+]
+},
+{
+"description": "Simulate microbial community dynamics using the Generalized Lotka-Volterra (gLV) model.",
+"module": "biomni.tool.microbiology",
+"name": "simulate_generalized_lotka_volterra_dynamics",
+"optional": [
+"output_file:str"
+],
+"required": [
+"initial_abundances:numpy.ndarray",
+"growth_rates:numpy.ndarray",
+"interaction_matrix:numpy.ndarray",
+"time_points:numpy.ndarray"
+]
+},
+{
+"description": "Predict the secondary structure of an RNA molecule using ViennaRNA.",
+"module": "biomni.tool.microbiology",
+"name": "predict_rna_secondary_structure",
+"optional": [
+"output_prefix:str"
+],
+"required": [
+"rna_sequence:str"
+]
+},
+{
+"description": "Performs stochastic simulation of microbial population dynamics using the Gillespie algorithm.",
+"module": "biomni.tool.microbiology",
+"name": "simulate_microbial_population_dynamics",
+"optional": [
+"max_time:float",
+"num_simulations:int",
+"time_points:int"
+],
+"required": [
+"initial_populations:List[int]",
+"growth_rates:List[float]",
+"clearance_rates:List[float]",
+"carrying_capacities:List[float]"
+]
+},
+{
+"description": "Find all Open Reading Frames (ORFs) in a DNA sequence using Biopython, searching both forward and reverse complement strands.",
+"module": "biomni.tool.molecular_biology",
+"name": "annotate_open_reading_frames",
+"optional": [
+"search_reverse:bool",
+"filter_subsets:bool"
+],
+"required": [
+"sequence:str",
+"min_length:int"
+]
+},
+{
+"description": "Annotate a DNA sequence using pLannotate's command-line interface.",
+"module": "biomni.tool.molecular_biology",
+"name": "annotate_plasmid",
+"optional": [
+"is_circular:bool"
+],
+"required": [
+"sequence:str"
+]
+},
+{
+"description": "Retrieves the coding sequence(s) of a specified gene from NCBI Entrez.",
+"module": "biomni.tool.molecular_biology",
+"name": "get_gene_coding_sequence",
+"optional": [
+"email:str"
+],
+"required": [
+"gene_name:str",
+"organism:str"
+]
+},
+{
+"description": "Unified function to retrieve plasmid sequences from either Addgene or NCBI. If is_addgene is True or identifier is numeric, uses Addgene. Otherwise searches NCBI using the plasmid name.",
+"module": "biomni.tool.molecular_biology",
+"name": "get_plasmid_sequence",
+"optional": [
+"is_addgene:bool"
+],
+"required": [
+"identifier:str"
+]
+},
+{
+"description": "Align short sequences (primers) to a longer sequence, allowing for one mismatch. Checks both forward and reverse complement strands.",
+"module": "biomni.tool.molecular_biology",
+"name": "align_sequences",
+"optional": [],
+"required": [
+"long_seq:str",
+"short_seqs:Union[str, List[str]]"
+]
+},
+{
+"description": "Simulate PCR amplification with given primers and sequence.",
+"module": "biomni.tool.molecular_biology",
+"name": "pcr_simple",
+"optional": [
+"circular:bool"
+],
+"required": [
+"sequence:str",
+"forward_primer:str",
+"reverse_primer:str"
+]
+},
+{
+"description": "Simulates restriction enzyme digestion of a DNA sequence and returns the resulting fragments with their properties.",
+"module": "biomni.tool.molecular_biology",
+"name": "digest_sequence",
+"optional": [
+"is_circular:bool"
+],
+"required": [
+"dna_sequence:str",
+"enzyme_names:List[str]"
+]
+},
+{
+"description": "Identifies restriction enzyme sites in a given DNA sequence for specified enzymes.",
+"module": "biomni.tool.molecular_biology",
+"name": "find_restriction_sites",
+"optional": [
+"is_circular:bool"
+],
+"required": [
+"dna_sequence:str",
+"enzymes:List[str]"
+]
+},
+{
+"description": "Finds common restriction enzyme sites in a DNA sequence and returns their cut positions.",
+"module": "biomni.tool.molecular_biology",
+"name": "find_restriction_enzymes",
+"optional": [
+"is_circular:bool"
+],
+"required": [
+"sequence:str"
+]
+},
+{
+"description": "Compare query sequence against reference sequence to identify mutations.",
+"module": "biomni.tool.molecular_biology",
+"name": "find_sequence_mutations",
+"optional": [
+"query_start:int"
+],
+"required": [
+"query_sequence:str",
+"reference_sequence:str"
+]
+},
+{
+"description": "Design sgRNAs for CRISPR knockout by searching pre-computed sgRNA libraries. Returns optimized guide RNAs for targeting a specific gene.",
+"module": "biomni.tool.molecular_biology",
+"name": "design_knockout_sgrna",
+"optional": [
+"species:str",
+"num_guides:int"
+],
+"required": [
+"gene_name:str",
+"data_lake_path:str"
+]
+},
+{
+"description": "Return a standard protocol for annealing oligonucleotides without phosphorylation.",
+"module": "biomni.tool.molecular_biology",
+"name": "get_oligo_annealing_protocol",
+"optional": [],
+"required": []
+},
+{
+"description": "Return a customized protocol for Golden Gate assembly based on the number of inserts and specific DNA sequences.",
+"module": "biomni.tool.molecular_biology",
+"name": "get_golden_gate_assembly_protocol",
+"optional": [
+"num_inserts:int",
+"vector_amount_ng:float",
+"insert_lengths:List[int]",
+"is_library_prep:bool"
+],
+"required": [
+"enzyme_name:str",
+"vector_length:int"
+]
+},
+{
+"description": "Return a standard protocol for bacterial transformation.",
+"module": "biomni.tool.molecular_biology",
+"name": "get_bacterial_transformation_protocol",
+"optional": [
+"antibiotic:str",
+"is_repetitive:bool"
+],
+"required": []
+},
+{
+"description": "Design a single primer within the given sequence window.",
+"module": "biomni.tool.molecular_biology",
+"name": "design_primer",
+"optional": [
+"primer_length:int",
+"min_gc:float",
+"max_gc:float",
+"min_tm:float",
+"max_tm:float",
+"search_window:int"
+],
+"required": [
+"sequence:str",
+"start_pos:int"
+]
+},
+{
+"description": "Design Sanger sequencing primers to verify a specific region in a plasmid. First tries to use primers from an existing primer pool. If they cannot fully cover the region, designs additional primers as needed.",
+"module": "biomni.tool.molecular_biology",
+"name": "design_verification_primers",
+"optional": [
+"existing_primers:Optional[List[Dict[str, str]]]",
+"is_circular:bool",
+"coverage_length:int",
+"primer_length:int",
+"min_gc:float",
+"max_gc:float",
+"min_tm:float",
+"max_tm:float"
+],
+"required": [
+"plasmid_sequence:str",
+"target_region:Tuple[int, int]"
+]
+},
+{
+"description": "Design complementary oligonucleotides with Type IIS restriction enzyme overhangs for Golden Gate assembly based on restriction site analysis of the backbone.",
+"module": "biomni.tool.molecular_biology",
+"name": "design_golden_gate_oligos",
+"optional": [
+"is_circular:bool"
+],
+"required": [
+"backbone_sequence:str",
+"insert_sequence:str",
+"enzyme_name:str"
+]
+},
+{
+"description": "Simulate Golden Gate assembly to predict final construct sequences from backbone and fragment sequences.",
+"module": "biomni.tool.molecular_biology",
+"name": "golden_gate_assembly",
+"optional": [
+"is_circular:bool"
+],
+"required": [
+"backbone_sequence:str",
+"enzyme_name:str",
+"fragments:List[Dict[str, str]]"
+]
+},
+{
+"description": "Analyze aortic diameter and geometry from cardiovascular imaging data to measure aortic root diameter, ascending aorta diameter, and calculate geometric parameters such as tortuosity and dilation indices.",
+"module": "biomni.tool.pathology",
+"name": "analyze_aortic_diameter_and_geometry",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"image_path:str"
+]
+},
+{
+"description": "Analyze luminescence-based ATP assay data to determine intracellular ATP concentration.",
+"module": "biomni.tool.pathology",
+"name": "analyze_atp_luminescence_assay",
+"optional": [
+"normalization_method:str",
+"normalization_data:str or dict"
+],
+"required": [
+"data_file:str",
+"standard_curve_file:str"
+]
+},
+{
+"description": "Analyze histological images of thrombus samples stained with H&E to identify and quantify different thrombus components (fresh, cellular lysis, endothelialization, fibroblastic reaction).",
+"module": "biomni.tool.pathology",
+"name": "analyze_thrombus_histology",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"image_path:str"
+]
+},
+{
+"description": "Analyzes intracellular calcium concentration using Rhod-2 fluorescent indicator from microscopy images.",
+"module": "biomni.tool.pathology",
+"name": "analyze_intracellular_calcium_with_rhod2",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"background_image_path:str",
+"control_image_path:str",
+"sample_image_path:str"
+]
+},
+{
+"description": "Quantify the volume/density of immunofluorescence-labeled corneal nerve fibers.",
+"module": "biomni.tool.pathology",
+"name": "quantify_corneal_nerve_fibers",
+"optional": [
+"output_dir:str",
+"threshold_method:str"
+],
+"required": [
+"image_path:str",
+"marker_type:str"
+]
+},
+{
+"description": "Segment cells and quantify protein expression levels from multichannel tissue images.",
+"module": "biomni.tool.pathology",
+"name": "segment_and_quantify_cells_in_multiplexed_images",
+"optional": [
+"nuclear_channel_index:int",
+"output_dir:str"
+],
+"required": [
+"image_path:str",
+"markers_list:List[str]"
+]
+},
+{
+"description": "Analyze bone microarchitecture parameters from 3D micro-CT images to calculate bone mineral density, bone volume, trabecular number, thickness, and separation.",
+"module": "biomni.tool.pathology",
+"name": "analyze_bone_microct_morphometry",
+"optional": [
+"output_dir:str",
+"threshold_value:float"
+],
+"required": [
+"input_file_path:str"
+]
+},
+{
+"description": "Run DiffDock molecular docking using a protein PDB file and a SMILES string for the ligand, executing the process in a Docker container.",
+"module": "biomni.tool.pharmacology",
+"name": "run_diffdock_with_smiles",
+"optional": [
+"gpu_device:int",
+"use_gpu:bool"
+],
+"required": [
+"pdb_path:str",
+"smiles_string:str",
+"local_output_dir:str"
+]
+},
+{
+"description": "Performs molecular docking using AutoDock Vina to predict binding affinities between small molecules and a receptor protein.",
+"module": "biomni.tool.pharmacology",
+"name": "docking_autodock_vina",
+"optional": [
+"ncpu:int"
+],
+"required": [
+"smiles_list:List[str]",
+"receptor_pdb_file:str",
+"box_center:List[float]",
+"box_size:List[float]"
+]
+},
+{
+"description": "Runs AutoSite on a PDB file to identify potential binding sites and returns a research log with the results.",
+"module": "biomni.tool.pharmacology",
+"name": "run_autosite",
+"optional": [
+"spacing:float"
+],
+"required": [
+"pdb_file:str",
+"output_dir:str"
+]
+},
+{
+"description": "Computes TxGNN model predictions for drug repurposing and returns the top predicted drugs with their scores for a given disease.",
+"module": "biomni.tool.pharmacology",
+"name": "retrieve_topk_repurposing_drugs_from_disease_txgnn",
+"optional": [
+"k:int"
+],
+"required": [
+"disease_name:str",
+"data_lake_path:str"
+]
+},
+{
+"description": "Predicts ADMET (Absorption, Distribution, Metabolism, Excretion, Toxicity) properties for a list of compounds using pretrained models.",
+"module": "biomni.tool.pharmacology",
+"name": "predict_admet_properties",
+"optional": [
+"ADMET_model_type:str"
+],
+"required": [
+"smiles_list:List[str]"
+]
+},
+{
+"description": "Predicts binding affinity between small molecules and a protein sequence using pre-trained deep learning models.",
+"module": "biomni.tool.pharmacology",
+"name": "predict_binding_affinity_protein_1d_sequence",
+"optional": [
+"affinity_model_type:str"
+],
+"required": [
+"smiles_list:List[str]",
+"amino_acid_sequence:str"
+]
+},
+{
+"description": "Analyzes the stability of pharmaceutical formulations under accelerated storage conditions.",
+"module": "biomni.tool.pharmacology",
+"name": "analyze_accelerated_stability_of_pharmaceutical_formulations",
+"optional": [],
+"required": [
+"formulations:List[dict]",
+"storage_conditions:List[dict]",
+"time_points:List[int]"
+]
+},
+{
+"description": "Generates a detailed protocol for performing a 3D chondrogenic aggregate culture assay to evaluate compounds' effects on chondrogenesis.",
+"module": "biomni.tool.pharmacology",
+"name": "run_3d_chondrogenic_aggregate_assay",
+"optional": [
+"culture_duration_days:int",
+"measurement_intervals:int"
+],
+"required": [
+"chondrocyte_cells:dict",
+"test_compounds:list of dict"
+]
+},
+{
+"description": "Grade and monitor adverse events in animal studies using the VCOG-CTCAE standard.",
+"module": "biomni.tool.pharmacology",
+"name": "grade_adverse_events_using_vcog_ctcae",
+"optional": [],
+"required": [
+"clinical_data_file:str"
+]
+},
+{
+"description": "Analyze biodistribution and pharmacokinetic profile of radiolabeled antibodies.",
+"module": "biomni.tool.pharmacology",
+"name": "analyze_radiolabeled_antibody_biodistribution",
+"optional": [],
+"required": [
+"time_points:List[float] or numpy.ndarray",
+"tissue_data:dict"
+]
+},
+{
+"description": "Estimate radiation absorbed doses to tumor and normal organs for alpha-particle radiotherapeutics using the Medical Internal Radiation Dose (MIRD) schema.",
+"module": "biomni.tool.pharmacology",
+"name": "estimate_alpha_particle_radiotherapy_dosimetry",
+"optional": [
+"output_file:str"
+],
+"required": [
+"biodistribution_data:dict",
+"radiation_parameters:dict"
+]
+},
+{
+"description": "Perform a Methylome-wide Association Study (MWAS) to identify CpG sites significantly associated with CYP2C19 metabolizer status.",
+"module": "biomni.tool.pharmacology",
+"name": "perform_mwas_cyp2c19_metabolizer_status",
+"optional": [
+"covariates_path:str",
+"pvalue_threshold:float",
+"output_file:str"
+],
+"required": [
+"methylation_data_path:str",
+"metabolizer_status_path:str"
+]
+},
+{
+"description": "Calculate key physicochemical properties of a drug candidate molecule.",
+"module": "biomni.tool.pharmacology",
+"name": "calculate_physicochemical_properties",
+"optional": [],
+"required": [
+"smiles_string:str"
+]
+},
+{
+"description": "Analyze tumor growth inhibition in xenograft models across different treatment groups.",
+"module": "biomni.tool.pharmacology",
+"name": "analyze_xenograft_tumor_growth_inhibition",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"data_path:str",
+"time_column:str",
+"volume_column:str",
+"group_column:str",
+"subject_column:str"
+]
+},
+{
+"description": "Analyze western blot or DNA electrophoresis images and return pixel distribution statistics including intensity statistics, percentiles, and brightness distribution. Use this to determine appropriate threshold values for find_roi_from_image.",
+"module": "biomni.tool.pharmacology",
+"name": "analyze_pixel_distribution",
+"optional": [],
+"required": [
+"image_path:str"
+]
+},
+{
+"description": "Find the ROIs (regions of interest) of protein bands from a Western blot or DNA electrophoresis image using threshold-based blob detection. Returns annotated image path and list of ROI coordinates. Use analyze_pixel_distribution first to determine appropriate threshold values. The returned ROI list can be converted to target_bands format for analyze_western_blot.",
+"module": "biomni.tool.pharmacology",
+"name": "find_roi_from_image",
+"optional": [
+"debug:bool"
+],
+"required": [
+"image_path:str",
+"lower_threshold:int",
+"upper_threshold:int",
+"number_of_bands:int"
+]
+},
+{
+"description": "Performs densitometric analysis of Western blot images to quantify relative protein expression.",
+"module": "biomni.tool.pharmacology",
+"name": "analyze_western_blot",
+"optional": [
+"output_dir:str"
+],
+"required": [
+"blot_image_path:str",
+"target_bands:list of dict",
+"loading_control_band:dict",
+"antibody_info:dict"
+]
+},
+{
+"description": "Query drug-drug interactions from DDInter database to identify potential interactions, mechanisms, and severity levels between specified drugs.",
+"module": "biomni.tool.pharmacology",
+"name": "query_drug_interactions",
+"optional": [
+"interaction_types:List[str]",
+"severity_levels:List[str]",
+"data_lake_path:str"
+],
+"required": [
+"drug_names:List[str]"
+]
+},
+{
+"description": "Analyze safety of a drug combination for potential interactions using DDInter database with comprehensive risk assessment and clinical recommendations.",
+"module": "biomni.tool.pharmacology",
+"name": "check_drug_combination_safety",
+"optional": [
+"include_mechanisms:bool",
+"include_management:bool",
+"data_lake_path:str"
+],
+"required": [
+"drug_list:List[str]"
+]
+},
+{
+"description": "Analyze interaction mechanisms between two specific drugs providing detailed mechanistic insights and clinical significance assessment.",
+"module": "biomni.tool.pharmacology",
+"name": "analyze_interaction_mechanisms",
+"optional": [
+"detailed_analysis:bool",
+"data_lake_path:str"
+],
+"required": [
+"drug_pair:Tuple[str, str]"
+]
+},
+{
+"description": "Find alternative drugs that don't interact with contraindicated drugs using DDInter database for safer therapeutic substitutions.",
+"module": "biomni.tool.pharmacology",
+"name": "find_alternative_drugs_ddinter",
+"optional": [
+"therapeutic_class:str",
+"data_lake_path:str"
+],
+"required": [
+"target_drug:str",
+"contraindicated_drugs:List[str]"
+]
+},
+{
+"description": "Query FDA adverse event reports for specific drugs from the OpenFDA database to identify potential safety signals, reaction patterns, and regulatory intelligence.",
+"module": "biomni.tool.pharmacology",
+"name": "query_fda_adverse_events",
+"optional": [
+"date_range:Tuple[str, str]",
+"severity_filter:List[str]",
+"outcome_filter:List[str]",
+"limit:int"
+],
+"required": [
+"drug_name:str"
+]
+},
+{
+"description": "Retrieve FDA drug label information including indications, contraindications, warnings, and dosage information from the OpenFDA database.",
+"module": "biomni.tool.pharmacology",
+"name": "get_fda_drug_label_info",
+"optional": [
+"sections:List[str]"
+],
+"required": [
+"drug_name:str"
+]
+},
+{
+"description": "Check for FDA drug recalls and enforcement actions from the OpenFDA database to identify safety concerns and regulatory actions.",
+"module": "biomni.tool.pharmacology",
+"name": "check_fda_drug_recalls",
+"optional": [
+"classification:List[str]",
+"date_range:Tuple[str, str]"
+],
+"required": [
+"drug_name:str"
+]
+},
+{
+"description": "Analyze safety signals across multiple drugs using OpenFDA adverse event data to identify patterns and comparative risk profiles.",
+"module": "biomni.tool.pharmacology",
+"name": "analyze_fda_safety_signals",
+"optional": [
+"comparison_period:Tuple[str, str]",
+"signal_threshold:float"
+],
+"required": [
+"drug_list:List[str]"
+]
+},
+{
+"description": "Generate a 3D model of facial anatomy from MRI scans of the head and neck.",
+"module": "biomni.tool.physiology",
+"name": "reconstruct_3d_face_from_mri",
+"optional": [
+"output_dir:str",
+"subject_id:str",
+"threshold_value:int"
+],
+"required": [
+"mri_file_path:str"
+]
+},
+{
+"description": "Extracts P1 amplitude and latency from Auditory Brainstem Response (ABR) waveform data.",
+"module": "biomni.tool.physiology",
+"name": "analyze_abr_waveform_p1_metrics",
+"optional": [],
+"required": [
+"time_ms:array-like",
+"amplitude_uv:array-like"
+]
+},
+{
+"description": "Analyze ciliary beat frequency from high-speed video microscopy data using FFT analysis.",
+"module": "biomni.tool.physiology",
+"name": "analyze_ciliary_beat_frequency",
+"optional": [
+"roi_count:int",
+"min_freq:float",
+"max_freq:float",
+"output_dir:str"
+],
+"required": [
+"video_path:str"
+]
+},
+{
+"description": "Analyze colocalization between two fluorescently labeled proteins in microscopy images.",
+"module": "biomni.tool.physiology",
+"name": "analyze_protein_colocalization",
+"optional": [
+"output_dir:str",
+"threshold_method:str"
+],
+"required": [
+"channel1_path:str",
+"channel2_path:str"
+]
+},
+{
+"description": "Performs cosinor analysis on physiological time series data to characterize circadian rhythms.",
+"module": "biomni.tool.physiology",
+"name": "perform_cosinor_analysis",
+"optional": [
+"period:float"
+],
+"required": [
+"time_data:array-like",
+"physiological_data:array-like"
+]
+},
+{
+"description": "Calculate Apparent Diffusion Coefficient (ADC) map from diffusion-weighted MRI data using monoexponential diffusion model.",
+"module": "biomni.tool.physiology",
+"name": "calculate_brain_adc_map",
+"optional": [
+"output_path:str",
+"mask_file_path:str"
+],
+"required": [
+"dwi_file_path:str",
+"b_values:List[float]"
+]
+},
+{
+"description": "Analyze calcium dynamics in endo-lysosomal compartments using ELGA/ELGA1 probe data.",
+"module": "biomni.tool.physiology",
+"name": "analyze_endolysosomal_calcium_dynamics",
+"optional": [
+"treatment_time:float",
+"cell_type:str",
+"treatment_name:str",
+"output_file:str"
+],
+"required": [
+"time_points:numpy.ndarray or list",
+"luminescence_values:numpy.ndarray or list"
+]
+},
+{
+"description": "Analyzes fatty acid composition in tissue samples using gas chromatography data.",
+"module": "biomni.tool.physiology",
+"name": "analyze_fatty_acid_composition_by_gc",
+"optional": [
+"output_directory:str"
+],
+"required": [
+"gc_data_file:str",
+"tissue_type:str",
+"sample_id:str"
+]
+},
+{
+"description": "Analyzes raw blood pressure data to calculate key hemodynamic parameters.",
+"module": "biomni.tool.physiology",
+"name": "analyze_hemodynamic_data",
+"optional": [
+"output_file:str"
+],
+"required": [
+"pressure_data:numpy.ndarray",
+"sampling_rate:float"
+]
+},
+{
+"description": "Simulates the transport and binding of thyroid hormones across different tissue compartments using an ODE-based pharmacokinetic model.",
+"module": "biomni.tool.physiology",
+"name": "simulate_thyroid_hormone_pharmacokinetics",
+"optional": [
+"time_span:tuple",
+"time_points:int"
+],
+"required": [
+"parameters:dict",
+"initial_conditions:dict"
+]
+},
+{
+"description": "Analyzes an image to detect and quantify amyloid-beta plaques, returning a detailed analysis log.",
+"module": "biomni.tool.physiology",
+"name": "quantify_amyloid_beta_plaques",
+"optional": [
+"output_dir:str",
+"threshold_method:str",
+"min_plaque_size:int",
+"manual_threshold:int"
+],
+"required": [
+"image_path:str"
+]
+},
+{
+"description": "Search protocols.io for public protocols matching a keyword.",
+"module": "biomni.tool.protocols",
+"name": "search_protocols",
+"optional": [],
+"required": [
+"query:str"
+]
+},
+{
+"description": "Retrieve detailed metadata for a specific protocols.io protocol by ID.",
+"module": "biomni.tool.protocols",
+"name": "get_protocol_details",
+"optional": [
+"timeout:int"
+],
+"required": [
+"protocol_id:int"
+]
+},
+{
+"description": "List available protocol files in the local biomni/tool/protocols/ directory. Includes protocols from Addgene and Thermo Fisher Scientific.",
+"module": "biomni.tool.protocols",
+"name": "list_local_protocols",
+"optional": [
+"source:str"
+],
+"required": []
+},
+{
+"description": "Read the contents of a local protocol file from biomni/tool/protocols/. Use list_local_protocols() first to find available protocol filenames.",
+"module": "biomni.tool.protocols",
+"name": "read_local_protocol",
+"optional": [
+"source:str"
+],
+"required": [
+"filename:str"
+]
+},
+{
+"description": "Executes the provided Python command in the notebook environment and returns the output.",
+"module": "biomni.tool.support_tools",
+"name": "run_python_repl",
+"optional": [],
+"required": [
+"command:str"
+]
+},
+{
+"description": "Read the source code of a function from any module path.",
+"module": "biomni.tool.support_tools",
+"name": "read_function_source_code",
+"optional": [],
+"required": [
+"function_name:str"
+]
+},
+{
+"description": "Download data from Synapse using entity IDs. Requires SYNAPSE_AUTH_TOKEN environment variable for authentication. CRITICAL: Always specify entity_type parameter based on what you're downloading (file, dataset, folder, project). Check user hints like 'files' or search results to determine correct type. Multiple IDs only work with entity_type='file'. Recursive only works with entity_type='folder'.",
+"module": "biomni.tool.support_tools",
+"name": "download_synapse_data",
+"optional": [
+"download_location:str",
+"follow_link:bool",
+"recursive:bool",
+"timeout:int",
+"entity_type:str"
+],
+"required": [
+"entity_ids:str|list[str]"
+]
+},
+{
+"description": "Engineer a bacterial genome by integrating therapeutic genetic parts for therapeutic delivery.",
+"module": "biomni.tool.synthetic_biology",
+"name": "engineer_bacterial_genome_for_therapeutic_delivery",
+"optional": [],
+"required": [
+"bacterial_genome_file:str",
+"genetic_parts:dict"
+]
+},
+{
+"description": "Analyze bacterial growth data and extract growth parameters from OD600 measurements.",
+"module": "biomni.tool.synthetic_biology",
+"name": "analyze_bacterial_growth_rate",
+"optional": [
+"strain_name:str",
+"output_dir:str"
+],
+"required": [
+"time_points:List or numpy.ndarray",
+"od_measurements:List or numpy.ndarray"
+]
+},
+{
+"description": "Analyze sequencing data to extract, quantify and determine lineage relationships of barcodes.",
+"module": "biomni.tool.synthetic_biology",
+"name": "analyze_barcode_sequencing_data",
+"optional": [
+"barcode_pattern:str",
+"flanking_seq_5prime:str",
+"flanking_seq_3prime:str",
+"min_count:int",
+"output_dir:str"
+],
+"required": [
+"input_file:str"
+]
+},
+{
+"description": "Performs bifurcation analysis on a dynamical system and generates a bifurcation diagram.",
+"module": "biomni.tool.synthetic_biology",
+"name": "analyze_bifurcation_diagram",
+"optional": [
+"system_name:str",
+"output_dir:str"
+],
+"required": [
+"time_series_data:numpy.ndarray",
+"parameter_values:numpy.ndarray"
+]
+},
+{
+"description": "Generate a mathematical model of a biochemical network in SBML format.",
+"module": "biomni.tool.synthetic_biology",
+"name": "create_biochemical_network_sbml_model",
+"optional": [
+"output_file:str"
+],
+"required": [
+"reaction_network:List[dict]",
+"kinetic_parameters:dict"
+]
+},
+{
+"description": "Analyzes and optimizes a DNA/RNA sequence for improved expression in a heterologous host organism.",
+"module": "biomni.tool.synthetic_biology",
+"name": "optimize_codons_for_heterologous_expression",
+"optional": [],
+"required": [
+"target_sequence:str",
+"host_codon_usage:dict"
+]
+},
+{
+"description": "Simulate gene regulatory circuit dynamics with growth feedback.",
+"module": "biomni.tool.synthetic_biology",
+"name": "simulate_gene_circuit_with_growth_feedback",
+"optional": [
+"simulation_time:float",
+"time_points:int"
+],
+"required": [
+"circuit_topology:numpy.ndarray",
+"kinetic_params:dict",
+"growth_params:dict"
+]
+},
+{
+"description": "Identifies functional domains within a Fatty Acid Synthase (FAS) sequence and predicts their roles.",
+"module": "biomni.tool.synthetic_biology",
+"name": "identify_fas_functional_domains",
+"optional": [
+"sequence_type:str",
+"output_file:str"
+],
+"required": [
+"sequence:str"
+]
+},
+{
+"description": "Perform Flux Balance Analysis (FBA) on a genome-scale metabolic network model and return a research log of the process and results.",
+"module": "biomni.tool.systems_biology",
+"name": "perform_flux_balance_analysis",
+"optional": [
+"constraints:dict",
+"objective_reaction:str",
+"output_file:str"
+],
+"required": [
+"model_file:str"
+]
+},
+{
+"description": "Model protein dimerization networks to find equilibrium concentrations of dimers.",
+"module": "biomni.tool.systems_biology",
+"name": "model_protein_dimerization_network",
+"optional": [],
+"required": [
+"monomer_concentrations:dict",
+"dimerization_affinities:dict",
+"network_topology:list"
+]
+},
+{
+"description": "Construct and simulate kinetic models of metabolic networks and analyze their responses to perturbations.",
+"module": "biomni.tool.systems_biology",
+"name": "simulate_metabolic_network_perturbation",
+"optional": [
+"simulation_time:float",
+"time_points:int"
+],
+"required": [
+"model_file:str",
+"initial_concentrations:dict",
+"perturbation_params:dict"
+]
+},
+{
+"description": "Simulate protein signaling network dynamics using ODE-based logic modeling with normalized Hill functions.",
+"module": "biomni.tool.systems_biology",
+"name": "simulate_protein_signaling_network",
+"optional": [
+"simulation_time:float",
+"time_points:int"
+],
+"required": [
+"network_structure:dict",
+"reaction_params:dict",
+"species_params:dict"
+]
+},
+{
+"description": "Compares two protein structures to identify structural differences and conformational changes.",
+"module": "biomni.tool.systems_biology",
+"name": "compare_protein_structures",
+"optional": [
+"chain_id1:str",
+"chain_id2:str",
+"output_prefix:str"
+],
+"required": [
+"pdb_file1:str",
+"pdb_file2:str"
+]
+},
+{
+"description": "Simulate the time-dependent concentrations of renin-angiotensin system (RAS) components.",
+"module": "biomni.tool.systems_biology",
+"name": "simulate_renin_angiotensin_system_dynamics",
+"optional": [
+"simulation_time:float",
+"time_points:int"
+],
+"required": [
+"initial_concentrations:dict",
+"rate_constants:dict",
+"feedback_params:dict"
+]
+},
+{
+"description": "Answer functions and properties questions for DNA sequences ",
+"module": "biomni.tool.systems_biology",
+"name": "query_chatnt",
+"optional": [
+"device:int"
+],
+"required": [
+"question:str",
+"sequence:str"
+]
+}
+]
+}

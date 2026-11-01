@@ -1,0 +1,31 @@
+{
+  "note": "Fallback snapshot only. The Catalog Refresher re-fetches each source page and replaces these rows with values that literally appear on the page. Scores are harness- and date-dependent; compare within a benchmark only.",
+  "benchmarks": {
+    "labbench2": {
+      "title": "LABBench2 (aggregate)", "source": "https://benchlm.ai/benchmarks/labbench2", "asOf": "2026-10-15",
+      "harness": "Provider-reported; Linux terminal with bioinformatics tools, Python, R and internet access",
+      "scores": {"Gemini 4 Argon": 88.8, "Gemini 3.8 Flash": 86.2, "Claude Opus 5": 84.2, "GPT-5.6 Sol": 82.1, "Gemini 3.7 Flash": 82.1, "GPT-5.6 Terra": 81.2, "Claude Sonnet 5": 80.1}
+    },
+    "terminal-bench-science": {
+      "title": "Terminal-Bench-Science 0.1", "source": "https://benchlm.ai/benchmarks/terminal-bench-science", "asOf": "2026-10-15",
+      "harness": "Official system leaderboard mirror; resolution rate over 3 trials; agent harness varies per row (Codex / Claude Code / mini-SWE-agent)",
+      "scores": {"GPT-6 Astra": 68.1, "Claude Opus 5.5": 63.3, "Claude Fable 5.1": 40.0, "Claude Opus 5": 30.0, "GPT-5.6 Sol": 22.4, "Claude Fable 5": 21.4,
+                 "DeepSeek V4.1 Flash": 15.7, "Grok 4.7": 14.3, "Gemini 3.8 Flash": 12.4, "Claude Opus 4.8": 10.5, "GPT-5.6 Terra": 8.6, "GLM-5.3": 8.1,
+                 "Kimi K3": 7.1, "Grok 4.6": 7.1, "Gemini 3.7 Flash": 5.7, "DeepSeek V4 Pro": 3.8, "GPT-5.6 Luna": 3.3}
+    },
+    "posttrainbench": {
+      "title": "PostTrainBench v1.1", "source": "https://benchlm.ai/benchmarks/posttrainbench-v1-1", "asOf": "2026-10-15",
+      "harness": "10 h on one H100 per run; contamination-audited; native CLI harnesses",
+      "scores": {"Claude Opus 5.5": 49.3, "Gemini 4 Argon": 45.3, "GPT-6 Astra": 44.3, "Claude Fable 5.1": 40.2, "GPT-5.6 Sol": 36.2, "Claude Opus 5": 35.0,
+                 "Claude Opus 4.8": 32.9, "Kimi K3": 32.0, "GLM-5.2": 31.7, "Claude Opus 4.7": 28.6, "GPT-5.5": 27.2, "Grok 4.5": 23.4, "Gemini 3.1 Pro": 22.0, "GPT-5.4": 19.0}
+    },
+    "riemannbench": {
+      "title": "Riemann-bench", "source": "https://surgehq.ai/leaderboards/riemann-bench", "asOf": "2026-10-16 (page undated)",
+      "harness": "Surge AI; advanced research mathematics; max/xhigh reasoning settings",
+      "scores": {"GPT-5.6 Sol": 74.4, "GPT-6 Astra": 72.0, "Claude Opus 5.5": 69.6, "Claude Opus 5": 68.0, "GPT-5.6 Terra": 66.4, "Claude Fable 5.1": 65.6,
+                 "GPT-6 Sol": 64.8, "Claude Fable 5": 60.0, "GPT-6 Luna": 59.2, "GPT-5.5": 55.2, "Gemini 3.8 Flash": 51.2, "Claude Opus 4.8": 47.2, "GPT-5.4": 41.6,
+                 "Gemini 3.7 Flash": 39.2, "DeepSeek V4 Pro": 38.4, "Grok 4.5": 38.4, "Kimi K3": 37.6, "Gemini 3.5 Flash": 36.8, "Gemini 3.1 Pro": 33.6,
+                 "Claude Opus 4.7": 32.8, "DeepSeek V4.1 Flash": 24.0, "GLM 5.3": 12.0, "DeepSeek V4 Flash": 10.4, "GLM 5.2": 10.4, "GLM 5.3 Flash": 8.8}
+    }
+  }
+}

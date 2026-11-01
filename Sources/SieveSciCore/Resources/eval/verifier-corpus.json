@@ -1,0 +1,85 @@
+{
+ "about": "Claims over small datasets with known truth, for evaluating SieveSci's blind verifier. Regenerate with gen_verifier.py; every label is checked there.",
+ "cases": [
+  {
+   "id": "diff-true",
+   "truth": "verified",
+   "statement": "Expression of the reporter is higher in treated than in control samples.",
+   "criteria": "Welch t-test, two-sided p < 0.05, treated mean > control mean",
+   "files": {
+    "data/reporter.csv": "sample,group,expression\ns0,control,10.86\ns1,control,10.95\ns2,control,9.471\ns3,control,9.119\ns4,control,9.822\ns5,control,10.59\ns6,control,9.346\ns7,control,7.61\ns8,control,8.788\ns9,control,9.797\ns10,control,11.52\ns11,control,10.53\ns12,treated,14.53\ns13,treated,12.7\ns14,treated,14.14\ns15,treated,12.57\ns16,treated,14.07\ns17,treated,14.03\ns18,treated,14.88\ns19,treated,13.29\ns20,treated,12.64\ns21,treated,13.43\ns22,treated,14.9\ns23,treated,13.72\n"
+   },
+   "note": ""
+  },
+  {
+   "id": "diff-null",
+   "truth": "refuted",
+   "statement": "Expression of the reporter is higher in treated than in control samples.",
+   "criteria": "Welch t-test, two-sided p < 0.05, treated mean > control mean",
+   "files": {
+    "data/reporter.csv": "sample,group,expression\ns0,control,9.601\ns1,control,10.31\ns2,control,9.397\ns3,control,9.301\ns4,control,9.274\ns5,control,9.996\ns6,control,9.686\ns7,control,8.909\ns8,control,9.185\ns9,control,9.701\ns10,control,10.1\ns11,control,8.303\ns12,treated,9.691\ns13,treated,8.899\ns14,treated,9.591\ns15,treated,8.313\ns16,treated,10.01\ns17,treated,9.291\ns18,treated,9.696\ns19,treated,10.32\ns20,treated,9.387\ns21,treated,10.09\ns22,treated,9.195\ns23,treated,9.264\n"
+   },
+   "note": ""
+  },
+  {
+   "id": "multiple-tests-trap",
+   "truth": "refuted",
+   "statement": "Gene G7 is differentially expressed between treated and control.",
+   "criteria": "Welch t-test per gene across all 20 genes, Benjamini–Hochberg q < 0.05",
+   "files": {
+    "data/genes_long.csv": "gene,group,replicate,expression\nG1,control,0,7.326\nG1,control,1,6.154\nG1,control,2,4.464\nG1,control,3,5.171\nG1,control,4,5.252\nG1,control,5,3.529\nG1,control,6,4.977\nG1,control,7,3.769\nG1,control,8,5.162\nG1,control,9,6.402\nG1,treated,0,3.507\nG1,treated,1,4.314\nG1,treated,2,5.834\nG1,treated,3,4.03\nG1,treated,4,5.259\nG1,treated,5,6.235\nG1,treated,6,6.115\nG1,treated,7,5.957\nG1,treated,8,5.648\nG1,treated,9,4.306\nG2,control,0,3.994\nG2,control,1,4.407\nG2,control,2,3.895\nG2,control,3,5.523\nG2,control,4,6.631\nG2,control,5,4.941\nG2,control,6,6.491\nG2,control,7,5.074\nG2,control,8,5.291\nG2,control,9,4.564\nG2,treated,0,5.266\nG2,treated,1,5.077\nG2,treated,2,3.552\nG2,treated,3,4.881\nG2,treated,4,5.48\nG2,treated,5,3.549\nG2,treated,6,4.905\nG2,treated,7,5.717\nG2,treated,8,5.422\nG2,treated,9,3.845\nG3,control,0,5.352\nG3,control,1,7.62\nG3,control,2,4.08\nG3,control,3,7.283\nG3,control,4,5.547\nG3,control,5,4.56\nG3,control,6,4.756\nG3,control,7,4.968\nG3,control,8,5.681\nG3,control,9,4.925\nG3,treated,0,5.32\nG3,treated,1,6.239\nG3,treated,2,5.234\nG3,treated,3,2.955\nG3,treated,4,4.236\nG3,treated,5,4.678\nG3,treated,6,5.929\nG3,treated,7,5.605\nG3,treated,8,5.301\nG3,treated,9,6.41\nG4,control,0,5.661\nG4,control,1,6.025\nG4,control,2,6.669\nG4,control,3,4.989\nG4,control,4,5.258\nG4,control,5,4.465\nG4,control,6,4.864\nG4,control,7,4.367\nG4,control,8,4.905\nG4,control,9,4.957\nG4,treated,0,3.739\nG4,treated,1,5.073\nG4,treated,2,4.77\nG4,treated,3,5.135\nG4,treated,4,5.375\nG4,treated,5,4.085\nG4,treated,6,5.29\nG4,treated,7,4.951\nG4,treated,8,4.403\nG4,treated,9,4.055\nG5,control,0,5.182\nG5,control,1,4.736\nG5,control,2,3.459\nG5,control,3,5.414\nG5,control,4,5.484\nG5,control,5,5.693\nG5,control,6,5.715\nG5,control,7,4.644\nG5,control,8,5.3\nG5,control,9,4.236\nG5,treated,0,5.422\nG5,treated,1,5.056\nG5,treated,2,4.814\nG5,treated,3,5.515\nG5,treated,4,4.778\nG5,treated,5,5.236\nG5,treated,6,5.078\nG5,treated,7,5.97\nG5,treated,8,5.444\nG5,treated,9,2.975\nG6,control,0,6.368\nG6,control,1,5.237\nG6,control,2,6.809\nG6,control,3,4.028\nG6,control,4,5.369\nG6,control,5,4.33\nG6,control,6,6.237\nG6,control,7,5.942\nG6,control,8,4.632\nG6,control,9,6.633\nG6,treated,0,6.073\nG6,treated,1,4.441\nG6,treated,2,4.47\nG6,treated,3,3.98\nG6,treated,4,4.215\nG6,treated,5,5.244\nG6,treated,6,4.703\nG6,treated,7,5.626\nG6,treated,8,3.701\nG6,treated,9,5.03\nG7,control,0,5.437\nG7,control,1,5.679\nG7,control,2,3.869\nG7,control,3,4.703\nG7,control,4,3.335\nG7,control,5,4.768\nG7,control,6,4.467\nG7,control,7,4.156\nG7,control,8,5.421\nG7,control,9,5.625\nG7,treated,0,5.46\nG7,treated,1,7.703\nG7,treated,2,6.892\nG7,treated,3,3.663\nG7,treated,4,5.362\nG7,treated,5,6.873\nG7,treated,6,5.864\nG7,treated,7,4.823\nG7,treated,8,6.109\nG7,treated,9,5.912\nG8,control,0,5.539\nG8,control,1,5.615\nG8,control,2,4.424\nG8,control,3,4.066\nG8,control,4,3.705\nG8,control,5,5.299\nG8,control,6,5.301\nG8,control,7,6.918\nG8,control,8,6.676\nG8,control,9,4.961\nG8,treated,0,4.267\nG8,treated,1,5.063\nG8,treated,2,4.637\nG8,treated,3,4.751\nG8,treated,4,5.955\nG8,treated,5,3.734\nG8,treated,6,2.605\nG8,treated,7,6.048\nG8,treated,8,2.132\nG8,treated,9,5.674\nG9,control,0,4.618\nG9,control,1,4.555\nG9,control,2,4.354\nG9,control,3,6.186\nG9,control,4,5.669\nG9,control,5,4.663\nG9,control,6,4.455\nG9,control,7,4.595\nG9,control,8,5.142\nG9,control,9,4.886\nG9,treated,0,5.101\nG9,treated,1,5.486\nG9,treated,2,5.755\nG9,treated,3,5.231\nG9,treated,4,5.585\nG9,treated,5,4.606\nG9,treated,6,5.479\nG9,treated,7,5.076\nG9,treated,8,4.849\nG9,treated,9,4.418\nG10,control,0,3.275\nG10,control,1,6.049\nG10,control,2,6.058\nG10,control,3,5.177\nG10,control,4,6.014\nG10,control,5,4.36\nG10,control,6,4.056\nG10,control,7,5.188\nG10,control,8,7.364\nG10,control,9,5.862\nG10,treated,0,4.838\nG10,treated,1,5.71\nG10,treated,2,5.599\nG10,treated,3,5.189\nG10,treated,4,5.203\nG10,treated,5,5.113\nG10,treated,6,4.67\nG10,treated,7,5.5\nG10,treated,8,4.611\nG10,treated,9,3.87\nG11,control,0,5.727\nG11,control,1,5.144\nG11,control,2,3.386\nG11,control,3,2.055\nG11,control,4,4.64\nG11,control,5,5.437\nG11,control,6,5.048\nG11,control,7,5.692\nG11,control,8,5.127\nG11,control,9,5.472\nG11,treated,0,5.159\nG11,treated,1,6.527\nG11,treated,2,5.284\nG11,treated,3,3.24\nG11,treated,4,5.606\nG11,treated,5,5.295\nG11,treated,6,5.026\nG11,treated,7,5.782\nG11,treated,8,6.065\nG11,treated,9,5.059\nG12,control,0,6.033\nG12,control,1,5.901\nG12,control,2,4.946\nG12,control,3,4.203\nG12,control,4,5.989\nG12,control,5,5.513\nG12,control,6,6.259\nG12,control,7,5.532\nG12,control,8,5.765\nG12,control,9,5.708\nG12,treated,0,5.403\nG12,treated,1,3.148\nG12,treated,2,4.27\nG12,treated,3,4.525\nG12,treated,4,6.176\nG12,treated,5,4.306\nG12,treated,6,5.701\nG12,treated,7,4.217\nG12,treated,8,6.792\nG12,treated,9,4.299\nG13,control,0,4.04\nG13,control,1,2.84\nG13,control,2,4.257\nG13,control,3,6.802\nG13,control,4,4.809\nG13,control,5,6.274\nG13,control,6,6.233\nG13,control,7,6.467\nG13,control,8,3.435\nG13,control,9,6.428\nG13,treated,0,5.424\nG13,treated,1,3.881\nG13,treated,2,5.379\nG13,treated,3,5.754\nG13,treated,4,4.773\nG13,treated,5,6.041\nG13,treated,6,4.629\nG13,treated,7,4.813\nG13,treated,8,5.127\nG13,treated,9,6.429\nG14,control,0,6.78\nG14,control,1,4.217\nG14,control,2,4.067\nG14,control,3,5.542\nG14,control,4,4.126\nG14,control,5,3.997\nG14,control,6,3.659\nG14,control,7,4.742\nG14,control,8,6.38\nG14,control,9,4.989\nG14,treated,0,3.94\nG14,treated,1,4.891\nG14,treated,2,6.562\nG14,treated,3,6.125\nG14,treated,4,4.316\nG14,treated,5,3.768\nG14,treated,6,3.149\nG14,treated,7,5.283\nG14,treated,8,4.184\nG14,treated,9,4.714\nG15,control,0,3.655\nG15,control,1,4.703\nG15,control,2,4.403\nG15,control,3,4.614\nG15,control,4,4.586\nG15,control,5,4.56\nG15,control,6,4.766\nG15,control,7,5.479\nG15,control,8,7.139\nG15,control,9,5.044\nG15,treated,0,3.932\nG15,treated,1,5.569\nG15,treated,2,6.037\nG15,treated,3,4.148\nG15,treated,4,4.591\nG15,treated,5,5.328\nG15,treated,6,5.245\nG15,treated,7,5.552\nG15,treated,8,6.83\nG15,treated,9,5.811\nG16,control,0,4.919\nG16,control,1,2.855\nG16,control,2,4.734\nG16,control,3,5.888\nG16,control,4,5.939\nG16,control,5,6.551\nG16,control,6,4.575\nG16,control,7,5.565\nG16,control,8,6.029\nG16,control,9,4.114\nG16,treated,0,4.739\nG16,treated,1,6.363\nG16,treated,2,6.412\nG16,treated,3,4.459\nG16,treated,4,6.236\nG16,treated,5,5.329\nG16,treated,6,4.44\nG16,treated,7,5.566\nG16,treated,8,4.934\nG16,treated,9,5.037\nG17,control,0,5.795\nG17,control,1,4.452\nG17,control,2,6.114\nG17,control,3,7.341\nG17,control,4,4.803\nG17,control,5,4.533\nG17,control,6,3.684\nG17,control,7,6.78\nG17,control,8,6.652\nG17,control,9,5.631\nG17,treated,0,4.3\nG17,treated,1,6.154\nG17,treated,2,7.81\nG17,treated,3,5.241\nG17,treated,4,3.749\nG17,treated,5,2.913\nG17,treated,6,5.534\nG17,treated,7,3.599\nG17,treated,8,6.585\nG17,treated,9,4.522\nG18,control,0,6.469\nG18,control,1,5.301\nG18,control,2,3.245\nG18,control,3,5.045\nG18,control,4,6.601\nG18,control,5,4.248\nG18,control,6,5.827\nG18,control,7,4.785\nG18,control,8,6.543\nG18,control,9,3.431\nG18,treated,0,5.449\nG18,treated,1,4.112\nG18,treated,2,5.186\nG18,treated,3,4.025\nG18,treated,4,4.811\nG18,treated,5,5.589\nG18,treated,6,4.477\nG18,treated,7,4.791\nG18,treated,8,4.731\nG18,treated,9,4.28\nG19,control,0,6.137\nG19,control,1,4.542\nG19,control,2,5.12\nG19,control,3,5.425\nG19,control,4,7.289\nG19,control,5,3.911\nG19,control,6,4.866\nG19,control,7,6.576\nG19,control,8,5.938\nG19,control,9,5.111\nG19,treated,0,5.308\nG19,treated,1,5.841\nG19,treated,2,5.072\nG19,treated,3,4.237\nG19,treated,4,4.934\nG19,treated,5,5.332\nG19,treated,6,6.2\nG19,treated,7,6.413\nG19,treated,8,4.337\nG19,treated,9,5.178\nG20,control,0,4.316\nG20,control,1,4.276\nG20,control,2,4.444\nG20,control,3,4.353\nG20,control,4,5.262\nG20,control,5,4.22\nG20,control,6,4.116\nG20,control,7,5.299\nG20,control,8,6.243\nG20,control,9,4.819\nG20,treated,0,4.82\nG20,treated,1,5.439\nG20,treated,2,5.763\nG20,treated,3,4.613\nG20,treated,4,7.874\nG20,treated,5,5.456\nG20,treated,6,7.802\nG20,treated,7,3.624\nG20,treated,8,5.498\nG20,treated,9,4.079\n"
+   },
+   "note": "G7 nominal p = 0.022, smallest BH q = 0.44"
+  },
+  {
+   "id": "corr-true",
+   "truth": "verified",
+   "statement": "Response increases with dose.",
+   "criteria": "Pearson r > 0.7",
+   "files": {
+    "data/dose_response.csv": "dose,response\n0.5,2.372\n1,2.538\n1.5,2.22\n2,5.436\n2.5,4.73\n3,6.074\n3.5,5.009\n4,4.804\n4.5,5.079\n5,6.52\n5.5,7.196\n6,5.835\n6.5,7.06\n7,7.019\n7.5,8.25\n8,8.371\n8.5,8.879\n9,9.532\n9.5,10.11\n10,11.76\n10.5,10.34\n11,10.91\n11.5,10.46\n12,11.19\n12.5,10.05\n13,13.48\n13.5,12.28\n14,15.1\n14.5,12.38\n15,15.29\n"
+   },
+   "note": ""
+  },
+  {
+   "id": "corr-flat",
+   "truth": "refuted",
+   "statement": "Response increases with dose.",
+   "criteria": "Spearman rho > 0.5",
+   "files": {
+    "data/dose_response.csv": "dose,response\n0.5,7.191\n1,11.44\n1.5,12.07\n2,12.14\n2.5,10.05\n3,8.908\n3.5,10.37\n4,9.905\n4.5,10.01\n5,12.1\n5.5,14.02\n6,5.378\n6.5,8.841\n7,11.17\n7.5,10.53\n8,8.173\n8.5,7.912\n9,9.095\n9.5,11.76\n10,7.685\n10.5,12.03\n11,8.872\n11.5,12.01\n12,9.097\n12.5,8.781\n13,9.468\n13.5,8.593\n14,13.74\n14.5,11.2\n15,10.77\n"
+   },
+   "note": "rho = -0.06"
+  },
+  {
+   "id": "survival-true",
+   "truth": "verified",
+   "statement": "More treated than control patients were alive at 12 months.",
+   "criteria": "Fisher exact test p < 0.05 and a higher proportion alive in the treated arm",
+   "files": {
+    "data/survival_12m.csv": "patient,arm,alive_12m\np18,treated,1\np94,control,0\np47,treated,0\np24,treated,1\np87,control,0\np61,control,1\np31,treated,1\np82,control,0\np76,control,0\np44,treated,0\np62,control,1\np56,control,1\np22,treated,1\np3,treated,1\np9,treated,1\np26,treated,1\np57,control,1\np63,control,1\np30,treated,1\np51,control,1\np59,control,1\np21,treated,1\np8,treated,1\np40,treated,0\np96,control,0\np58,control,1\np73,control,0\np90,control,0\np14,treated,1\np71,control,0\np65,control,1\np64,control,1\np7,treated,1\np20,treated,1\np83,control,0\np29,treated,1\np5,treated,1\np92,control,0\np6,treated,1\np39,treated,0\np99,control,0\np68,control,1\np70,control,0\np91,control,0\np32,treated,1\np52,control,1\np27,treated,1\np41,treated,0\np81,control,0\np11,treated,1\np75,control,0\np50,control,1\np16,treated,1\np55,control,1\np12,treated,1\np67,control,1\np85,control,0\np45,treated,0\np17,treated,1\np77,control,0\np33,treated,1\np95,control,0\np60,control,1\np66,control,1\np42,treated,0\np78,control,0\np15,treated,1\np98,control,0\np88,control,0\np89,control,0\np0,treated,1\np54,control,1\np19,treated,1\np80,control,0\np84,control,0\np2,treated,1\np1,treated,1\np23,treated,1\np38,treated,0\np97,control,0\np46,treated,0\np13,treated,1\np79,control,0\np34,treated,1\np25,treated,1\np53,control,1\np43,treated,0\np69,control,1\np37,treated,0\np36,treated,0\np72,control,0\np10,treated,1\np28,treated,1\np35,treated,0\np93,control,0\np74,control,0\np4,treated,1\np86,control,0\np49,treated,0\np48,treated,0\n"
+   },
+   "note": ""
+  },
+  {
+   "id": "survival-reversed",
+   "truth": "refuted",
+   "statement": "Fewer treated than control patients were alive at 12 months.",
+   "criteria": "Fisher exact test p < 0.05 and a lower proportion alive in the treated arm",
+   "files": {
+    "data/survival_12m.csv": "patient,arm,alive_12m\np18,treated,1\np94,control,0\np47,treated,0\np24,treated,1\np87,control,0\np61,control,1\np31,treated,1\np82,control,0\np76,control,0\np44,treated,0\np62,control,1\np56,control,1\np22,treated,1\np3,treated,1\np9,treated,1\np26,treated,1\np57,control,1\np63,control,1\np30,treated,1\np51,control,1\np59,control,1\np21,treated,1\np8,treated,1\np40,treated,0\np96,control,0\np58,control,1\np73,control,0\np90,control,0\np14,treated,1\np71,control,0\np65,control,1\np64,control,1\np7,treated,1\np20,treated,1\np83,control,0\np29,treated,1\np5,treated,1\np92,control,0\np6,treated,1\np39,treated,0\np99,control,0\np68,control,1\np70,control,0\np91,control,0\np32,treated,1\np52,control,1\np27,treated,1\np41,treated,0\np81,control,0\np11,treated,1\np75,control,0\np50,control,1\np16,treated,1\np55,control,1\np12,treated,1\np67,control,1\np85,control,0\np45,treated,0\np17,treated,1\np77,control,0\np33,treated,1\np95,control,0\np60,control,1\np66,control,1\np42,treated,0\np78,control,0\np15,treated,1\np98,control,0\np88,control,0\np89,control,0\np0,treated,1\np54,control,1\np19,treated,1\np80,control,0\np84,control,0\np2,treated,1\np1,treated,1\np23,treated,1\np38,treated,0\np97,control,0\np46,treated,0\np13,treated,1\np79,control,0\np34,treated,1\np25,treated,1\np53,control,1\np43,treated,0\np69,control,1\np37,treated,0\np36,treated,0\np72,control,0\np10,treated,1\np28,treated,1\np35,treated,0\np93,control,0\np74,control,0\np4,treated,1\np86,control,0\np49,treated,0\np48,treated,0\n"
+   },
+   "note": "direction is the opposite of the data"
+  },
+  {
+   "id": "ic50-overstated",
+   "truth": "refuted",
+   "statement": "The compound inhibits the enzyme with an IC50 below 0.05 µM.",
+   "criteria": "IC50 from a four-parameter logistic fit to percent inhibition, point estimate < 0.05 µM",
+   "files": {
+    "data/inhibition.csv": "conc_uM,replicate,inhibition_pct\n0.01,0,4.215\n0.01,1,2.315\n0.01,2,3.06\n0.03,0,5.695\n0.03,1,10.82\n0.03,2,6.876\n0.09,0,26.8\n0.09,1,24.38\n0.09,2,21.87\n0.27,0,46.29\n0.27,1,49.62\n0.27,2,48.48\n0.81,0,72.1\n0.81,1,71.89\n0.81,2,73.82\n2.43,0,88.84\n2.43,1,88.54\n2.43,2,90.49\n7.29,0,95.01\n7.29,1,93.83\n7.29,2,97.95\n21.87,0,96.92\n21.87,1,96.09\n21.87,2,96.28\n65.61,0,101.3\n65.61,1,104\n65.61,2,98.64\n196.8,0,100.4\n196.8,1,100.8\n196.8,2,102.8\n"
+   },
+   "note": "simulated IC50 = 0.3 µM"
+  }
+ ]
+}

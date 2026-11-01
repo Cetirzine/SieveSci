@@ -1,0 +1,1042 @@
+{
+ "entries": [
+  {
+   "cas": "111-48-8",
+   "cid": 5447,
+   "inchikey": "YODZTKMDCQEPHD-UHFFFAOYSA-N",
+   "smiles": "OCCSCCO",
+   "source": "australia group"
+  },
+  {
+   "cas": "10025-87-3",
+   "cid": 24813,
+   "inchikey": "XHXFXVLFKHQFAL-UHFFFAOYSA-N",
+   "smiles": "O=P(Cl)(Cl)Cl",
+   "source": "australia group"
+  },
+  {
+   "cas": "756-79-6",
+   "cid": 12958,
+   "inchikey": "VONWDASPFIQPDY-UHFFFAOYSA-N",
+   "smiles": "COP(C)(=O)OC",
+   "source": "australia group"
+  },
+  {
+   "cas": "676-99-3",
+   "cid": 69610,
+   "inchikey": "PQIOSYKVBBWRRI-UHFFFAOYSA-N",
+   "smiles": "CP(=O)(F)F",
+   "source": "australia group"
+  },
+  {
+   "cas": "676-97-1",
+   "cid": 12671,
+   "inchikey": "SCLFRABIDYGTAZ-UHFFFAOYSA-N",
+   "smiles": "CP(=O)(Cl)Cl",
+   "source": "australia group"
+  },
+  {
+   "cas": "868-85-9",
+   "cid": 6327114,
+   "inchikey": "YLFBFPXKTIQSSY-UHFFFAOYSA-N",
+   "smiles": "CO[P+](=O)OC",
+   "source": "australia group"
+  },
+  {
+   "cas": "7719-12-2",
+   "cid": 24387,
+   "inchikey": "FAIAAWCVCHQXDN-UHFFFAOYSA-N",
+   "smiles": "ClP(Cl)Cl",
+   "source": "australia group"
+  },
+  {
+   "cas": "121-45-9",
+   "cid": 8472,
+   "inchikey": "CYTQBVOFDCPGCX-UHFFFAOYSA-N",
+   "smiles": "COP(OC)OC",
+   "source": "australia group"
+  },
+  {
+   "cas": "7719-09-7",
+   "cid": 24386,
+   "inchikey": "FYSNRJHAOHDILO-UHFFFAOYSA-N",
+   "smiles": "O=S(Cl)Cl",
+   "source": "australia group"
+  },
+  {
+   "cas": "3554-74-3",
+   "cid": 98016,
+   "inchikey": "UKANCZCEGQDKGF-UHFFFAOYSA-N",
+   "smiles": "CN1CCCC(O)C1",
+   "source": "australia group"
+  },
+  {
+   "cas": "96-79-7",
+   "cid": 7312,
+   "inchikey": "DBVADBHSJCWFKI-UHFFFAOYSA-N",
+   "smiles": "CC(C)N(CCCl)C(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "5842-07-9",
+   "cid": 111102,
+   "inchikey": "IFZVKYXDCOHPOT-UHFFFAOYSA-N",
+   "smiles": "CC(C)N(CCS)C(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "1619-34-7",
+   "cid": 15381,
+   "inchikey": "IVLICPVPXWEGCA-UHFFFAOYSA-N",
+   "smiles": "OC1CN2CCC1CC2",
+   "source": "australia group"
+  },
+  {
+   "cas": "7789-23-3",
+   "cid": 813,
+   "inchikey": "NPYPAHLBTDXSSS-UHFFFAOYSA-N",
+   "smiles": "[K+]",
+   "source": "australia group"
+  },
+  {
+   "cas": "107-07-3",
+   "cid": 34,
+   "inchikey": "SZIFAVKTNFCBPC-UHFFFAOYSA-N",
+   "smiles": "OCCCl",
+   "source": "australia group"
+  },
+  {
+   "cas": "124-40-3",
+   "cid": 674,
+   "inchikey": "ROSDSFDQCJNGOL-UHFFFAOYSA-N",
+   "smiles": "CNC",
+   "source": "australia group"
+  },
+  {
+   "cas": "78-38-6",
+   "cid": 6534,
+   "inchikey": "AATNZNJRDOVKDD-UHFFFAOYSA-N",
+   "smiles": "CCOP(=O)(CC)OCC",
+   "source": "australia group"
+  },
+  {
+   "cas": "2404-03-7",
+   "cid": 520087,
+   "inchikey": "MSDFSXFZUKFPKX-UHFFFAOYSA-N",
+   "smiles": "CCOP(=O)(OCC)N(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "762-04-9",
+   "cid": 6327654,
+   "inchikey": "LXCYSACZTOKNNS-UHFFFAOYSA-N",
+   "smiles": "CCO[P+](=O)OCC",
+   "source": "australia group"
+  },
+  {
+   "cas": "506-59-2",
+   "cid": 674,
+   "inchikey": "ROSDSFDQCJNGOL-UHFFFAOYSA-N",
+   "smiles": "CNC",
+   "source": "australia group"
+  },
+  {
+   "cas": "1498-40-4",
+   "cid": 15157,
+   "inchikey": "JHNJGLVSPIMBLD-UHFFFAOYSA-N",
+   "smiles": "CCP(Cl)Cl",
+   "source": "australia group"
+  },
+  {
+   "cas": "1066-50-8",
+   "cid": 70596,
+   "inchikey": "OWGJXSYVHQEVHS-UHFFFAOYSA-N",
+   "smiles": "CCP(=O)(Cl)Cl",
+   "source": "australia group"
+  },
+  {
+   "cas": "753-98-0",
+   "cid": 12585494,
+   "inchikey": "GAEHUYVKDMCAMJ-UHFFFAOYSA-N",
+   "smiles": "CCP(=O)(F)F",
+   "source": "australia group"
+  },
+  {
+   "cas": "7664-39-3",
+   "cid": 14917,
+   "inchikey": "KRHYYFGTRYWZRS-UHFFFAOYSA-N",
+   "smiles": "F",
+   "source": "australia group"
+  },
+  {
+   "cas": "76-89-1",
+   "cid": 66159,
+   "inchikey": "LJFIHTFNTGQZJL-UHFFFAOYSA-N",
+   "smiles": "COC(=O)C(O)(C1=CC=CC=C1)C1=CC=CC=C1",
+   "source": "australia group"
+  },
+  {
+   "cas": "676-83-5",
+   "cid": 61194,
+   "inchikey": "CDPKWOKGVUHZFR-UHFFFAOYSA-N",
+   "smiles": "CP(Cl)Cl",
+   "source": "australia group"
+  },
+  {
+   "cas": "96-80-0",
+   "cid": 7313,
+   "inchikey": "ZYWUVGFIXPNBDL-UHFFFAOYSA-N",
+   "smiles": "CC(C)N(CCO)C(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "464-07-3",
+   "cid": 10045,
+   "inchikey": "DFOXKPDFWGNLJU-UHFFFAOYSA-N",
+   "smiles": "CC(O)C(C)(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "57856-11-8",
+   "cid": 170325,
+   "inchikey": "OIQVKKOBTVZIFE-UHFFFAOYSA-N",
+   "smiles": "CCOP(C)OCCN(C(C)C)C(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "122-52-1",
+   "cid": 31215,
+   "inchikey": "BDZBKCUKTQZUTL-UHFFFAOYSA-N",
+   "smiles": "CCOP(OCC)OCC",
+   "source": "australia group"
+  },
+  {
+   "cas": "7784-34-1",
+   "cid": 24570,
+   "inchikey": "OEYOHULQRFXULB-UHFFFAOYSA-N",
+   "smiles": "Cl[As](Cl)Cl",
+   "source": "australia group"
+  },
+  {
+   "cas": "76-93-7",
+   "cid": 6463,
+   "inchikey": "UKXSKSHDVLQNKG-UHFFFAOYSA-N",
+   "smiles": "O=C(O)C(O)(C1=CC=CC=C1)C1=CC=CC=C1",
+   "source": "australia group"
+  },
+  {
+   "cas": "15715-41-0",
+   "cid": 85063,
+   "inchikey": "NSSMTQDEWVTEKN-UHFFFAOYSA-N",
+   "smiles": "CCOP(C)OCC",
+   "source": "australia group"
+  },
+  {
+   "cas": "6163-75-3",
+   "cid": 521983,
+   "inchikey": "YHQMSHVVGOSZEW-UHFFFAOYSA-N",
+   "smiles": "CCP(=O)(OC)OC",
+   "source": "australia group"
+  },
+  {
+   "cas": "430-78-4",
+   "cid": 23280220,
+   "inchikey": "DUCRUCROZRWMSA-UHFFFAOYSA-N",
+   "smiles": "CCP(F)F",
+   "source": "australia group"
+  },
+  {
+   "cas": "753-59-3",
+   "cid": 136565,
+   "inchikey": "AMJMBJIZKKMZIE-UHFFFAOYSA-N",
+   "smiles": "CP(F)F",
+   "source": "australia group"
+  },
+  {
+   "cas": "3731-38-2",
+   "cid": 19507,
+   "inchikey": "ZKMZPXWMMSBLNO-UHFFFAOYSA-N",
+   "smiles": "O=C1CN2CCC1CC2",
+   "source": "australia group"
+  },
+  {
+   "cas": "10026-13-8",
+   "cid": 24819,
+   "inchikey": "UHZYTMXLRWXGPK-UHFFFAOYSA-N",
+   "smiles": "ClP(Cl)(Cl)(Cl)Cl",
+   "source": "australia group"
+  },
+  {
+   "cas": "75-97-8",
+   "cid": 6416,
+   "inchikey": "PJGSXYOJTGTZAV-UHFFFAOYSA-N",
+   "smiles": "CC(=O)C(C)(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "151-50-8",
+   "cid": 5975,
+   "inchikey": "XFXPMWWXUTWYJX-UHFFFAOYSA-N",
+   "smiles": "[C-]#N",
+   "source": "australia group"
+  },
+  {
+   "cas": "7789-29-9",
+   "cid": 297,
+   "inchikey": "VNWKTOKETHGBQD-UHFFFAOYSA-N",
+   "smiles": "C",
+   "source": "australia group"
+  },
+  {
+   "cas": "1341-49-7",
+   "cid": 223,
+   "inchikey": "QGZKDVFQNNGYKY-UHFFFAOYSA-O",
+   "smiles": "[NH4+]",
+   "source": "australia group"
+  },
+  {
+   "cas": "1333-83-1",
+   "cid": 923,
+   "inchikey": "FKNQFGJONOIPTF-UHFFFAOYSA-N",
+   "smiles": "[Na+]",
+   "source": "australia group"
+  },
+  {
+   "cas": "7681-49-4",
+   "cid": 923,
+   "inchikey": "FKNQFGJONOIPTF-UHFFFAOYSA-N",
+   "smiles": "[Na+]",
+   "source": "australia group"
+  },
+  {
+   "cas": "143-33-9",
+   "cid": 5975,
+   "inchikey": "XFXPMWWXUTWYJX-UHFFFAOYSA-N",
+   "smiles": "[C-]#N",
+   "source": "australia group"
+  },
+  {
+   "cas": "102-71-6",
+   "cid": 7618,
+   "inchikey": "GSEJCLTVZPLZKY-UHFFFAOYSA-N",
+   "smiles": "OCCN(CCO)CCO",
+   "source": "australia group"
+  },
+  {
+   "cas": "1314-80-3",
+   "cid": 297,
+   "inchikey": "VNWKTOKETHGBQD-UHFFFAOYSA-N",
+   "smiles": "C",
+   "source": "australia group"
+  },
+  {
+   "cas": "108-18-9",
+   "cid": 7912,
+   "inchikey": "UAOMVDZJSHZZME-UHFFFAOYSA-N",
+   "smiles": "CC(C)NC(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "100-37-8",
+   "cid": 7497,
+   "inchikey": "BFSVOASYOCHEOV-UHFFFAOYSA-N",
+   "smiles": "CCN(CC)CCO",
+   "source": "australia group"
+  },
+  {
+   "cas": "1313-82-2",
+   "cid": 5047209,
+   "inchikey": "RWSOTUBLDIXVET-UHFFFAOYSA-M",
+   "smiles": "[SH-]",
+   "source": "australia group"
+  },
+  {
+   "cas": "10025-67-9",
+   "cid": 24807,
+   "inchikey": "PXJJSXABGXMUSU-UHFFFAOYSA-N",
+   "smiles": "ClSSCl",
+   "source": "australia group"
+  },
+  {
+   "cas": "10545-99-0",
+   "cid": 25353,
+   "inchikey": "FWMUJAIKEJWSSY-UHFFFAOYSA-N",
+   "smiles": "ClSCl",
+   "source": "australia group"
+  },
+  {
+   "cas": "637-39-8",
+   "cid": 7618,
+   "inchikey": "GSEJCLTVZPLZKY-UHFFFAOYSA-N",
+   "smiles": "OCCN(CCO)CCO",
+   "source": "australia group"
+  },
+  {
+   "cas": "4261-68-1",
+   "cid": 7312,
+   "inchikey": "DBVADBHSJCWFKI-UHFFFAOYSA-N",
+   "smiles": "CC(C)N(CCCl)C(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "993-13-5",
+   "cid": 13818,
+   "inchikey": "YACKEPLHDIMKIO-UHFFFAOYSA-N",
+   "smiles": "CP(=O)(O)O",
+   "source": "australia group"
+  },
+  {
+   "cas": "683-08-9",
+   "cid": 12685,
+   "inchikey": "NYYLZXREFNYPKB-UHFFFAOYSA-N",
+   "smiles": "CCOP(C)(=O)OCC",
+   "source": "australia group"
+  },
+  {
+   "cas": "677-43-0",
+   "cid": 12673,
+   "inchikey": "YNHXBEVSSILHPI-UHFFFAOYSA-N",
+   "smiles": "CN(C)P(=O)(Cl)Cl",
+   "source": "australia group"
+  },
+  {
+   "cas": "116-17-6",
+   "cid": 8304,
+   "inchikey": "SJHCUXCOGGKFAI-UHFFFAOYSA-N",
+   "smiles": "CC(C)OP(OC(C)C)OC(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "139-87-7",
+   "cid": 8769,
+   "inchikey": "AKNUHUCEWALCOI-UHFFFAOYSA-N",
+   "smiles": "CCN(CCO)CCO",
+   "source": "australia group"
+  },
+  {
+   "cas": "2465-65-8",
+   "cid": 655,
+   "inchikey": "PKUWKAXTAVNIJR-UHFFFAOYSA-N",
+   "smiles": "CCOP(O)(=S)OCC",
+   "source": "australia group"
+  },
+  {
+   "cas": "298-06-6",
+   "cid": 9274,
+   "inchikey": "IRDLUHRVLVEUHA-UHFFFAOYSA-N",
+   "smiles": "CCOP(=S)(S)OCC",
+   "source": "australia group"
+  },
+  {
+   "cas": "16893-85-9",
+   "cid": 28117,
+   "inchikey": "OHORFAFFMDIQRR-UHFFFAOYSA-N",
+   "smiles": "F[Si-2](F)(F)(F)(F)F",
+   "source": "australia group"
+  },
+  {
+   "cas": "676-98-2",
+   "cid": 61195,
+   "inchikey": "TUNCWCIKOHOGJX-UHFFFAOYSA-N",
+   "smiles": "CP(=S)(Cl)Cl",
+   "source": "australia group"
+  },
+  {
+   "cas": "109-89-7",
+   "cid": 8021,
+   "inchikey": "HPNMFZURTQLUMO-UHFFFAOYSA-N",
+   "smiles": "CCNCC",
+   "source": "australia group"
+  },
+  {
+   "cas": "41480-75-5",
+   "cid": 111102,
+   "inchikey": "IFZVKYXDCOHPOT-UHFFFAOYSA-N",
+   "smiles": "CC(C)N(CCS)C(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "677-24-7",
+   "cid": 69611,
+   "inchikey": "SNVCRNWSNUUGEA-UHFFFAOYSA-N",
+   "smiles": "COP(=O)(Cl)Cl",
+   "source": "australia group"
+  },
+  {
+   "cas": "1498-51-7",
+   "cid": 15158,
+   "inchikey": "YZBOZNXACBQJHI-UHFFFAOYSA-N",
+   "smiles": "CCOP(=O)(Cl)Cl",
+   "source": "australia group"
+  },
+  {
+   "cas": "22382-13-4",
+   "cid": 123401,
+   "inchikey": "ZLTVJTLCEBCPRC-UHFFFAOYSA-N",
+   "smiles": "COP(=O)(F)F",
+   "source": "australia group"
+  },
+  {
+   "cas": "460-52-6",
+   "cid": 120250,
+   "inchikey": "CNDDYKSDJBKASR-UHFFFAOYSA-N",
+   "smiles": "CCOP(=O)(F)F",
+   "source": "australia group"
+  },
+  {
+   "cas": "589-57-1",
+   "cid": 68530,
+   "inchikey": "TXHWYSOQHNMOOU-UHFFFAOYSA-N",
+   "smiles": "CCOP(Cl)OCC",
+   "source": "australia group"
+  },
+  {
+   "cas": "754-01-8",
+   "cid": 23418492,
+   "inchikey": "GUDIWCZJEDSHOE-UHFFFAOYSA-N",
+   "smiles": "COP(=O)(F)Cl",
+   "source": "australia group"
+  },
+  {
+   "cas": "762-77-6",
+   "cid": 23416048,
+   "inchikey": "GKMSNBMXTVUSFQ-UHFFFAOYSA-N",
+   "smiles": "CCOP(=O)(F)Cl",
+   "source": "australia group"
+  },
+  {
+   "cas": "44205-42-7",
+   "cid": 12669390,
+   "inchikey": "DSWNRHCOGVRDOE-UHFFFAOYSA-N",
+   "smiles": "CN(C)C=N",
+   "source": "australia group"
+  },
+  {
+   "cas": "90324-67-7",
+   "cid": 17912027,
+   "inchikey": "WJPHKKLZKLZWDB-UHFFFAOYSA-N",
+   "smiles": "CCN(C=N)CC",
+   "source": "australia group"
+  },
+  {
+   "cas": "48044-20-8",
+   "cid": 87832225,
+   "inchikey": "BLDHGACEPAYSQL-UHFFFAOYSA-N",
+   "smiles": "CCCN(C=N)CCC",
+   "source": "australia group"
+  },
+  {
+   "cas": "857522-08-8",
+   "cid": 19782034,
+   "inchikey": "ZQRAQDIQRXIIGH-UHFFFAOYSA-N",
+   "smiles": "CC(C)N(C=N)C(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "2909-14-0",
+   "cid": 6394935,
+   "inchikey": "PAXRVGDTBDATMF-UHFFFAOYSA-N",
+   "smiles": "CC(=N)N(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "14277-06-6",
+   "cid": 4243241,
+   "inchikey": "RXSIKRLQGANXCL-UHFFFAOYSA-N",
+   "smiles": "CCN(CC)C(C)=N",
+   "source": "australia group"
+  },
+  {
+   "cas": "1339586-99-0",
+   "cid": 62047941,
+   "inchikey": "NCEHBEWJERYLDC-UHFFFAOYSA-N",
+   "smiles": "CCCN(CCC)C(C)=N",
+   "source": "australia group"
+  },
+  {
+   "cas": "56776-14-8",
+   "cid": 12375523,
+   "inchikey": "HFNWYQJFWCTELT-UHFFFAOYSA-N",
+   "smiles": "CCC(=N)N(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "84764-73-8",
+   "cid": 13109962,
+   "inchikey": "KCIXJSPXBFPFGZ-UHFFFAOYSA-N",
+   "smiles": "CCC(=N)N(CC)CC",
+   "source": "australia group"
+  },
+  {
+   "cas": "1341496-89-6",
+   "cid": 62047942,
+   "inchikey": "QGXGUIYCSOPPGP-UHFFFAOYSA-N",
+   "smiles": "CCCN(CCC)C(=N)CC",
+   "source": "australia group"
+  },
+  {
+   "cas": "1340437-35-5",
+   "cid": 17928752,
+   "inchikey": "XXHLECYBVSUVRK-UHFFFAOYSA-N",
+   "smiles": "CCCC(=N)N(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "53510-30-8",
+   "cid": 57106491,
+   "inchikey": "RFCZFRBWFIKGTJ-UHFFFAOYSA-N",
+   "smiles": "CCCC(=N)N(CC)CC",
+   "source": "australia group"
+  },
+  {
+   "cas": "1342422-35-8",
+   "cid": 62048118,
+   "inchikey": "LVXHITFMDGAYLY-UHFFFAOYSA-N",
+   "smiles": "CCCC(=N)N(CCC)CCC",
+   "source": "australia group"
+  },
+  {
+   "cas": "1315467-17-4",
+   "cid": 101801650,
+   "inchikey": "IRABBLSJPFTRAG-UHFFFAOYSA-N",
+   "smiles": "CCCC(=N)N(C(C)C)C(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "321881-25-8",
+   "cid": 21623186,
+   "inchikey": "MNSQSJWQUTWSOO-UHFFFAOYSA-N",
+   "smiles": "CC(C)C(=N)N(C)C",
+   "source": "australia group"
+  },
+  {
+   "cas": "1342789-47-2",
+   "cid": 297,
+   "inchikey": "VNWKTOKETHGBQD-UHFFFAOYSA-N",
+   "smiles": "C",
+   "source": "australia group"
+  },
+  {
+   "cas": "1342700-45-1",
+   "cid": 297,
+   "inchikey": "VNWKTOKETHGBQD-UHFFFAOYSA-N",
+   "smiles": "C",
+   "source": "australia group"
+  },
+  {
+   "cas": "107-44-8",
+   "cid": 7871,
+   "inchikey": "DYAHQFWOVKZOOW-UHFFFAOYSA-N",
+   "smiles": "CC(C)OP(C)(=O)F",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "96-64-0",
+   "cid": 7305,
+   "inchikey": "GRXKLBBBQUKJJZ-UHFFFAOYSA-N",
+   "smiles": "CC(OP(C)(=O)F)C(C)(C)C",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "77-81-6",
+   "cid": 6500,
+   "inchikey": "PJVJTCIRVMBVIA-UHFFFAOYSA-N",
+   "smiles": "CCOP(=O)(C#N)N(C)C",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "50782-69-9",
+   "cid": 39793,
+   "inchikey": "JJIUCEJQJXNMHV-UHFFFAOYSA-N",
+   "smiles": "CCOP(C)(=O)SCCN(C(C)C)C(C)C",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "2625-76-5",
+   "cid": 14557887,
+   "inchikey": "HHQVSDLFPSFPST-UHFFFAOYSA-N",
+   "smiles": "ClCCSCCl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "505-60-2",
+   "cid": 10461,
+   "inchikey": "QKSKPIVNLNLAAV-UHFFFAOYSA-N",
+   "smiles": "ClCCSCCCl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "63869-13-6",
+   "cid": 522107,
+   "inchikey": "RKTJTTAEKCRXNL-UHFFFAOYSA-N",
+   "smiles": "ClCCSCSCCCl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "3563-36-8",
+   "cid": 19092,
+   "inchikey": "AMGNHZVUZWILSB-UHFFFAOYSA-N",
+   "smiles": "ClCCSCCSCCCl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "63905-10-2",
+   "cid": 522108,
+   "inchikey": "YHRGRBPJIRKFND-UHFFFAOYSA-N",
+   "smiles": "ClCCSCCCSCCCl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "142868-93-7",
+   "cid": 518918,
+   "inchikey": "AYSIRJGVBLMLAS-UHFFFAOYSA-N",
+   "smiles": "ClCCSCCCCSCCCl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "142868-94-8",
+   "cid": 22608774,
+   "inchikey": "CUJOZMZOOCTTAZ-UHFFFAOYSA-N",
+   "smiles": "ClCCSCCCCCSCCCl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "63918-90-1",
+   "cid": 22608780,
+   "inchikey": "IJGBNRTYNRKNHS-UHFFFAOYSA-N",
+   "smiles": "ClCCSCOCSCCCl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "63918-89-8",
+   "cid": 45452,
+   "inchikey": "FWVCSXWHVOOTFJ-UHFFFAOYSA-N",
+   "smiles": "ClCCSCCOCCSCCCl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "541-25-3",
+   "cid": 5372798,
+   "inchikey": "GIKLTQKNOXNBNY-OWOJBTEDSA-N",
+   "smiles": "Cl/C=C/[As](Cl)Cl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "40334-69-8",
+   "cid": 5368106,
+   "inchikey": "YRFJGLQNTWLXKO-ZPUQHVIOSA-N",
+   "smiles": "Cl/C=C/[As](Cl)/C=C/Cl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "40334-70-1",
+   "cid": 5352143,
+   "inchikey": "AOAVIJUEFJPSAI-GZDDRBCLSA-N",
+   "smiles": "Cl/C=C/[As](/C=C/Cl)/C=C/Cl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "538-07-8",
+   "cid": 10848,
+   "inchikey": "UQZPGHOJMQTOHB-UHFFFAOYSA-N",
+   "smiles": "CCN(CCCl)CCCl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "51-75-2",
+   "cid": 4033,
+   "inchikey": "HAWPXGHAZFHHAD-UHFFFAOYSA-N",
+   "smiles": "CN(CCCl)CCCl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "555-77-1",
+   "cid": 5561,
+   "inchikey": "FDAYLTPAFBGXAB-UHFFFAOYSA-N",
+   "smiles": "ClCCN(CCCl)CCCl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "35523-89-8",
+   "cid": 56947150,
+   "inchikey": "RPQXVSUAYFXFJA-HGRQIUPRSA-N",
+   "smiles": "NC(=O)OC[C@@H]1N=C(N)N2CCC(O)(O)[C@@]23NC(N)=N[C@@H]13",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "9009-86-3",
+   "cid": 297,
+   "inchikey": "VNWKTOKETHGBQD-UHFFFAOYSA-N",
+   "smiles": "C",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "2387495-99-8",
+   "cid": 165365051,
+   "inchikey": "IEPUOARPJDRIRJ-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCN(CCCCCCCCCC)C(CCCCCCCCC)=NP(=O)(F)CCCCCCCCCC",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "2387496-12-8",
+   "cid": 160100773,
+   "inchikey": "OUJDIWHRYQBZSR-UHFFFAOYSA-N",
+   "smiles": "CCN(CC)C(C)=NP(C)(=O)F",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "2387496-00-4",
+   "cid": 165365085,
+   "inchikey": "XMKBSLNYHANASW-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCOP(=O)(F)N=C(CCCCCCCCC)N(CCCCCCCCCC)CCCCCCCCCC",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "2387496-04-8",
+   "cid": 157299938,
+   "inchikey": "BBTXAVJVSQSXHZ-UHFFFAOYSA-N",
+   "smiles": "CCN(CC)C(C)=NP(=O)(F)OC",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "2387496-06-0",
+   "cid": 139033607,
+   "inchikey": "SBPSVLLDDYOPDZ-UHFFFAOYSA-N",
+   "smiles": "CCOP(=O)(F)N=C(C)N(CC)CC",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "2387496-14-0",
+   "cid": 146586254,
+   "inchikey": "WJDIQLITBJEMBA-UHFFFAOYSA-N",
+   "smiles": "CCN(CC)C(=NP(C)(=O)F)N(CC)CC",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "77104-62-2",
+   "cid": 165365095,
+   "inchikey": "SYCGFOHOUDICRQ-UHFFFAOYSA-N",
+   "smiles": "CN(C)C(=O)OC1=C(C[N+](C)(C)CCCCCCCCCC[N+](C)(C)CCO)N=CC=C1",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "77104-00-8",
+   "cid": 165365088,
+   "inchikey": "BBPFTDPNUDRIAP-UHFFFAOYSA-N",
+   "smiles": "CC[N+](C)(CC(=O)CCCCCCC(=O)C[N+](C)(CC)CC1=C(OC(=O)N(C)C)C=CC=N1)CC1=C(OC(=O)N(C)C)C=CC=N1",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "676-99-3",
+   "cid": 69610,
+   "inchikey": "PQIOSYKVBBWRRI-UHFFFAOYSA-N",
+   "smiles": "CP(=O)(F)F",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "57856-11-8",
+   "cid": 170325,
+   "inchikey": "OIQVKKOBTVZIFE-UHFFFAOYSA-N",
+   "smiles": "CCOP(C)OCCN(C(C)C)C(C)C",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "1445-76-7",
+   "cid": 102124,
+   "inchikey": "RHAHLPAWJVKXAZ-UHFFFAOYSA-N",
+   "smiles": "CC(C)OP(C)(=O)Cl",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "7040-57-5",
+   "cid": 145983,
+   "inchikey": "XVNBZVNXJMOQEX-UHFFFAOYSA-N",
+   "smiles": "CC(OP(C)(=O)Cl)C(C)(C)C",
+   "source": "OPCW schedule 1"
+  },
+  {
+   "cas": "382-21-8",
+   "cid": 61109,
+   "inchikey": "DAFIBNSJXIGBQB-UHFFFAOYSA-N",
+   "smiles": "FC(F)=C(C(F)(F)F)C(F)(F)F",
+   "source": "OPCW schedule 2"
+  },
+  {
+   "cas": "6581-06-2",
+   "cid": 23056,
+   "inchikey": "HGMITUYOCPPQLE-UHFFFAOYSA-N",
+   "smiles": "O=C(OC1CN2CCC1CC2)C(O)(C1=CC=CC=C1)C1=CC=CC=C1",
+   "source": "OPCW schedule 2"
+  },
+  {
+   "cas": "676-97-1",
+   "cid": 12671,
+   "inchikey": "SCLFRABIDYGTAZ-UHFFFAOYSA-N",
+   "smiles": "CP(=O)(Cl)Cl",
+   "source": "OPCW schedule 2"
+  },
+  {
+   "cas": "756-79-6",
+   "cid": 12958,
+   "inchikey": "VONWDASPFIQPDY-UHFFFAOYSA-N",
+   "smiles": "COP(C)(=O)OC",
+   "source": "OPCW schedule 2"
+  },
+  {
+   "cas": "7784-34-1",
+   "cid": 24570,
+   "inchikey": "OEYOHULQRFXULB-UHFFFAOYSA-N",
+   "smiles": "Cl[As](Cl)Cl",
+   "source": "OPCW schedule 2"
+  },
+  {
+   "cas": "76-93-7",
+   "cid": 6463,
+   "inchikey": "UKXSKSHDVLQNKG-UHFFFAOYSA-N",
+   "smiles": "O=C(O)C(O)(C1=CC=CC=C1)C1=CC=CC=C1",
+   "source": "OPCW schedule 2"
+  },
+  {
+   "cas": "1619-34-7",
+   "cid": 15381,
+   "inchikey": "IVLICPVPXWEGCA-UHFFFAOYSA-N",
+   "smiles": "OC1CN2CCC1CC2",
+   "source": "OPCW schedule 2"
+  },
+  {
+   "cas": "111-48-8",
+   "cid": 5447,
+   "inchikey": "YODZTKMDCQEPHD-UHFFFAOYSA-N",
+   "smiles": "OCCSCCO",
+   "source": "OPCW schedule 2"
+  },
+  {
+   "cas": "464-07-3",
+   "cid": 10045,
+   "inchikey": "DFOXKPDFWGNLJU-UHFFFAOYSA-N",
+   "smiles": "CC(O)C(C)(C)C",
+   "source": "OPCW schedule 2"
+  },
+  {
+   "cas": "75-44-5",
+   "cid": 6371,
+   "inchikey": "YGYAWVDWMABLBF-UHFFFAOYSA-N",
+   "smiles": "O=C(Cl)Cl",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "506-77-4",
+   "cid": 10477,
+   "inchikey": "QPJDMGCKMHUXFD-UHFFFAOYSA-N",
+   "smiles": "N#CCl",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "74-90-8",
+   "cid": 768,
+   "inchikey": "LELOWRISYMNNSU-UHFFFAOYSA-N",
+   "smiles": "C#N",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "76-06-2",
+   "cid": 6423,
+   "inchikey": "LFHISGNCFUNFFM-UHFFFAOYSA-N",
+   "smiles": "O=[N+]([O-])C(Cl)(Cl)Cl",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "10025-87-3",
+   "cid": 24813,
+   "inchikey": "XHXFXVLFKHQFAL-UHFFFAOYSA-N",
+   "smiles": "O=P(Cl)(Cl)Cl",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "7719-12-2",
+   "cid": 24387,
+   "inchikey": "FAIAAWCVCHQXDN-UHFFFAOYSA-N",
+   "smiles": "ClP(Cl)Cl",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "10026-13-8",
+   "cid": 24819,
+   "inchikey": "UHZYTMXLRWXGPK-UHFFFAOYSA-N",
+   "smiles": "ClP(Cl)(Cl)(Cl)Cl",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "121-45-9",
+   "cid": 8472,
+   "inchikey": "CYTQBVOFDCPGCX-UHFFFAOYSA-N",
+   "smiles": "COP(OC)OC",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "122-52-1",
+   "cid": 31215,
+   "inchikey": "BDZBKCUKTQZUTL-UHFFFAOYSA-N",
+   "smiles": "CCOP(OCC)OCC",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "868-85-9",
+   "cid": 6327114,
+   "inchikey": "YLFBFPXKTIQSSY-UHFFFAOYSA-N",
+   "smiles": "CO[P+](=O)OC",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "762-04-9",
+   "cid": 6327654,
+   "inchikey": "LXCYSACZTOKNNS-UHFFFAOYSA-N",
+   "smiles": "CCO[P+](=O)OCC",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "10025-67-9",
+   "cid": 24807,
+   "inchikey": "PXJJSXABGXMUSU-UHFFFAOYSA-N",
+   "smiles": "ClSSCl",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "10545-99-0",
+   "cid": 25353,
+   "inchikey": "FWMUJAIKEJWSSY-UHFFFAOYSA-N",
+   "smiles": "ClSCl",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "7719-09-7",
+   "cid": 24386,
+   "inchikey": "FYSNRJHAOHDILO-UHFFFAOYSA-N",
+   "smiles": "O=S(Cl)Cl",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "139-87-7",
+   "cid": 8769,
+   "inchikey": "AKNUHUCEWALCOI-UHFFFAOYSA-N",
+   "smiles": "CCN(CCO)CCO",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "105-59-9",
+   "cid": 7767,
+   "inchikey": "CRVGTESFCCXCTH-UHFFFAOYSA-N",
+   "smiles": "CN(CCO)CCO",
+   "source": "OPCW schedule 3"
+  },
+  {
+   "cas": "102-71-6",
+   "cid": 7618,
+   "inchikey": "GSEJCLTVZPLZKY-UHFFFAOYSA-N",
+   "smiles": "OCCN(CCO)CCO",
+   "source": "OPCW schedule 3"
+  }
+ ],
+ "generated": "2026-10-16",
+ "source": "PubChem PUG REST, from chemcrow-chem-weapons.csv"
+}
