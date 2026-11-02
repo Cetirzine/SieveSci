@@ -29,6 +29,10 @@ struct AppConfig: Codable, Equatable {
     var notifyTurnFinished = true
     var notifyPermission = true
     var showThinking = true
+    /// Look for a newer release on GitHub at launch and once a day.
+    var autoCheckUpdates = true
+    /// Download it in the background and install it on quit (or from the sidebar banner).
+    var autoInstallUpdates = true
 
     static var url: URL {
         // SIEVESCI_CONFIG_DIR: a separate configuration (fresh-install checks, several profiles).
@@ -84,5 +88,7 @@ extension AppConfig {
         notifyTurnFinished = v(.notifyTurnFinished, d.notifyTurnFinished)
         notifyPermission = v(.notifyPermission, d.notifyPermission)
         showThinking = v(.showThinking, d.showThinking)
+        autoCheckUpdates = v(.autoCheckUpdates, d.autoCheckUpdates)
+        autoInstallUpdates = v(.autoInstallUpdates, d.autoInstallUpdates)
     }
 }

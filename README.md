@@ -88,6 +88,10 @@
 
 技能（各自独立的 Python 环境，安装前需你批准）、MCP 服务器、钩子、斜杠命令、自定义命令、定时运行（macOS LaunchAgents，例如每天的文献追踪）、项目记忆文件（SIEVESCI.md / AGENTS.md / CLAUDE.md）。命令行版 `sievesci` 以无头方式运行同一个智能体（脚本、定时任务、SSH）。
 
+**更新**
+
+启动时和之后每天从 GitHub Releases 检查新版本；有新版本就在后台下载磁盘映像，用 GitHub 公布的 SHA-256 核对、检查签名，然后在侧栏提示“重启即可更新”，不重启的话退出时自动安装。也可以在菜单“检查更新…”或设置 → 通用里手动检查。两项自动行为都能在设置里关闭。
+
 界面语言：简体中文 · 正體中文 · English · Русский · Español · Français。
 
 ## 界面
@@ -99,6 +103,7 @@
 - 设计语言叫“标本单”：直角与 1 px 细线、等宽字体的标签与读数、单一强调色。线条本身有含义：**实线框**是已确定的（已核实、已批准、你自己说的话），**虚线框**是待定的（智能体提出、等审查或等你决定）；反白的等宽标签页标明内容出自哪个智能体或工具
 - 新任务是一张空白页：点阵字标像被筛子筛过一样逐点落下，输入框居中，下面是三个起点
 - 智能体工作时，旁边的小点阵像仪器的指示灯一样跳动；主要按钮和输入框是粗边框加硬投影，按下时压进投影里
+- 推理强度是一条点阵量规：档位越高，点阵流得越快；拉到最高档时变成红色并出现信号故障（glitch）效果
 - 同一界面里成组的按钮等宽；跟随系统浅色 / 深色外观；尊重“减少动态效果”
 
 完整的设计语言见 [docs/DESIGN_LANGUAGE.md](docs/DESIGN_LANGUAGE.md)。
@@ -116,7 +121,7 @@
 ./scripts/bundle-app.sh
 ```
 
-生成 `dist/SieveSci.app` 与 `dist/SieveSci.app.zip`（release 优化）。只有 Command Line Tools 时，脚本会自动改用能编译 SwiftUI 宏的 SDK。
+生成 `dist/SieveSci.app`、`dist/SieveSci.app.zip` 与 `dist/SieveSci-<版本>.dmg`（release 优化）。只有 Command Line Tools 时，脚本会自动改用能编译 SwiftUI 宏的 SDK。
 
 开发时：
 
@@ -125,7 +130,7 @@ swift build --product SieveSci
 swift test
 ```
 
-应用是 ad-hoc 签名，没有公证。从网上下载的副本被 macOS 拒绝打开时：
+应用是 ad-hoc 签名，没有公证。从网上下载的副本第一次被 macOS 拒绝打开时（之后的应用内更新不会再遇到）：
 
 ```bash
 xattr -dr com.apple.quarantine SieveSci.app

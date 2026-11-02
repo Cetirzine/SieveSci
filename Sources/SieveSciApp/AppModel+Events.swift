@@ -19,16 +19,21 @@ extension AppModel {
             }
             return
         }
-        // Only the lines appended since the last refresh are decoded.
-        let cache = traceCache?.url == url ? traceCache! : (url: url, offset: 0, entries: [])
+        // Only the lines appended since the last refresh, and only the kinds the trace shows, are decoded;
+        // the cache keeps the finished events rather than every entry of the log.
+        guard !traceReading else { traceRefreshQueued = true; return }
+        let cache = traceCache?.url == url ? traceCache! : (url: url, offset: 0, events: [])
+        traceReading = true
         Task.detached(priority: .utility) {
-            let (new, offset) = AuditLog.readNew(url, from: cache.offset)
-            let entries = cache.entries + new
-            let events = Trace.events(entries)
+            let (new, offset) = AuditLog.readNew(url, from: cache.offset, kinds: Trace.kinds)
+            let added = Trace.events(new)
             await MainActor.run {
+                self.traceReading = false
                 guard self.bench?.services.audit.url == url else { return }
-                self.traceCache = (url, offset, entries)
-                self.trace = events
+                let events = cache.events + added
+                self.traceCache = (url, offset, events)
+                if !added.isEmpty || self.trace.count != events.count { self.trace = events }
+                if self.traceRefreshQueued { self.traceRefreshQueued = false; self.refreshTrace() }
             }
         }
     }

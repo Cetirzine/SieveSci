@@ -87,6 +87,10 @@ Literature review, deep research, systematic review and meta-analysis (PRISMA), 
 
 Skills (each with its own Python environment, built after your approval), MCP servers, hooks, slash commands, custom commands, scheduled runs (macOS LaunchAgents, e.g. a daily literature watch), project memory files (SIEVESCI.md / AGENTS.md / CLAUDE.md). The `sievesci` command line runs the same agent headless (scripts, scheduled jobs, SSH).
 
+**Updates**
+
+SieveSci checks GitHub Releases at launch and daily. A new release's disk image downloads in the background, is checked against the SHA-256 GitHub publishes and its code signature, and the sidebar offers "Restart to update"; otherwise it installs when you quit. "Check for Updates…" in the app menu or Settings → General checks by hand; both automatic steps can be turned off.
+
 Interface languages: English · 简体中文 · 正體中文 · Русский · Español · Français.
 
 ## Interface
@@ -96,6 +100,7 @@ Interface languages: English · 简体中文 · 正體中文 · Русский �
 - The design language is a *specimen sheet*: square corners and 1 px rules, monospaced labels and readouts, one accent colour. Lines carry meaning: a **solid frame** is settled (verified, approved, your own words), a **dashed frame** is provisional (proposed by an agent, waiting for review or your decision); inverted monospaced tabs name the agent or tool a block came from
 - A new task is a blank page: the dot-matrix wordmark sifts into place, the composer sits in the middle, with three starting points below
 - While an agent works, a small dot grid ripples beside it like an instrument lamp; the primary buttons and the composer have heavy frames and hard shadows that they press into
+- Reasoning effort is a dot-matrix gauge: the higher the level, the faster it flows; at the top level it turns red and glitches
 - Buttons that belong together are equal width; light and dark appearance; Reduce Motion is respected
 
 The full design language is in [docs/DESIGN_LANGUAGE.md](docs/DESIGN_LANGUAGE.md).
@@ -113,7 +118,7 @@ Requires macOS 14+ and Swift 6 (Xcode 16 or later; Command Line Tools alone also
 ./scripts/bundle-app.sh
 ```
 
-This builds `dist/SieveSci.app` and `dist/SieveSci.app.zip` (release). With Command Line Tools only, the script picks an SDK that can build SwiftUI macros.
+This builds `dist/SieveSci.app`, `dist/SieveSci.app.zip` and `dist/SieveSci-<version>.dmg` (release). With Command Line Tools only, the script picks an SDK that can build SwiftUI macros.
 
 During development:
 

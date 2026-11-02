@@ -87,12 +87,17 @@ extension AppModel {
             if !files.contains(rel) { files.append(rel) }
         }
         update(\.changedFiles, files)
-        // Figures any tool wrote (scripts, kernels), not only file edits.
-        var figs = figures
-        for r in s.ledger.all.reversed() {
+        // Figures any tool wrote (scripts, kernels), not only file edits. Only receipts added since the last
+        // pass are scanned: a long task has thousands, and this runs on every tab switch and turn.
+        let from = figureScan?.audit == s.audit.url ? figureScan!.count : 0
+        let fresh = s.ledger.since(from)
+        figureScan = (s.audit.url, from + fresh.count)
+        var figs = from == 0 ? [] : figures
+        var seen = Set(figs.map(\.path))
+        for r in fresh.reversed() {
             for path in r.filesWritten.keys where Self.isFigure(path) {
                 let u = path.hasPrefix("/") ? URL(fileURLWithPath: path) : s.workspace.appendingPathComponent(path)
-                if !figs.contains(u), FileManager.default.fileExists(atPath: u.path) { figs.append(u) }
+                if seen.insert(u.path).inserted, FileManager.default.fileExists(atPath: u.path) { figs.append(u) }
             }
         }
         update(\.figures, figs)

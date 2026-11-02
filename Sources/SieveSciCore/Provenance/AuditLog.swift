@@ -70,11 +70,11 @@ public final class AuditLog: @unchecked Sendable {
         return e
     }
 
-    /// All entries, or only those of the given kinds. Lines of other kinds are skipped before decoding
-    /// (canonical encoding writes `"kind":"…"` verbatim), which keeps reopening a long task fast.
+    /// All entries, or only those of the given kinds. Lines of other kinds are skipped before decoding,
+    /// which keeps reopening a long task fast (see `wanted`).
     public static func read(_ url: URL, kinds: Set<String>? = nil) throws -> [Entry] {
         let data = try Data(contentsOf: url, options: .mappedIfSafe)
-        let needles: [[UInt8]]? = kinds.map { ks in ks.map { Array("\"kind\":\"\($0)\"".utf8) } }
+        let needles = kinds.map { Set($0.map { Array($0.utf8) }) }
         var out: [Entry] = []
         data.withUnsafeBytes { (buf: UnsafeRawBufferPointer) in
             guard let base = buf.baseAddress else { return }
@@ -92,21 +92,43 @@ public final class AuditLog: @unchecked Sendable {
         return out
     }
 
-    private static func wanted(_ line: UnsafeRawPointer, _ len: Int, _ needles: [[UInt8]]?) -> Bool {
-        guard let needles else { return true }
-        for n in needles where n.withUnsafeBytes({ memmem(line, len, $0.baseAddress, n.count) }) != nil { return true }
-        return false
+    /// Whether a line's entry kind is one of `kinds`, without decoding it. Canonical encoding sorts keys
+    /// (actor, data, hash, kind, prev, seq, session, time), so the entry's own `"kind":"…"` is the last one
+    /// on the line (a nested `kind` inside `data` comes earlier, and a quote inside a string is escaped).
+    /// Scanning back from the end touches a couple of hundred bytes however long the tool output is.
+    private static func wanted(_ line: UnsafeRawPointer, _ len: Int, _ kinds: Set<[UInt8]>?) -> Bool {
+        guard let kinds else { return true }
+        let p = line.assumingMemoryBound(to: UInt8.self)
+        let key = Array("\"kind\":\"".utf8)
+        var i = len - key.count
+        while i >= 0 {
+            if p[i] == 0x22, memcmp(p + i, key, key.count) == 0 {
+                let start = i + key.count
+                var end = start
+                while end < len, p[end] != 0x22 { end += 1 }
+                return kinds.contains(Array(UnsafeBufferPointer(start: p + start, count: end - start)))
+            }
+            i -= 1
+        }
+        return true   // not canonical: let the decoder decide
     }
 
     /// The entries appended since byte `offset` (complete lines only) and the offset to resume from.
     /// Lets a live view follow the log without re-decoding all of it.
-    public static func readNew(_ url: URL, from offset: UInt64) -> (entries: [Entry], offset: UInt64) {
+    /// With `kinds`, lines of other kinds are skipped before decoding, as in `read`.
+    public static func readNew(_ url: URL, from offset: UInt64, kinds: Set<String>? = nil) -> (entries: [Entry], offset: UInt64) {
         guard let h = try? FileHandle(forReadingFrom: url) else { return ([], offset) }
         defer { try? h.close() }
         guard (try? h.seek(toOffset: offset)) != nil else { return ([], offset) }
         let d = h.readRest()
         guard let end = d.lastIndex(of: UInt8(ascii: "\n")) else { return ([], offset) }
-        let entries = d[d.startIndex...end].split(separator: UInt8(ascii: "\n")).compactMap { try? decode(Data($0)) }
+        let needles = kinds.map { Set($0.map { Array($0.utf8) }) }
+        var entries: [Entry] = []
+        for line in d[d.startIndex...end].split(separator: UInt8(ascii: "\n")) {
+            let keep = line.withUnsafeBytes { b in b.baseAddress.map { wanted($0, b.count, needles) } ?? false }
+            guard keep, let e = try? decode(Data(line)), kinds?.contains(e.kind) ?? true else { continue }
+            entries.append(e)
+        }
         return (entries, offset + UInt64(end - d.startIndex + 1))
     }
 

@@ -150,20 +150,24 @@ struct GeneralSettings: View {
                 Toggle(L("Notify me when permission is needed"), isOn: $model.config.notifyPermission)
             }
             Section(spec: L("Identity")) {
-                TextField(L("Contact email (polite pool for OpenAlex / Crossref / Unpaywall)"), text: $model.config.contactEmail)
+                SpecField(title: L("Contact email"), text: $model.config.contactEmail, prompt: "name@university.edu")
+                Text(L("Optional. Sent with literature requests so OpenAlex, Crossref and Unpaywall serve them from their faster polite pool; never shared elsewhere."))
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            Section(spec: L("About")) {
-                LabeledContent("SieveSci", value: SieveSci.version).font(Theme.body)
-                Text(Credits.line).font(Theme.monoSmall).foregroundStyle(.secondary)
-                Link("github.com/Cetirzine/SieveSci", destination: URL(string: "https://github.com/Cetirzine/SieveSci")!).font(.caption)
+            Section(spec: L("Updates")) {
+                UpdateSettings()
             }
             Section(spec: L("Command line")) {
-                HStack {
-                    Button(L("Install command-line tool")) { cliMessage = Self.installCLI() }
-                    Text(cliMessage).font(.caption).foregroundStyle(.secondary)
+                ActionRow(title: L("Command-line tool"), detail: cliMessage.isEmpty ? L("`sievesci` runs the same agent headless (scripts, scheduled tasks, SSH).") : cliMessage) {
+                    Button(L("Install")) { cliMessage = Self.installCLI() }.buttonStyle(.column())
                 }
-                Text(L("`sievesci` runs the same agent headless (scripts, scheduled tasks, SSH)."))
-                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section(spec: L("About")) {
+                ActionRow(title: "SieveSci " + SieveSci.version, detail: Credits.line) {
+                    Button("GitHub") { NSWorkspace.shared.open(URL(string: "https://github.com/Cetirzine/SieveSci")!) }
+                        .buttonStyle(.column())
+                        .help("https://github.com/Cetirzine/SieveSci")
+                }
             }
         }
         .formStyle(.grouped)
@@ -172,7 +176,8 @@ struct GeneralSettings: View {
     /// Links the bundled CLI into ~/.local/bin (no administrator rights needed).
     static func installCLI() -> String {
         let exe = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
-        let candidates = [exe.appendingPathComponent("sievesci"), exe.deletingLastPathComponent().appendingPathComponent("Resources/sievesci")]
+        // The bundle ships the CLI as `sievesci-cli`: on a case-insensitive disk `MacOS/sievesci` is the app itself.
+        let candidates = [exe.appendingPathComponent("sievesci-cli"), exe.deletingLastPathComponent().appendingPathComponent("Resources/sievesci")]
         guard let src = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0.path) }) else {
             return L("The CLI is not bundled with this build.")
         }
@@ -203,30 +208,49 @@ struct ProvidersSettings: View {
             .filter { !$0.items.isEmpty }
     }
 
+    func providerRow(_ p: ProviderProfile) -> some View {
+        let selected = selection == p.id
+        return Button { selection = p.id } label: {
+            HStack(spacing: Theme.Space.s) {
+                Rectangle().fill(model.isUsable(p) ? Theme.ok : Theme.rule).frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(p.displayName).font(Theme.body.weight(selected ? .semibold : .regular)).lineLimit(1)
+                    Text(model.isUsable(p) ? (model.quotas[p.id].flatMap(QuotaText.summary) ?? ProviderStatus(p, model: model).short)
+                                           : ProviderStatus(p, model: model).short)
+                        .font(Theme.monoTiny).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Theme.Space.s)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Rectangle().fill(selected ? Theme.selection : .clear))
+            .overlay(alignment: .leading) { if selected { Rectangle().fill(Theme.accent).frame(width: 2) } }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(HoverRowStyle(radius: 0))
+        .help(ProvidersSettings.formatName(p.family) + " · " + L(p.billing))
+    }
+
     var body: some View {
         HSplitView {
             VStack(spacing: 0) {
-                List(selection: $selection) {
-                    ForEach(groups, id: \.title) { g in
-                        Section(g.title) {
-                            ForEach(g.items) { p in
-                                HStack(spacing: Theme.Space.s) {
-                                    Rectangle().fill(model.isUsable(p) ? Theme.ok : Color.secondary.opacity(0.35)).frame(width: 7, height: 7)
-                                        .accessibilityHidden(true)
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(p.displayName).lineLimit(1)
-                                        Text(model.isUsable(p) ? (model.quotas[p.id].flatMap(QuotaText.summary) ?? ProviderStatus(p, model: model).short)
-                                                               : ProviderStatus(p, model: model).short)
-                                            .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                                    }
-                                }
-                                .padding(.vertical, 2)
-                                .tag(p.id)
-                                .help(ProvidersSettings.formatName(p.family) + " · " + L(p.billing))
-                            }
+                // Drawn like the settings navigation: grey fill and an accent rule on the selected row.
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 1) {
+                        ForEach(groups, id: \.title) { g in
+                            SectionLabel(g.title)
+                                .padding(.horizontal, Theme.Space.s)
+                                .padding(.top, Theme.Space.m)
+                                .padding(.bottom, Theme.Space.xs)
+                            ForEach(g.items) { p in providerRow(p) }
                         }
                     }
+                    .padding(.horizontal, Theme.Space.s)
+                    .padding(.bottom, Theme.Space.s)
                 }
+                Rectangle().fill(Theme.hairline).frame(height: 1)
                 HStack {
                     Button { adding = true } label: { Image(systemName: "plus") }
                         .help(L("Add provider…")).accessibilityLabel(L("Add provider…"))
@@ -412,13 +436,13 @@ struct ProviderDetail: View {
             }
             if let ref = ProviderStatus.adminKeyRef(profile) {
                 HStack(spacing: Theme.Space.s) {
-                    SecureField(KeychainSecretStore.has(ref) ? "••••••••••••" : L("Management key (sk-admin-…)"), text: $adminKey)
-                        .textFieldStyle(.roundedBorder)
+                    SpecField(text: $adminKey, prompt: KeychainSecretStore.has(ref) ? L("Saved — paste a new key to replace it") : L("Management key (sk-admin-…)"), secure: true, mono: true)
                     Button(L("Save")) {
                         KeychainSecretStore.set(adminKey.trimmingCharacters(in: .whitespacesAndNewlines), for: ref)
                         adminKey = ""
                         Task { await refreshUsage() }
                     }
+                    .buttonStyle(.column())
                     .disabled(adminKey.isEmpty)
                 }
                 Text(L("Used only to read the balance; it cannot call models.")).font(.caption).foregroundStyle(.secondary)
@@ -441,11 +465,7 @@ struct ProviderDetail: View {
             Section {
                 HStack(spacing: Theme.Space.s) {
                     Text(profile.displayName).font(.system(size: 16, weight: .semibold))
-                    Text(st.short)
-                        .font(Theme.caption.weight(.medium))
-                        .foregroundStyle(st.ready ? Theme.ok : .secondary)
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(Capsule().fill(st.ready ? Theme.ok.opacity(0.12) : Color.secondary.opacity(0.1)))
+                    Chip(text: st.short, tint: st.ready ? Theme.ok : .secondary)
                     Spacer()
                     Toggle(L("Enabled"), isOn: $profile.enabled).labelsHidden().toggleStyle(.switch)
                         .help(L("Enabled")).accessibilityLabel(L("Enabled"))
@@ -458,11 +478,14 @@ struct ProviderDetail: View {
             }
             if st.ready || profile.family == .cliAgent || ProviderStatus.adminKeyRef(profile) != nil { usageSection }
             Section(spec: L("Models")) {
-                HStack {
-                    Button(fetching ? L("Fetching…") : L("Fetch models from provider")) { Task { await fetch() } }
+                HStack(spacing: Theme.Space.s) {
+                    SpecField(text: $newModel, prompt: L("Model id, e.g. deepseek-chat"), mono: true, onSubmit: addModel)
+                    Button(L("Add")) { addModel() }.buttonStyle(.column()).disabled(newModel.isEmpty)
+                }
+                ActionRow(title: L("Models from the provider"), detail: L("Lists what this key can use; nothing is billed.")) {
+                    Button(fetching ? L("Fetching…") : L("Fetch")) { Task { await fetch() } }
+                        .buttonStyle(.column())
                         .disabled(fetching || (profile.family == .cliAgent ? !(profile.flavor == .antigravity || profile.flavor == .codex) : !KeychainSecretStore.has(profile.apiKeyRef)))
-                    TextField(L("Add model id"), text: $newModel).onSubmit { addModel() }
-                    Button(L("Add")) { addModel() }.disabled(newModel.isEmpty)
                 }
                 ForEach(profile.models, id: \.self) { m in
                     let st = ModelDiscovery.effectiveSettings(model: m, profile: profile, discovered: discovered.first { $0.id == m })
@@ -488,7 +511,7 @@ struct ProviderDetail: View {
                                 Text(d.id).font(Theme.monoTiny)
                                 if let c = d.contextWindow { Text(Self.tokens(c)).font(.caption2).foregroundStyle(.secondary) }
                                 Spacer()
-                                Button(L("Add")) { profile.models.append(d.id) }
+                                Button(L("Add")) { profile.models.append(d.id) }.buttonStyle(.column())
                             }
                         }
                     }
@@ -521,11 +544,10 @@ struct ProviderDetail: View {
             Text(hasKey ? L("API key saved in the macOS Keychain. Paste a new one to replace it.") : L("Paste your API key. It is stored in the macOS Keychain, never in a file."))
                 .font(.caption).foregroundStyle(.secondary)
             HStack(spacing: Theme.Space.s) {
-                SecureField(hasKey ? "••••••••••••" : L("API key"), text: $key)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { Task { await saveAndCheck() } }
+                SpecField(text: $key, prompt: hasKey ? L("Saved — paste a new key to replace it") : L("Paste your API key"), secure: true, mono: true,
+                          onSubmit: { Task { await saveAndCheck() } })
                 Button(checkingKey ? L("Checking…") : L("Save & check")) { Task { await saveAndCheck() } }
-                    .buttonStyle(.primaryAction)
+                    .buttonStyle(.column(.primary))
                     .disabled(key.isEmpty || checkingKey)
             }
             HStack(spacing: Theme.Space.m) {
@@ -575,17 +597,17 @@ struct ProviderDetail: View {
     }
 
     @ViewBuilder var advanced: some View {
-        TextField(L("Name"), text: $profile.displayName)
+        SpecField(title: L("Name"), text: $profile.displayName, prompt: "My relay")
         Picker(L("API format"), selection: $profile.family) {
             ForEach(ProviderFamily.allCases, id: \.self) { Text(ProvidersSettings.formatName($0)).tag($0) }
         }
         .onChange(of: profile.family) { _, f in profile.options = ProviderOptions.detected(family: f, baseURL: profile.baseURL) }
         if profile.family == .cliAgent {
-            TextField(L("Executable"), text: Binding(get: { profile.executable ?? "" }, set: { profile.executable = $0 }))
+            SpecField(title: L("Executable"), text: Binding(get: { profile.executable ?? "" }, set: { profile.executable = $0 }), prompt: "claude", mono: true)
         } else {
-            TextField(L("Base URL"), text: $profile.baseURL)
-                .onSubmit { profile.options = ProviderOptions.detected(family: profile.family, baseURL: profile.baseURL) }
-            TextField(L("Keychain / environment name"), text: $profile.apiKeyRef)
+            SpecField(title: L("Base URL"), text: $profile.baseURL, prompt: "https://api.example.com/v1", mono: true,
+                      onSubmit: { profile.options = ProviderOptions.detected(family: profile.family, baseURL: profile.baseURL) })
+            SpecField(title: L("Keychain / environment name"), text: $profile.apiKeyRef, prompt: "EXAMPLE_API_KEY", mono: true)
         }
         Picker(L("Billing"), selection: $profile.billing) {
             Text(L("API (pay per token)")).tag("api")
@@ -600,8 +622,10 @@ struct ProviderDetail: View {
         Toggle(L("cache_control in chat content parts (OpenRouter-style relays)"), isOn: $profile.options.cacheControlInChatParts)
         Toggle(L("Explicit Gemini context cache"), isOn: $profile.options.explicitPromptCacheMode)
         Toggle(L("Stream usage"), isOn: $profile.options.streamUsage)
-        TextField(L("Session-affinity header"), text: $profile.options.sessionAffinity)
-        Button(L("Reset to detected defaults")) { profile.options = ProviderOptions.detected(family: profile.family, baseURL: profile.baseURL) }
+        SpecField(title: L("Session-affinity header"), text: $profile.options.sessionAffinity, prompt: "x-session-affinity", mono: true)
+        ActionRow(title: L("Reset to detected defaults")) {
+            Button(L("Reset")) { profile.options = ProviderOptions.detected(family: profile.family, baseURL: profile.baseURL) }.buttonStyle(.column())
+        }
         Text(L("Extra headers")).font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.top, Theme.Space.s)
         ForEach(profile.options.headers.sorted { $0.key < $1.key }, id: \.key) { k, v in
             HStack {
@@ -612,16 +636,16 @@ struct ProviderDetail: View {
                     .accessibilityLabel(L("Remove"))
             }
         }
-        HStack {
-            TextField(L("Header"), text: $newHeaderName)
-            TextField(L("Value"), text: $newHeaderValue)
+        HStack(spacing: Theme.Space.s) {
+            SpecField(text: $newHeaderName, prompt: L("Header"), mono: true)
+            SpecField(text: $newHeaderValue, prompt: L("Value"), mono: true)
             Button(L("Add")) { profile.options.headers[newHeaderName] = newHeaderValue; newHeaderName = ""; newHeaderValue = "" }
+                .buttonStyle(.column())
                 .disabled(newHeaderName.isEmpty)
         }
         Text(L("Check")).font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.top, Theme.Space.s)
-        HStack {
-            Button(testing ? L("Testing…") : L("Test connection and cache")) { Task { await test() } }.disabled(testing)
-            Text(L("sends two short requests (a few thousand tokens)")).font(.caption).foregroundStyle(.secondary)
+        ActionRow(title: L("Test connection and cache"), detail: L("sends two short requests (a few thousand tokens)")) {
+            Button(testing ? L("Testing…") : L("Test")) { Task { await test() } }.buttonStyle(.column()).disabled(testing)
         }
         if !status.isEmpty { Text(status).font(Theme.monoTiny).textSelection(.enabled) }
     }
@@ -732,7 +756,7 @@ struct AddProviderSheet: View {
                 Text("models.dev").tag(2)
                 Text(L("Custom / relay")).tag(3)
             }.pickerStyle(.segmented).labelsHidden()
-            if tab < 3 { TextField(L("Search"), text: $query).textFieldStyle(.roundedBorder) }
+            if tab < 3 { SpecField(text: $query, prompt: L("Search")) }
             List {
                 switch tab {
                 case 0:
@@ -756,8 +780,8 @@ struct AddProviderSheet: View {
                     }
                 default:
                     Form {
-                        TextField(L("Name"), text: $customName)
-                        TextField(L("Base URL (e.g. https://relay.example.com/v1)"), text: $customURL)
+                        SpecField(title: L("Name"), text: $customName, prompt: "My relay")
+                        SpecField(title: L("Base URL"), text: $customURL, prompt: "https://relay.example.com/v1", mono: true)
                         Picker(L("API format"), selection: $customFamily) {
                             ForEach(ProviderFamily.allCases.filter { $0 != .cliAgent }, id: \.self) { Text(ProvidersSettings.formatName($0)).tag($0) }
                         }
@@ -771,12 +795,16 @@ struct AddProviderSheet: View {
                                                   models: [], billing: "relay",
                                                   options: ProviderOptions.detected(family: customFamily, baseURL: customURL)))
                             dismiss()
-                        }.disabled(customURL.isEmpty)
+                        }
+                        .buttonStyle(.column(.primary))
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .disabled(customURL.isEmpty)
                     }
                 }
             }
-            HStack { Spacer(); Button(L("Cancel")) { dismiss() } }
+            HStack { Spacer(); Button(L("Cancel")) { dismiss() }.buttonStyle(.column()) }
         }
+        .buttonStyle(.action)
         .padding(16)
         .frame(width: 620, height: 520)
     }
@@ -788,7 +816,7 @@ struct AddProviderSheet: View {
                 Text(sub).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
-            Button(L("Add"), action: action)
+            Button(L("Add"), action: action).buttonStyle(.column())
         }
     }
 }
@@ -871,17 +899,15 @@ struct ModelsSettings: View {
             Section(spec: L("Benchmarks")) {
                 let snap = BenchmarkSnapshot.current()
                 ForEach(snap.benchmarks.sorted { $0.key < $1.key }, id: \.key) { _, b in
-                    HStack {
-                        Text(b.title)
-                        Spacer()
-                        Text(L("as of") + " \(b.asOf)").font(.caption).foregroundStyle(.secondary)
-                        if let u = URL(string: b.source) { Link(L("source"), destination: u).font(.caption) }
+                    ActionRow(title: b.title, detail: L("as of") + " \(b.asOf)") {
+                        if let u = URL(string: b.source) {
+                            Button(L("Source")) { NSWorkspace.shared.open(u) }.buttonStyle(.column()).help(b.source)
+                        }
                     }
                 }
-                HStack {
-                    Button(refreshing ? L("Refreshing…") : L("Refresh catalogs and leaderboards")) { Task { await refresh() } }.disabled(refreshing)
-                    Text(L("Uses the research agent's model to extract leaderboard rows; every row must appear verbatim on the page."))
-                        .font(.caption).foregroundStyle(.secondary)
+                ActionRow(title: L("Refresh catalogs and leaderboards"),
+                          detail: L("Uses the research agent's model to extract leaderboard rows; every row must appear verbatim on the page.")) {
+                    Button(refreshing ? L("Refreshing…") : L("Refresh")) { Task { await refresh() } }.buttonStyle(.column()).disabled(refreshing)
                 }
                 if !report.isEmpty { Text(report).font(Theme.monoTiny).textSelection(.enabled) }
             }
@@ -915,19 +941,32 @@ struct SearchSettings: View {
                     model.config.webSearch.apiKeyRef = ["brave": "BRAVE_API_KEY", "tavily": "TAVILY_API_KEY", "exa": "EXA_API_KEY", "googleCSE": "GOOGLE_CSE_KEY"][b.rawValue] ?? ""
                 }
                 if !model.config.webSearch.apiKeyRef.isEmpty {
-                    HStack {
-                        SecureField(L("API key"), text: $key)
-                        Button(L("Save key")) { KeychainSecretStore.set(key, for: model.config.webSearch.apiKeyRef); key = "" }.disabled(key.isEmpty)
-                        Text(KeychainSecretStore.has(model.config.webSearch.apiKeyRef) ? "✓" : "✗")
+                    let saved = KeychainSecretStore.has(model.config.webSearch.apiKeyRef)
+                    HStack(alignment: .center, spacing: Theme.Space.s) {
+                        Text(L("API key"))
+                        Chip(text: saved ? L("Saved") : L("Not set"), tint: saved ? Theme.ok : .secondary)
+                        Spacer(minLength: Theme.Space.m)
+                        SpecField(text: $key, prompt: saved ? L("Saved — paste a new key to replace it") : L("Paste your API key"), secure: true, mono: true,
+                                  onSubmit: saveSearchKey)
+                            .frame(width: Theme.Control.fieldWidth)
+                        Button(L("Save")) { saveSearchKey() }.buttonStyle(.column()).disabled(key.isEmpty)
                     }
                 }
-                if model.config.webSearch.backend == .searxng { TextField("SearXNG URL", text: $model.config.webSearch.searxngURL) }
-                if model.config.webSearch.backend == .googleCSE { TextField("Google CX", text: $model.config.webSearch.googleCX) }
+                if model.config.webSearch.backend == .searxng {
+                    SpecField(title: "SearXNG URL", text: $model.config.webSearch.searxngURL, prompt: "https://searx.example.org", mono: true)
+                }
+                if model.config.webSearch.backend == .googleCSE {
+                    SpecField(title: "Google CX", text: $model.config.webSearch.googleCX, prompt: "0123456789abcdef0", mono: true)
+                }
                 Text(L("Models with native search (Claude API, DeepSeek and GLM Anthropic endpoints) search natively first; this engine is the fallback and the independent cross-check."))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section(spec: L("Excluded domains")) {
                 TextEditor(text: $excluded).font(Theme.monoTiny).frame(height: 140)
+                    .scrollContentBackground(.hidden)
+                    .padding(Theme.Space.xs)
+                    .background(Rectangle().fill(Theme.canvas))
+                    .overlay(Rectangle().strokeBorder(Theme.rule, lineWidth: 1))
                     .onAppear { excluded = model.config.webSearch.excludedDomains.joined(separator: "\n") }
                     .onChange(of: excluded) { _, v in
                         model.config.webSearch.excludedDomains = v.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
@@ -937,6 +976,13 @@ struct SearchSettings: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    func saveSearchKey() {
+        guard !key.isEmpty else { return }
+        KeychainSecretStore.set(key.trimmingCharacters(in: .whitespacesAndNewlines), for: model.config.webSearch.apiKeyRef)
+        key = ""
+        model.objectWillChange.send()
     }
 }
 
@@ -958,15 +1004,19 @@ struct ResearchSettings: View {
                                 Chip(text: c.license)
                             }
                             Text(c.notes).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                            Link(c.source, destination: URL(string: c.source)!).font(.caption)
                         }
-                        Spacer()
-                        Button(connected.contains(c.id) ? L("Connected") : L("Connect")) {
-                            connectorMessage = (try? ScienceConnectors.connect(c.id)) ?? ""
-                            connected.insert(c.id)
+                        Spacer(minLength: Theme.Space.m)
+                        VStack(spacing: Theme.Space.s) {
+                            Button(connected.contains(c.id) ? L("Connected") : L("Connect")) {
+                                connectorMessage = (try? ScienceConnectors.connect(c.id)) ?? ""
+                                connected.insert(c.id)
+                            }
+                            .buttonStyle(.column(connected.contains(c.id) ? .secondary : .primary))
+                            .disabled(connected.contains(c.id))
+                            Button("GitHub") { if let u = URL(string: c.source) { NSWorkspace.shared.open(u) } }
+                                .buttonStyle(.column())
+                                .help(c.source)
                         }
-                        .buttonStyle(.action(connected.contains(c.id) ? .secondary : .primary, width: Theme.Control.buttonWidth))
-                        .disabled(connected.contains(c.id))
                     }
                 }
                 if !connectorMessage.isEmpty { Text(connectorMessage).font(.caption).foregroundStyle(.secondary) }
@@ -1030,24 +1080,26 @@ struct MemorySettings: View {
                     if es.isEmpty { Text(L("Empty")).foregroundStyle(.secondary) }
                     ForEach(Array(es.enumerated()), id: \.offset) { _, e in Text(e).font(.caption).textSelection(.enabled) }
                 } header: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(Self.title(s))
+                    VStack(alignment: .leading, spacing: 3) {
+                        SectionLabel(Self.title(s))
                         Text(Self.hint(s)).font(.caption).foregroundStyle(.secondary).textCase(nil)
                     }
                 }
             }
-            Section {
-                HStack {
-                    EqualWidthButtons {
-                        Button(L("Open memory folder")) { NSWorkspace.shared.open(store.dir) }
-                        Button(L("Open learned skills")) {
-                            NSWorkspace.shared.open(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".sievesci/learned-skills"))
-                        }
+            Section(spec: L("Files")) {
+                ActionRow(title: L("Memory folder"), detail: (store.dir.path as NSString).abbreviatingWithTildeInPath) {
+                    Button(L("Open")) { NSWorkspace.shared.open(store.dir) }.buttonStyle(.column())
+                }
+                ActionRow(title: L("Learned skills"), detail: "~/.sievesci/learned-skills") {
+                    Button(L("Open")) {
+                        NSWorkspace.shared.open(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".sievesci/learned-skills"))
                     }
-                    Spacer()
-                    let pending = model.proposals.filter { $0.status == .pending }.count
-                    if pending > 0 {
-                        Button(L10n.f("%d proposals await approval", pending)) { model.show(.learning) }
+                    .buttonStyle(.column())
+                }
+                let pending = model.proposals.filter { $0.status == .pending }.count
+                if pending > 0 {
+                    ActionRow(title: L10n.f("%d proposals await approval", pending)) {
+                        Button(L("Review")) { model.show(.learning) }.buttonStyle(.column(.primary))
                     }
                 }
             }
@@ -1091,22 +1143,28 @@ struct ScheduleSettings: View {
                             Text(t.prompt).lineLimit(2)
                             Text("\(t.when) · \(URL(fileURLWithPath: t.workspace).lastPathComponent)").font(.caption).foregroundStyle(.secondary)
                         }
-                        Spacer()
+                        Spacer(minLength: Theme.Space.m)
                         Button(L("Remove"), role: .destructive) {
                             Task { message = await Scheduler.remove(t.id); tasks = Scheduler.list() }
                         }
+                        .buttonStyle(.column(.destructive))
                     }
                 }
             }
             Section(spec: L("New")) {
-                TextField(L("When (daily 08:30 · weekly mon 09:00 · every 6h)"), text: $when)
-                TextField(L("Prompt"), text: $prompt, axis: .vertical).lineLimit(2...5)
-                HStack {
-                    Button(L("Schedule in current workspace")) {
+                SpecField(title: L("When"), text: $when, prompt: "daily 08:30 · weekly mon 09:00 · every 6h", mono: true)
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    Text(L("Prompt"))
+                    SpecField(text: $prompt, prompt: L("e.g. Every morning, find new papers on CRISPR base editing and summarise the three most relevant."), multiline: true)
+                }
+                ActionRow(title: model.workspace.map { L("Runs in") + " " + $0.lastPathComponent } ?? L("Open a workspace first."),
+                          detail: message) {
+                    Button(L("Schedule")) {
                         guard let ws = model.workspace else { message = L("Open a workspace first."); return }
                         Task { message = await Scheduler.add(workspace: ws, when: when, prompt: prompt); tasks = Scheduler.list(); prompt = "" }
-                    }.disabled(prompt.isEmpty || model.workspace == nil)
-                    Text(message).font(.caption).foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.column(.primary))
+                    .disabled(prompt.isEmpty || model.workspace == nil)
                 }
                 Text(L("Runs headless as a macOS LaunchAgent with the same research rules, audit log and notebook; results land in the workspace's task list."))
                     .font(.caption).foregroundStyle(.secondary)

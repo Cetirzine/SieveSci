@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds SieveSci.app from the SwiftPM products (app, CLI, resource bundle) and zips it to dist/.
+# Builds SieveSci.app from the SwiftPM products (app, CLI, resource bundle), zips it and makes a disk image in dist/.
 # Usage: scripts/bundle-app.sh [debug|release] [--scratch-path DIR]   (default: release, .build)
 # Environment:
 #   SCRATCH       build directory (same as --scratch-path)
@@ -156,4 +156,13 @@ codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || echo "warning: codesi
 # Re-register so Finder picks up the (possibly changed) icon instead of a cached one.
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" >/dev/null 2>&1 || true
 (cd dist && ditto -c -k --keepParent SieveSci.app SieveSci.app.zip)
-echo "Built dist/SieveSci.app ($VERSION) and dist/SieveSci.app.zip"
+
+# Disk image: the app next to an Applications link, to drag across. The in-app updater installs from it too.
+DMG="dist/SieveSci-$VERSION.dmg"
+DMG_STAGE="$(mktemp -d -t sievesci-dmg)"
+ditto "$APP" "$DMG_STAGE/SieveSci.app"
+ln -s /Applications "$DMG_STAGE/Applications"
+rm -f "$DMG"
+hdiutil create -volname "SieveSci $VERSION" -srcfolder "$DMG_STAGE" -fs HFS+ -format UDZO -imagekey zlib-level=9 -ov "$DMG" >/dev/null
+rm -rf "$DMG_STAGE"
+echo "Built dist/SieveSci.app ($VERSION), dist/SieveSci.app.zip and $DMG"

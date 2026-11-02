@@ -167,7 +167,8 @@ private func plan(_ steps: [PlanStep]) -> ResearchPlan {
     }
 
     @Test func multiPartTurnRunsOnWorkersBeforeTheMainModel() async throws {
-        let model = FakeWorkerModel()
+        // Long enough that all three workers are mid-call together even when setting one up is slow.
+        let model = FakeWorkerModel(delayMs: 400)
         let s = try services(worker: model)
         // With the research protocol on and no plan yet, the lead agent plans first: nothing is split.
         s.research.groundingRequired = true

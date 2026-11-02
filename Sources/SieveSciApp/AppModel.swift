@@ -12,6 +12,9 @@ final class AppModel: ObservableObject {
             if config != oldValue, !Self.isDemo { config.save() }
             // Effort applies from the next model call of the open task, not only to new sessions.
             if config.effort != oldValue.effort { bench?.services.effort = config.effort }
+            if config.autoCheckUpdates != oldValue.autoCheckUpdates || config.autoInstallUpdates != oldValue.autoInstallUpdates {
+                configureUpdater()
+            }
         }
     }
     @Published var language = L10n.language
@@ -19,7 +22,12 @@ final class AppModel: ObservableObject {
     @Published var taskId = ""
     /// For rows that call actions without observing the model (see `ModelLink`).
     lazy var link = ModelLink(self)
-    var traceCache: (url: URL, offset: UInt64, entries: [AuditLog.Entry])?
+    var traceCache: (url: URL, offset: UInt64, events: [TraceEvent])?
+    /// A trace read is in flight; a refresh asked for meanwhile runs once it lands.
+    var traceReading = false
+    /// How many receipts of which task the figure list has seen (`refreshSidePanels`).
+    var figureScan: (audit: URL, count: Int)?
+    var traceRefreshQueued = false
     /// Transcript streams: "main" plus one per dispatched agent (nested cards).
     @Published var streams: [String: [TranscriptItem]] = ["main": []]
     @Published var cards: [String: AgentCard] = [:]
@@ -150,6 +158,16 @@ final class AppModel: ObservableObject {
             DispatchQueue.main.async { [weak self] in self?.resumeIfNeeded() }
         }
         notifier.requestAuthorization()
+        configureUpdater()
+        if !Self.isDemo { Updater.shared.start() }
+    }
+
+    func configureUpdater() {
+        let u = Updater.shared
+        u.autoCheck = config.autoCheckUpdates
+        u.autoInstall = config.autoInstallUpdates
+        u.isBusy = { [weak self] in self?.running ?? false }
+        u.notify = { [weak self] title, body in self?.notifier.post(title: title, body: body, id: "update") }
     }
 
     func setLanguage(_ l: L10n.Language) {

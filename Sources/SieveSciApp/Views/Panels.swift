@@ -8,30 +8,19 @@ import SwiftUI
 struct ActivityPanel: View {
     @EnvironmentObject var model: AppModel
     @State private var filter = 0
+    /// Rows drawn so far, newest first. A long project's audit log holds tens of thousands of events;
+    /// drawing them all at once froze the window, so older ones come in pages.
+    @State private var limit = ActivityPanel.page
 
-    struct Entry: Identifiable {
-        let id: String
-        let at: Date
-        let icon: String
-        let color: Color
-        let actor: String
-        let text: String
-    }
+    static let page = 200
 
     /// From the audit log, so the trace is complete after a restart and for CLI agents, whose tool
     /// calls are not tool blocks in the saved transcript.
-    var entries: [Entry] {
-        let events = model.trace.reversed().filter { e in
-            switch filter {
-            case 1: return e.category == .literature
-            case 2: return e.category == .agents
-            default: return true
-            }
-        }
-        return events.map { e in
-            Entry(id: "a\(e.id)", at: e.at, icon: Self.icon(e), color: e.isError ? (e.kind == "signal" || e.kind == "gate" ? Theme.warn : Theme.bad) : .secondary,
-                  actor: e.actor == "host" ? L("Host") : e.actor == "user" ? L("You") : e.actor == "git" ? "git" : Theme.agentName(e.actor),
-                  text: (Theme.toolNames[e.kind].map { L($0) + " " } ?? "") + e.text)
+    var events: [TraceEvent] {
+        switch filter {
+        case 1: return model.trace.filter { $0.category == .literature }
+        case 2: return model.trace.filter { $0.category == .agents }
+        default: return model.trace
         }
     }
 
@@ -50,12 +39,15 @@ struct ActivityPanel: View {
     }
 
     var body: some View {
+        let all = events
+        let shown = all.suffix(limit).reversed()
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             Picker("", selection: $filter) {
                 Text(L("All")).tag(0)
                 Text(L("Literature")).tag(1)
                 Text(L("Agents & checks")).tag(2)
             }.pickerStyle(.segmented).labelsHidden()
+            .onChange(of: filter) { _, _ in limit = Self.page }
             let agents = model.cards.values.sorted { $0.started > $1.started }
             if !agents.isEmpty {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -72,18 +64,40 @@ struct ActivityPanel: View {
                 }
                 Divider()
             }
-            if entries.isEmpty { Text(L("Nothing yet.")).font(Theme.body).foregroundStyle(.secondary) }
-            ForEach(entries) { e in
-                HStack(alignment: .top, spacing: Theme.Space.s) {
-                    Image(systemName: e.icon).font(Theme.caption).foregroundStyle(e.color).frame(width: Theme.gutter).padding(.top, 2)
-                    VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                        HStack(spacing: Theme.Space.xs + 2) {
-                            Text(e.actor).font(Theme.metaStrong)
-                            Text(e.at, style: .time).font(Theme.caption).foregroundStyle(.tertiary)
-                        }
-                        Text(e.text).font(Theme.meta).foregroundStyle(.secondary).lineLimit(3).textSelection(.enabled)
-                    }
+            if all.isEmpty {
+                Text(L("Nothing yet.")).font(Theme.body).foregroundStyle(.secondary)
+            } else {
+                SectionLabel(L("Events") + " · \(all.count)")
+            }
+            LazyVStack(alignment: .leading, spacing: Theme.Space.s) {
+                ForEach(shown, id: \.id) { e in TraceRow(event: e).equatable() }
+            }
+            if all.count > limit {
+                Button(L10n.f("Show older (%d more)", all.count - limit)) { limit += Self.page * 2 }
+                    .buttonStyle(.action)
+            }
+        }
+    }
+}
+
+/// One audit event. Equatable, so a refresh that appends events leaves the existing rows alone.
+struct TraceRow: View, Equatable {
+    let event: TraceEvent
+
+    var body: some View {
+        let e = event
+        HStack(alignment: .top, spacing: Theme.Space.s) {
+            Image(systemName: ActivityPanel.icon(e)).font(Theme.caption)
+                .foregroundStyle(e.isError ? (e.kind == "signal" || e.kind == "gate" ? Theme.warn : Theme.bad) : .secondary)
+                .frame(width: Theme.gutter).padding(.top, 2)
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                HStack(spacing: Theme.Space.xs + 2) {
+                    Text(e.actor == "host" ? L("Host") : e.actor == "user" ? L("You") : e.actor == "git" ? "git" : Theme.agentName(e.actor))
+                        .font(Theme.metaStrong)
+                    Text(e.at, format: .dateTime.hour().minute()).font(Theme.monoTiny).foregroundStyle(.tertiary)
                 }
+                Text((Theme.toolNames[e.kind].map { L($0) + " " } ?? "") + e.text)
+                    .font(Theme.meta).foregroundStyle(.secondary).lineLimit(3).textSelection(.enabled)
             }
         }
     }

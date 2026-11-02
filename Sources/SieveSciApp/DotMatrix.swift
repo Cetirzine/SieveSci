@@ -141,3 +141,26 @@ struct SieveField: View {
         .accessibilityHidden(true)
     }
 }
+
+/// Progress as a row of square dots filling from the left, the lit edge easing forward (downloads).
+struct DotProgress: View {
+    var value: Double
+    var count = 20
+    var dot: CGFloat = 3
+    var gap: CGFloat = 1.5
+    var color: Color = Theme.accent
+
+    var body: some View {
+        let lit = Int((min(max(value, 0), 1) * Double(count)).rounded(.down))
+        HStack(spacing: gap) {
+            ForEach(0..<count, id: \.self) { i in
+                Rectangle()
+                    .fill(i < lit ? color : Theme.rule)
+                    .frame(width: dot, height: dot)
+            }
+        }
+        .animation(Theme.Motion.allowed ? Theme.Motion.hover : nil, value: lit)
+        .accessibilityElement()
+        .accessibilityValue("\(Int(value * 100))%")
+    }
+}

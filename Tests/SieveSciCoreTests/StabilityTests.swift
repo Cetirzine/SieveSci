@@ -55,6 +55,19 @@ import Testing
         #expect(try AuditLog.read(url).count == 31)
     }
 
+    @Test func incrementalReadFiltersByKindAndResumes() throws {
+        let url = try tempLog()
+        let log = try AuditLog(url: url)
+        for i in 0..<30 { log.append(session: "s", kind: i % 3 == 0 ? "tool_call" : "model_call", actor: "main", ["tool": "bash", "input": ["command": .string("echo \(i)")]]) }
+        let first = AuditLog.readNew(url, from: 0, kinds: Trace.kinds)
+        #expect(first.entries.count == 10 && first.entries.allSatisfy { $0.kind == "tool_call" })
+        log.append(session: "s", kind: "tool_call", actor: "main", ["tool": "bash", "input": ["command": "echo late"]])
+        log.append(session: "s", kind: "model_call", actor: "main", ["note": "\"kind\":\"tool_call\""])
+        let next = AuditLog.readNew(url, from: first.offset, kinds: Trace.kinds)
+        #expect(next.entries.count == 1, "only the new tool call; a string mentioning a kind is not one")
+        #expect(Trace.events(first.entries + next.entries).count == 11)
+    }
+
     @Test func timeParserMatchesTheFormatter() {
         let f = ISO8601DateFormatter()
         for t in ["2026-10-22T12:08:35Z", "2000-02-29T23:59:59Z", "1970-01-01T00:00:00Z", "2099-12-31T00:00:01Z", "2026-03-01T00:00:00Z"] {

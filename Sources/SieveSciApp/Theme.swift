@@ -125,6 +125,8 @@ enum Theme {
         static let button: CGFloat = 28
         /// Width of text buttons that share a column or row, so aligned buttons are equal.
         static let buttonWidth: CGFloat = 112
+        /// Text inputs in settings rows.
+        static let fieldWidth: CGFloat = 300
     }
 
     /// Width of the transcript and composer column.
@@ -568,7 +570,8 @@ struct ActionButtonStyle: ButtonStyle {
                 .foregroundStyle(text)
                 .padding(.horizontal, Theme.Space.m + 2)
                 .frame(maxWidth: fills ? .infinity : nil)
-                .frame(width: fixedWidth, height: Theme.Control.button)
+                // A column width is a minimum: a longer translation widens its button instead of truncating.
+                .frame(minWidth: fixedWidth, minHeight: Theme.Control.button, maxHeight: Theme.Control.button)
                 .background(Rectangle().fill(fill))
                 .overlay(Rectangle().strokeBorder(stroke, lineWidth: kind == .primary ? 1.5 : 1))
                 .modifier(HardShadow(pressed: configuration.isPressed, offset: kind == .primary && enabled ? 3 : 0))
@@ -604,6 +607,82 @@ extension ButtonStyle where Self == ActionButtonStyle {
     static var action: ActionButtonStyle { ActionButtonStyle() }
     static var primaryAction: ActionButtonStyle { ActionButtonStyle(kind: .primary) }
     static func action(_ kind: ActionButtonStyle.Kind = .secondary, width: CGFloat? = nil) -> ActionButtonStyle { ActionButtonStyle(kind: kind, fixedWidth: width) }
+    /// A button in the trailing action column of a settings row (`Theme.Control.buttonWidth`).
+    static func column(_ kind: ActionButtonStyle.Kind = .secondary) -> ActionButtonStyle { ActionButtonStyle(kind: kind, fixedWidth: Theme.Control.buttonWidth) }
+}
+
+/// Text input drawn like the rest of the sheet: square corners, a 1 px frame that turns accent (1.5 px)
+/// while focused, and a grey example inside saying what goes there. With a `title` it is a settings row
+/// (title left, field right); without one it fills the space it is given.
+struct SpecField: View {
+    var title: String? = nil
+    @Binding var text: String
+    var prompt: String = ""
+    var secure = false
+    var mono = false
+    var multiline = false
+    var width: CGFloat? = nil
+    var onSubmit: () -> Void = {}
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        if let title {
+            // Not LabeledContent: a grouped form pins its label to the first baseline, which sits above a
+            // framed field's text; here both centre on one row.
+            HStack(alignment: .center, spacing: Theme.Space.m) {
+                Text(title)
+                Spacer(minLength: Theme.Space.m)
+                field.frame(width: width ?? Theme.Control.fieldWidth)
+            }
+        } else {
+            field.frame(width: width)
+        }
+    }
+
+    private var field: some View {
+        Group {
+            if secure {
+                SecureField(title ?? prompt, text: $text, prompt: Text(prompt))
+            } else if multiline {
+                TextField(title ?? prompt, text: $text, prompt: Text(prompt), axis: .vertical).lineLimit(3...6)
+            } else {
+                TextField(title ?? prompt, text: $text, prompt: Text(prompt))
+            }
+        }
+        .labelsHidden()
+        .textFieldStyle(.plain)
+        .multilineTextAlignment(.leading)   // grouped forms right-align row values otherwise
+        .font(mono ? Theme.monoSmall : Theme.body)
+        .focused($focused)
+        .onSubmit(onSubmit)
+        .padding(.horizontal, Theme.Space.s + 1)
+        .padding(.vertical, multiline ? Theme.Space.s : 0)
+        .frame(maxWidth: .infinity, minHeight: Theme.Control.button, alignment: .leading)
+        .background(Rectangle().fill(Theme.canvas))
+        .overlay(Rectangle().strokeBorder(focused ? Theme.accent : Theme.rule, lineWidth: focused ? 1.5 : 1))
+        .animation(Theme.Motion.allowed ? Theme.Motion.hover : nil, value: focused)
+    }
+}
+
+/// A settings row: what it is (and a line of detail) on the left, its actions on the right in the
+/// shared button column, so every page's buttons line up at one width.
+struct ActionRow<Trailing: View>: View {
+    let title: String
+    var detail: String? = nil
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        HStack(alignment: .center, spacing: Theme.Space.m) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                if let detail, !detail.isEmpty {
+                    Text(detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: Theme.Space.m)
+            trailing()
+        }
+    }
 }
 
 /// Lays children out in a row, all as wide as the widest (and at least `minWidth`), so buttons that

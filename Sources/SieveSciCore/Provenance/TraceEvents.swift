@@ -11,12 +11,20 @@ public struct TraceEvent: Sendable, Identifiable, Equatable {
     public var text: String
     public var isError: Bool
     public var category: Category
+
+    public init(id: Int, at: Date, actor: String, kind: String, text: String, isError: Bool, category: Category) {
+        self.id = id; self.at = at; self.actor = actor; self.kind = kind; self.text = text; self.isError = isError; self.category = category
+    }
 }
 
 public enum Trace {
     static let literature: Set<String> = ["web_search", "literature_search", "paper_fetch", "library_search", "paper_graph", "verify_citation", "bio_db"]
     /// Reading around is not worth a trace line; work, sources, plans and checks are.
     static let quiet: Set<String> = ["read_file", "glob", "grep", "repo_map", "session_search", "tool_result", "job_output", "memory"]
+
+    /// The audit kinds `events` turns into trace lines; reading only these keeps a long log cheap.
+    public static let kinds: Set<String> = ["tool_call", "supervisor_review", "review_unavailable", "integrity_signal", "deliberation",
+                                            "git_commit", "preregistration_gate", "permission", "compaction", "error", "user_turn"]
 
     public static func events(_ entries: [AuditLog.Entry]) -> [TraceEvent] {
         entries.compactMap { e -> TraceEvent? in

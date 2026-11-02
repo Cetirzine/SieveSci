@@ -21,6 +21,7 @@ struct SieveSciApp: App {
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button(L("About SieveSci")) { Credits.showAboutPanel() }
+                Button(L("Check for Updates…")) { Task { await Updater.shared.check(manual: true) } }
             }
             CommandGroup(replacing: .appSettings) {
                 Button(L("Settings") + "…") { model.showSettingsPage = true }.keyboardShortcut(",")
@@ -74,6 +75,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated { Updater.shared.installOnQuit() }
+    }
 }
 
 struct RootView: View {
@@ -202,6 +207,8 @@ struct SidebarView: View {
                 }
                 .padding(.horizontal, Theme.Space.s)
             }
+
+            UpdateBanner().padding(.horizontal, Theme.Space.m).padding(.top, Theme.Space.s)
 
             Button { model.showSettingsPage = true } label: {
                 Label(L("Settings"), systemImage: "gearshape")
@@ -628,7 +635,8 @@ struct WelcomeView: View {
                         EmptyView()
                     }
                 }
-        HStack(spacing: Theme.Space.m) {
+                // The main action on the left, the interface language at the far right of the same row.
+                HStack(spacing: Theme.Space.m) {
                     Button(L("Open Workspace…")) {
                         let panel = NSOpenPanel()
                         panel.canChooseDirectories = true
@@ -637,14 +645,8 @@ struct WelcomeView: View {
                     }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.action(.primary))
-                }
-                HStack(spacing: Theme.Space.s) {
-                    Image(systemName: "globe").foregroundStyle(.secondary)
-                    Picker(L("Language"), selection: Binding(get: { model.language }, set: { model.setLanguage($0) })) {
-                        ForEach(L10n.Language.allCases) { Text($0.nativeName).tag($0) }
-                    }
-                    .labelsHidden()
-                    .frame(width: 180)
+                    Spacer(minLength: Theme.Space.m)
+                    LanguageMenu()
                 }
                 Text(Credits.line).font(Theme.label).tracking(0.4).foregroundStyle(.tertiary)
             }
@@ -663,6 +665,41 @@ struct WelcomeView: View {
             }
         }
         .background(Theme.canvas)
+    }
+}
+
+/// Interface language as a framed menu the height of a button (globe, native name, chevron), so it sits
+/// in a row of action buttons instead of a rounded system pop-up.
+struct LanguageMenu: View {
+    @EnvironmentObject var model: AppModel
+    @State private var hovering = false
+
+    var body: some View {
+        Menu {
+            Picker(L("Language"), selection: Binding(get: { model.language }, set: { model.setLanguage($0) })) {
+                ForEach(L10n.Language.allCases) { Text($0.nativeName).tag($0) }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            HStack(spacing: Theme.Space.s) {
+                Image(systemName: "globe")
+                Text(model.language.nativeName)
+            }
+            .font(Theme.body.weight(.medium))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.visible)
+        .tint(.primary)   // ink like a secondary button, not accent
+        .fixedSize()
+        .padding(.horizontal, Theme.Space.m)
+        .frame(minWidth: Theme.Control.buttonWidth, minHeight: Theme.Control.button, maxHeight: Theme.Control.button)
+        .background(Rectangle().fill(hovering ? Theme.hairline : Theme.raised))
+        .overlay(Rectangle().strokeBorder(hovering ? Theme.ink.opacity(0.55) : Theme.rule, lineWidth: 1))
+        .contentShape(Rectangle())
+        .onHover { h in withAnimation(Theme.Motion.hover) { hovering = h } }
+        .help(L("Interface language"))
+        .accessibilityLabel(L("Interface language"))
     }
 }
 

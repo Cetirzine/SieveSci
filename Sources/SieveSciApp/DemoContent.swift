@@ -9,6 +9,7 @@ extension AppModel {
     func loadDemo() {
         let env = ProcessInfo.processInfo.environment
         if let a = env["SIEVESCI_UI_APPEARANCE"].flatMap(AppConfig.Appearance.init(rawValue:)) { config.appearance = a }
+        if let e = env["SIEVESCI_UI_EFFORT"].flatMap(Effort.init(rawValue:)) { config.effort = e }
         config.permissionMode = .acceptEdits
         config.recentWorkspaces = ["/Users/demo/Research/kinase-screen", "/Users/demo/Research/metabolomics-2026"]
 
@@ -124,6 +125,18 @@ extension AppModel {
         inspectorTab = .files
         showInspector = env["SIEVESCI_UI_INSPECTOR"] == "1"
         if let tab = env["SIEVESCI_UI_TAB"], let t = InspectorTab(rawValue: tab) { mainTab = .panel(t) }
+        // SIEVESCI_UI_TRACE=<n>: a long project's trace (n audit events), for checking the Trace tab stays responsive.
+        if let n = env["SIEVESCI_UI_TRACE"].flatMap(Int.init) {
+            let t0 = Date().addingTimeInterval(-Double(n) * 20)
+            trace = (0..<n).map { i -> TraceEvent in
+                let review = i % 5 == 0, lit = i % 3 == 0
+                let kind = review ? "review" : (lit ? "literature_search" : "bash")
+                let text = lit ? "CRISPR base editing off-target \(i)" : "Rscript analysis/stats.R --replicate \(i % 7) [r\(i)]"
+                let cat: TraceEvent.Category = review ? .agents : (lit ? .literature : .work)
+                return TraceEvent(id: i, at: t0.addingTimeInterval(Double(i) * 20), actor: review ? "checker-1a2b" : "main",
+                                  kind: kind, text: text, isError: i % 97 == 0, category: cat)
+            }
+        }
         if env["SIEVESCI_UI_SETTINGS"] == "1" { showSettingsPage = true }
         if env["SIEVESCI_UI_WELCOME"] == "1" { workspace = nil }
         if env["SIEVESCI_UI_EMPTY"] == "1" {
