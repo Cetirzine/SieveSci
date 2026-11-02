@@ -3,6 +3,7 @@
 # SieveSci
 
 <p align="center">
+  <a href="https://sieve.bio"><img src="https://img.shields.io/badge/website-sieve.bio-111111?logo=safari&logoColor=white" alt="Website"></a>
   <img src="https://img.shields.io/badge/Swift-6.0+-F05138?logo=swift&logoColor=white" alt="Swift">
   <img src="https://img.shields.io/badge/macOS-14.0+-0A7AFF?logo=apple&logoColor=white" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Apple_Silicon-native-34C759?logo=apple&logoColor=white" alt="Apple Silicon">
@@ -11,7 +12,7 @@
   <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-PolyForm_Strict_1.0.0-blue" alt="License"></a>
 </p>
 
-[English](README.en.md)
+[English](README.en.md) · 官网：[sieve.bio](https://sieve.bio)
 
 面向生物与化学研究的 macOS 原生科研智能体，SwiftUI 实现。先检索再发言，带检查点地做计划，自己写代码跑分析；每一条重要结论都由独立的智能体复核，所做的一切都有记录、可追溯。
 

@@ -3,6 +3,7 @@
 # SieveSci
 
 <p align="center">
+  <a href="https://sieve.bio"><img src="https://img.shields.io/badge/website-sieve.bio-111111?logo=safari&logoColor=white" alt="Website"></a>
   <img src="https://img.shields.io/badge/Swift-6.0+-F05138?logo=swift&logoColor=white" alt="Swift">
   <img src="https://img.shields.io/badge/macOS-14.0+-0A7AFF?logo=apple&logoColor=white" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Apple_Silicon-native-34C759?logo=apple&logoColor=white" alt="Apple Silicon">
@@ -11,7 +12,7 @@
   <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-PolyForm_Strict_1.0.0-blue" alt="License"></a>
 </p>
 
-[简体中文](README.md)
+[简体中文](README.md) · Website: [sieve.bio](https://sieve.bio)
 
 A native macOS research agent for biology and chemistry, built with SwiftUI. It searches before it speaks, plans with checkpoints, writes and runs its own analysis code, and has every significant claim checked by independent agents. Everything it does is logged and traceable.
 
