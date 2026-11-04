@@ -34,7 +34,7 @@ struct VerifyCitationTool: Tool {
             case .pmcid: q = "PMCID:\(id)"
             default: q = id
             }
-            if kind == .arxiv { rec = try? await lib.searchArXiv("id:\(id)", limit: 1).first }
+            if kind == .arxiv { rec = try? await lib.arxivById(id) }
             else { rec = try? await lib.searchEuropePMC(q, limit: 1).first }
             if rec == nil, kind == .doi { rec = try? await lib.crossref(doi: id) }
             guard let found = rec else { return .error("NOT FOUND: \(raw) does not resolve in Europe PMC, Crossref or arXiv. Treat the citation as unverified.") }
