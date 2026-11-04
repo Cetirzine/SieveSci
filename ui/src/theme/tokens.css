@@ -1,0 +1,77 @@
+/* Design tokens from Sources/SieveSciApp/Theme.swift. Light and dark resolve by the system unless
+   <html data-theme="light|dark"> is set; <html data-accent> picks one of the five accent themes. */
+:root {
+  --accent-l: #4d6bfe; --accent-d: #6e8aff;
+  --ok-l: #16935c; --ok-d: #4cc38a; --warn-l: #c27c0e; --warn-d: #e8b04b; --bad-l: #d93d3d; --bad-d: #f06a6a;
+  --info-l: #2f80ed; --info-d: #6aa7ff; --verifier-l: #1e8780; --verifier-d: #4fc3ba; --worker-l: #7d6c57; --worker-d: #b8a992;
+
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  /* Theme.Space, Theme.Radius, Theme.Control */
+  --s-xxs: 2px; --s-xs: 4px; --s-s: 8px; --s-m: 12px; --s-l: 16px; --s-xl: 24px; --s-xxl: 32px;
+  --r-s: 2px; --r-m: 3px; --r-l: 4px;
+  --c-icon: 28px; --c-row: 32px; --c-button: 28px; --c-button-width: 112px; --c-field-width: 300px;
+  --reading-width: 760px; --transcript-width: 1400px; --gutter: 16px;
+
+  /* Theme.Motion */
+  --ease: cubic-bezier(0.12, 0.23, 0.5, 1);
+  --hover: 0.2s var(--ease);
+  --settle: 0.45s var(--ease);
+}
+:root[data-accent="violet"] { --accent-l: #7657f2; --accent-d: #9b86ff; }
+:root[data-accent="green"] { --accent-l: #13906a; --accent-d: #3cc28f; }
+:root[data-accent="orange"] { --accent-l: #e0702a; --accent-d: #f39a5c; }
+:root[data-accent="graphite"] { --accent-l: #3f3f46; --accent-d: #a1a1aa; }
+
+/* Light (default) */
+:root, :root[data-theme="light"] {
+  color-scheme: light;
+  --accent: var(--accent-l); --ok: var(--ok-l); --warn: var(--warn-l); --bad: var(--bad-l);
+  --info: var(--info-l); --verifier: var(--verifier-l); --worker: var(--worker-l);
+  --canvas: #ffffff; --sidebar: #f7f7f8; --raised: #ffffff; --surface: #f2f3f5; --surface-subtle: #f7f8fa;
+  --selection: rgba(0, 0, 0, 0.065); --hairline: rgba(0, 0, 0, 0.08); --separator: rgba(0, 0, 0, 0.16); --rule: rgba(0, 0, 0, 0.24);
+  --ink: #18181b; --paper: #ffffff;
+  --text: rgba(0, 0, 0, 0.85); --secondary: rgba(0, 0, 0, 0.5); --tertiary: rgba(0, 0, 0, 0.26);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --accent: var(--accent-d); --ok: var(--ok-d); --warn: var(--warn-d); --bad: var(--bad-d);
+    --info: var(--info-d); --verifier: var(--verifier-d); --worker: var(--worker-d);
+    --canvas: #1a1a1d; --sidebar: #202024; --raised: #27272b; --surface: #2c2c31; --surface-subtle: #232327;
+    --selection: rgba(255, 255, 255, 0.065); --hairline: rgba(255, 255, 255, 0.08); --separator: rgba(255, 255, 255, 0.16); --rule: rgba(255, 255, 255, 0.24);
+    --ink: #ececee; --paper: #1a1a1d;
+    --text: rgba(255, 255, 255, 0.85); --secondary: rgba(255, 255, 255, 0.55); --tertiary: rgba(255, 255, 255, 0.25);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --accent: var(--accent-d); --ok: var(--ok-d); --warn: var(--warn-d); --bad: var(--bad-d);
+  --info: var(--info-d); --verifier: var(--verifier-d); --worker: var(--worker-d);
+  --canvas: #1a1a1d; --sidebar: #202024; --raised: #27272b; --surface: #2c2c31; --surface-subtle: #232327;
+  --selection: rgba(255, 255, 255, 0.065); --hairline: rgba(255, 255, 255, 0.08); --separator: rgba(255, 255, 255, 0.16); --rule: rgba(255, 255, 255, 0.24);
+  --ink: #ececee; --paper: #1a1a1d;
+  --text: rgba(255, 255, 255, 0.85); --secondary: rgba(255, 255, 255, 0.55); --tertiary: rgba(255, 255, 255, 0.25);
+}
+
+/* Theme fonts */
+.t-title { font: 600 24px/1.2 var(--sans); }
+.t-display { font: 600 34px/1.15 var(--sans); letter-spacing: -0.8px; }
+.t-label { font: 500 10.5px/1.3 var(--mono); }
+.t-prose { font: 15px/1.55 var(--sans); }
+.t-body { font: 13px/1.45 var(--sans); }
+.t-body-strong { font: 600 13px/1.45 var(--sans); }
+.t-meta { font: 12px/1.4 var(--sans); }
+.t-meta-strong { font: 500 12px/1.4 var(--sans); }
+.t-caption { font: 11px/1.35 var(--sans); }
+.t-mono { font: 13px/1.45 var(--mono); }
+.t-mono-small { font: 12px/1.4 var(--mono); }
+.t-mono-tiny { font: 11px/1.35 var(--mono); }
+.secondary { color: var(--secondary); }
+.tertiary { color: var(--tertiary); }
+.c-ok { color: var(--ok); } .c-warn { color: var(--warn); } .c-bad { color: var(--bad); } .c-accent { color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

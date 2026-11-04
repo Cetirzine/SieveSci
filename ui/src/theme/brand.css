@@ -1,0 +1,18 @@
+/* Role ghost animation (GhostLayers in Brand.swift). Points are in the artwork's 1254-unit canvas. */
+.brand-logo, .role-badge { display: block; flex: none; }
+.role-icon { display: inline-block; flex: none; -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; }
+.ghost-rig { position: relative; display: inline-block; flex: none; }
+.ghost-rig .rig { position: absolute; inset: 0; transform-origin: 50% 100%; animation: ghost-rig 2.1s ease-in-out infinite alternate; }
+.ghost-rig img { position: absolute; inset: 0; width: 100%; height: 100%; }
+@keyframes ghost-rig { from { transform: translateY(2%) rotate(-2.5deg); } to { transform: translateY(-3.5%) rotate(2.5deg); } }
+.role-worker .prop { transform-origin: calc(1092 / 1254 * 100%) calc(300 / 1254 * 100%); animation: ghost-spin 8.4s linear infinite; }
+@keyframes ghost-spin { to { transform: rotate(360deg); } }
+.role-checker .prop { transform-origin: calc(810 / 1254 * 100%) calc(570 / 1254 * 100%); animation: ghost-scan 1.05s ease-in-out infinite alternate; }
+@keyframes ghost-scan { from { transform: translateX(-2.5%); } to { transform: translateX(2.5%); } }
+.role-main .prop { transform-origin: calc(1000 / 1254 * 100%) calc(260 / 1254 * 100%); animation: ghost-twinkle 0.7s ease-in-out infinite alternate; }
+@keyframes ghost-twinkle { from { opacity: 0.35; transform: scale(0.9); } to { opacity: 1; transform: scale(1.06); } }
+.ghost-rig .sonar { position: absolute; left: calc(705 / 1254 * 100% - 24%); top: calc(535 / 1254 * 100% - 24%); width: 48%; height: 48%;
+                    border-radius: 50%; border: solid rgb(33 191 237); border-width: calc(0.035 * var(--ghost-size, 28px)); opacity: 0;
+                    animation: ghost-sonar 2.1s ease-out infinite backwards; }
+.ghost-rig .sonar.late { animation-delay: 1.05s; }
+@keyframes ghost-sonar { from { opacity: 0.55; transform: scale(1); } to { opacity: 0; transform: scale(1.6); } }

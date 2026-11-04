@@ -4,14 +4,17 @@
   "version": "0.2.1",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run assets && vite",
     "bridge": "node dev-bridge.mjs",
-    "build": "tsc --noEmit && vite build",
-    "tauri": "tauri"
+    "build": "npm run assets && tsc --noEmit && vite build",
+    "tauri": "tauri",
+    "strings": "node scripts/strings.mjs",
+    "assets": "node scripts/strings.mjs && node scripts/brand.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.5.0",
     "@tauri-apps/plugin-dialog": "^2.2.0",
+    "lucide-react": "^0.500.0",
     "marked": "^15.0.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
