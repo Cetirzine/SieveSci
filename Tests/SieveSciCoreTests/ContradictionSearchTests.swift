@@ -8,7 +8,7 @@ import Testing
         let dir = s.library.dir
         try FileManager.default.createDirectory(at: dir.appendingPathComponent("text"), withIntermediateDirectories: true)
         for (key, text) in papers {
-            try text.write(to: dir.appendingPathComponent("text/\(key).txt"), atomically: true, encoding: .utf8)
+            try text.writeReliably(to: dir.appendingPathComponent("text/\(key).txt"))
             s.library.add(PaperRecord(key: key, title: key, authors: [], year: 2020, venue: nil, doi: nil, pmid: nil, pmcid: nil, arxiv: nil, url: nil,
                                       abstract: nil, oaPdfURL: nil, pdfPath: nil, textPath: "text/\(key).txt", pdfSHA256: nil,
                                       source: "manual", addedAt: Date(), notes: nil))

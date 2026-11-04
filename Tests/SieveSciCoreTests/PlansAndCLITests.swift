@@ -136,7 +136,7 @@ private struct Keys: SecretStore {
         let day = root.appendingPathComponent("2026/11/04")
         try FileManager.default.createDirectory(at: day, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        try rollout.write(to: day.appendingPathComponent("rollout-2026-11-04T10-00-00-thread-abc.jsonl"), atomically: true, encoding: .utf8)
+        try rollout.writeReliably(to: day.appendingPathComponent("rollout-2026-11-04T10-00-00-thread-abc.jsonl"))
         #expect(CodexRollout.lastTokenCount(thread: "thread-abc", root: root)?.tokens == 163710)
         #expect(CodexRollout.lastTokenCount(thread: "thread-zzz", root: root) == nil)
     }

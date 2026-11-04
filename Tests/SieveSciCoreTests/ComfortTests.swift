@@ -65,7 +65,7 @@ import Testing
     @Test(.enabled(if: ProcessRunner.which("git") != nil)) func oversizedWorkspaceIsNotSnapshotted() async throws {
         let ws = FileManager.default.temporaryDirectory.appendingPathComponent("sievesci-hist-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: ws, withIntermediateDirectories: true)
-        for i in 0..<30 { try "row \(i)\n".write(to: ws.appendingPathComponent("f\(i).csv"), atomically: true, encoding: .utf8) }
+        for i in 0..<30 { try "row \(i)\n".writeReliably(to: ws.appendingPathComponent("f\(i).csv")) }
         let g = GitHistory(workspace: ws)
         await g.prepare()
         g.maxSnapshotFiles = 10
@@ -100,10 +100,10 @@ import Testing
         let (s, ws) = try makeServices()
         s.sandboxMode = .workspaceWrite
         let planted = URL(fileURLWithPath: "/private/tmp/sievesci-leak-\(UUID().uuidString).txt")
-        try "main agent result p=0.001".write(to: planted, atomically: true, encoding: .utf8)
+        try "main agent result p=0.001".writeReliably(to: planted)
         defer { try? FileManager.default.removeItem(at: planted) }
         let data = ws.appendingPathComponent("data.csv")
-        try "x,y\n1,2\n".write(to: data, atomically: true, encoding: .utf8)
+        try "x,y\n1,2\n".writeReliably(to: data)
         let sandbox = s.taskDir.appendingPathComponent("verify/C1")
         try FileManager.default.createDirectory(at: sandbox, withIntermediateDirectories: true)
         let v = s.makeSubagent(role: .verifier, writeRoot: sandbox, readable: [sandbox.path, data.path])
@@ -188,8 +188,8 @@ import Testing
         for (task, key) in [("t1", "smith2020"), ("t2", "lee2021"), ("t3", "smith2020")] {
             let lib = tasks.appendingPathComponent("\(task)/library")
             try FileManager.default.createDirectory(at: lib.appendingPathComponent("text"), withIntermediateDirectories: true)
-            try #"[{"key":"\#(key)","title":"T","authors":[],"source":"manual","addedAt":"2026-10-17T00:00:00Z"}]"#.write(to: lib.appendingPathComponent("library.json"), atomically: true, encoding: .utf8)
-            try "text".write(to: lib.appendingPathComponent("text/\(key).txt"), atomically: true, encoding: .utf8)
+            try #"[{"key":"\#(key)","title":"T","authors":[],"source":"manual","addedAt":"2026-10-17T00:00:00Z"}]"#.writeReliably(to: lib.appendingPathComponent("library.json"))
+            try "text".writeReliably(to: lib.appendingPathComponent("text/\(key).txt"))
         }
         let shared = ws.appendingPathComponent(".sievesci/library")
         LiteratureLibrary.adoptTaskLibraries(into: shared, tasks: tasks)

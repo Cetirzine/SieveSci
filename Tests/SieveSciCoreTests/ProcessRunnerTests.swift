@@ -5,12 +5,16 @@ import FoundationNetworking
 import Testing
 @testable import SieveSciCore
 
+/// Process start-up and Git Bash are several times slower on a Windows CI machine; the limits
+/// here are about not hanging, so they stretch there. (Ordering checks keep their exact limits.)
+let slack: Double = Platform.isWindows ? 3 : 1
+
 @Suite struct ProcessRunnerRobustness {
     @Test func backgroundGrandchildDoesNotHangTheCall() async throws {
         let t0 = Date()
         // The grandchild keeps stdout open for 30 s; the call must return when `bash` itself exits.
         let r = try await ProcessRunner.run(Platform.bash, ["-c", "echo started; sleep 30 & echo done"], timeout: 60)
-        #expect(Date().timeIntervalSince(t0) < 5, "returned after \(Date().timeIntervalSince(t0)) s")
+        #expect(Date().timeIntervalSince(t0) < 5 * slack, "returned after \(Date().timeIntervalSince(t0)) s")
         #expect(r.stdout.contains("started") && r.stdout.contains("done"))
     }
 
@@ -67,7 +71,7 @@ import Testing
         try await Task.sleep(nanoseconds: 300_000_000)
         task.cancel()
         let r = try await task.value
-        #expect(Date().timeIntervalSince(t0) < 4, "Stop must not wait for the command")
+        #expect(Date().timeIntervalSince(t0) < 4 * slack, "Stop must not wait for the command")
         #expect(!r.timedOut)
     }
 
@@ -160,7 +164,7 @@ private struct SlowTool: Tool {
             #expect(String(decoding: data, as: UTF8.self).contains("quick-ok"))
             if i % 7 == 0 { try await Task.sleep(nanoseconds: 300_000_000) }   // idle gaps, like a model thinking
         }
-        #expect(worst < 3, "slowest call took \(worst) s")
+        #expect(worst < 3 * slack, "slowest call took \(worst) s")
     }
 }
 
@@ -204,7 +208,7 @@ extension ToolBridgeHTTP {
             #expect(line?.contains("quick-ok") == true, "call \(i): \(line ?? "no answer within 15 s")")
             if i % 5 == 0 { try await Task.sleep(nanoseconds: 2_500_000_000) }
         }
-        #expect(worst < 3, "slowest call took \(worst) s")
+        #expect(worst < 3 * slack, "slowest call took \(worst) s")
     }
 }
 

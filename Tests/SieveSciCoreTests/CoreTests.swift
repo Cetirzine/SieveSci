@@ -52,7 +52,7 @@ final class ProvenanceTests: XCTestCase {
         XCTAssertNil(try AuditLog.verify(url), "intact chain verifies")
         var text = try String(contentsOf: url, encoding: .utf8)
         text = text.replacingOccurrences(of: #""i":2"#, with: #""i":7"#)
-        try text.write(to: url, atomically: true, encoding: .utf8)
+        try text.writeReliably(to: url)
         XCTAssertNotNil(try AuditLog.verify(url), "edited entry breaks the chain")
     }
 }
@@ -129,8 +129,8 @@ final class DeliberationTests: XCTestCase {
             #"{"position":"maintain","reason":"Still underpowered with n=3 per group.","evidence":[],"question":null}"#,
         ])
         let (s, ws) = try makeServices(checker: reviewer)
-        try "data".write(to: ws.appendingPathComponent("power.csv"), atomically: true, encoding: .utf8)
-        try "data".write(to: ws.appendingPathComponent("power2.csv"), atomically: true, encoding: .utf8)
+        try "data".writeReliably(to: ws.appendingPathComponent("power.csv"))
+        try "data".writeReliably(to: ws.appendingPathComponent("power2.csv"))
         let agent = s.makeSubagent(role: .checker)
         let d = s.deliberation
         let tid = d.open(kind: "integrity", reviewer: agent, issues: ["Sample size too small"])
@@ -163,7 +163,7 @@ final class DeliberationTests: XCTestCase {
     func testConcessionWithdrawsIssue() async throws {
         let reviewer = ScriptedProvider(id: "checker", replies: [#"{"position":"concede","reason":"The control resolves it.","evidence":[]}"#])
         let (s, ws) = try makeServices(checker: reviewer)
-        try "x".write(to: ws.appendingPathComponent("control.csv"), atomically: true, encoding: .utf8)
+        try "x".writeReliably(to: ws.appendingPathComponent("control.csv"))
         let tid = s.deliberation.open(kind: "integrity", reviewer: s.makeSubagent(role: .checker), issues: ["Missing control"])
         let r = await s.deliberation.respond(thread: tid, issue: 1, position: .disagree, argument: "The control is in control.csv.",
                                              evidence: ["control.csv"], from: "main")

@@ -33,9 +33,9 @@ import Testing
         try FileManager.default.createDirectory(at: ws, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: ws) }
         let script = ws.appendingPathComponent("server.py")
-        try Self.server.write(to: script, atomically: true, encoding: .utf8)
+        try Self.server.writeReliably(to: script)
         let config: JSON = ["mcpServers": ["fake": ["command": .string(Platform.python), "args": [.string(script.path)]]]]
-        try JSONCodec.pretty(config).write(to: ws.appendingPathComponent(".mcp.json"), atomically: true, encoding: .utf8)
+        try JSONCodec.pretty(config).writeReliably(to: ws.appendingPathComponent(".mcp.json"))
 
         MCPManager.forcePipeTransport = true
         defer { MCPManager.forcePipeTransport = false }

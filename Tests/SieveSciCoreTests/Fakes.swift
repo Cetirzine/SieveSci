@@ -85,13 +85,13 @@ func toolContext(http: HTTPStreaming) throws -> (ToolContext, SessionServices) {
 /// Windows a `.cmd` that runs it with Git Bash (how npm-installed CLIs are launched there).
 func makeScript(in dir: URL, name: String, _ body: String) throws -> URL {
     let sh = dir.appendingPathComponent(Platform.isWindows ? name + ".sh" : name)
-    try ("#!/bin/bash\n" + body).write(to: sh, atomically: true, encoding: .utf8)
+    try ("#!/bin/bash\n" + body).writeReliably(to: sh)
     guard Platform.isWindows else {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: sh.path)
         return sh
     }
     let cmd = dir.appendingPathComponent(name + ".cmd")
-    try "@\"\(Platform.bash)\" \"%~dp0\(name).sh\" %*\r\n".write(to: cmd, atomically: true, encoding: .utf8)
+    try "@\"\(Platform.bash)\" \"%~dp0\(name).sh\" %*\r\n".writeReliably(to: cmd)
     return cmd
 }
 

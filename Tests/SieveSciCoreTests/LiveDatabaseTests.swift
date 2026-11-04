@@ -53,7 +53,7 @@ struct LiveDatabases {
         let dir = ws.appendingPathComponent(".sievesci/skills/tiny")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try "---\nname: tiny\ndescription: Live test skill.\ncompatibility: Requires Python 3.9+ and six (pip install six).\n---\nBody.\n"
-            .write(to: dir.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
+            .writeReliably(to: dir.appendingPathComponent("SKILL.md"))
         let s = try SessionServices(taskId: "t1", workspace: ws, models: RoleModels(main: (ScriptedProvider(replies: []), "m")), secrets: EnvironmentSecretStore())
         s.environments = SkillEnvironments(root: ws.appendingPathComponent("envs"))
         let ctx = ToolContext(workspace: ws, sessionId: "main", role: .main, ledger: s.ledger, audit: s.audit, services: s)
