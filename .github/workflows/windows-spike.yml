@@ -1,0 +1,73 @@
+# Windows build spike: does SieveSciCore (and each of its dependencies) compile on Windows?
+# Every target is built on its own and failures don't stop the job, so one run shows the whole
+# picture. Linux runs as a control: an error on both is non-Darwin, an error only on Windows is
+# Windows-specific.
+name: windows-spike
+
+on:
+  push:
+    branches: [claude/sievesci-cross-platform-rewrite-7e1dea]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ["6.2", "6.4"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: compnerd/gha-setup-swift@main
+        with:
+          branch: swift-${{ matrix.swift }}-release
+          tag: ${{ matrix.swift }}-RELEASE
+      - run: swift --version
+      - name: Resolve
+        run: swift package resolve
+      - name: Build each target
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force logs | Out-Null
+          $targets = @("SystemPackage", "Crypto", "Yams", "EventSource", "NIOCore", "MCP", "SieveSciCore", "sievesci-cli")
+          "| target | result |`n|---|---|" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          foreach ($t in $targets) {
+            Write-Host "::group::$t"
+            swift build --target $t -Xswiftc -continue-building-after-errors *>&1 | Tee-Object -FilePath "logs/$t.log"
+            $code = $LASTEXITCODE
+            Write-Host "::endgroup::"
+            $r = if ($code -eq 0) { "ok" } else { "FAIL ($code)" }
+            "| $t | $r |" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          }
+          exit 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-swift-${{ matrix.swift }}-logs
+          path: logs/
+
+  linux-control:
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build each target
+        shell: bash
+        run: |
+          mkdir -p logs
+          printf '| target | result |\n|---|---|\n' >> "$GITHUB_STEP_SUMMARY"
+          for t in SieveSciCore sievesci-cli; do
+            echo "::group::$t"
+            set +e
+            swift build --target "$t" -Xswiftc -continue-building-after-errors 2>&1 | tee "logs/$t.log"
+            code=${PIPESTATUS[0]}
+            set -e
+            echo "::endgroup::"
+            [ "$code" = 0 ] && r=ok || r="FAIL ($code)"
+            echo "| $t | $r |" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-logs
+          path: logs/
