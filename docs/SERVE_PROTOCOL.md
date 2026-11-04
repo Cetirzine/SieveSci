@@ -25,7 +25,7 @@ Requests are handled concurrently, so responses can arrive in a different order 
 |---|---|---|
 | `initialize` | `{client?: string}` | `{name, version, protocol: 1, workspace, provider, model, mode}` |
 | `tasks.list` | `{}` | `{tasks: [{id, title, modified}]}` newest first; `title` is null for an empty task |
-| `task.open` | `{id?: string}` | Opens the task (new one without `id`) and returns its state: `{task, title, running, messages, plan, claims, ideas, asks}`. Refused while the open task is running. |
+| `task.open` | `{id?: string}` | Opens the task (new one without `id`) and returns its state: `{task, title, running, history, plan, claims, ideas, asks}`. Refused while the open task is running. |
 | `task.send` | `{text: string}` | `{accepted: true}` at once; the turn streams as `event` notifications and ends with `turnFinished` for agent `main`. Slash commands (`/goal`, `/trace r3`, …) work as in the CLI; their direct output arrives as an `output` notification. Text sent while a turn runs is queued. |
 | `task.stop` | `{}` | `{}` Stops the running turn (and its tools and workers). |
 | `permission.respond` | `{id, decision: "allow" \| "always" \| "deny", reason?}` | `{}` Answers a `permissionRequested` event. |
@@ -33,10 +33,9 @@ Requests are handled concurrently, so responses can arrive in a different order 
 | `brainstorm.wrapUp` | `{}` | `{}` Asks a running brainstorm to stop generating and report. |
 | `shutdown` | `{}` | `{}` Stops work, closes the task, then serve exits. Closing stdin does the same. |
 
-`messages` are the task's saved transcript (`Message` as stored in
-`.sievesci/tasks/<id>/transcript-main.jsonl`): `{id, role: "user"|"assistant", blocks: [...]}`
-with blocks `{type: "text", text}`, `{type: "thinking", thinking: {text}}`,
-`{type: "toolUse", toolUse: {id, name, input}}`, `{type: "toolResult", toolResult: {toolUseId, content, isError, …}}`, `{type: "image", …}`.
+`history` is the saved conversation as a front end shows it, oldest first: `{kind: "user", text}` (what the
+user typed; context the host adds for the model is left out), `{kind: "assistant", text}`, and
+`{kind: "tool", id, name, input, output?, isError?, receipt?}` (a tool call with its result).
 
 Answers to an `askRequested` event: `outcome` is `{"kind": "answered", "answers": [{questionId, selected?: [label], other?: string, text?: string}]}`
 or `{"kind": "dismissed", note?: string}`. The `askRequested` event carries the questions with their `id`,
@@ -72,7 +71,7 @@ Unknown event types and fields may be added in later versions; front ends ignore
 → {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"client":"web"}}
 ← {"id":1,"jsonrpc":"2.0","result":{"model":"deepseek-flash","name":"sievesci","protocol":1,…}}
 → {"jsonrpc":"2.0","id":2,"method":"task.open","params":{}}
-← {"id":2,"jsonrpc":"2.0","result":{"messages":[],"running":false,"task":"2026-11-04-1a2b3c",…}}
+← {"id":2,"jsonrpc":"2.0","result":{"history":[],"running":false,"task":"2026-11-04-1a2b3c",…}}
 → {"jsonrpc":"2.0","id":3,"method":"task.send","params":{"text":"Sum the primes below 100 in Python"}}
 ← {"id":3,"jsonrpc":"2.0","result":{"accepted":true}}
 ← {"jsonrpc":"2.0","method":"event","params":{"type":"turnStarted","role":"main","agentId":"main"}}

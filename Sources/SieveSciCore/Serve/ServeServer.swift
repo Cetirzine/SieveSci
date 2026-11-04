@@ -149,12 +149,46 @@ public final class ServeServer: @unchecked Sendable {
             "task": .string(id),
             "title": SessionStore.title(dir: services.taskDir).map { .string($0) } ?? .null,
             "running": .bool(b.isRunning),
-            "messages": Wire.value(SessionStore.load(dir: services.taskDir, agent: "main")),
+            "history": .array(Self.history(SessionStore.load(dir: services.taskDir, agent: "main"))),
             "plan": Wire.value(services.research.snapshot),
             "claims": Wire.value(services.claims.snapshot),
             "ideas": Wire.value(services.ideas.snapshot),
             "asks": Wire.value(services.asks.pending),
         ]
+    }
+
+    /// The saved transcript as a front end shows it: what the user typed (host context removed),
+    /// the replies, and each tool call with its result.
+    static func history(_ msgs: [Message]) -> [JSON] {
+        var results: [String: ToolResult] = [:]
+        for m in msgs { for b in m.blocks { if case .toolResult(let r) = b { results[r.toolUseId] = r } } }
+        var out: [JSON] = []
+        for m in msgs {
+            for b in m.blocks {
+                switch b {
+                case .text(let t) where m.role == .user && !HostContext.isHostBlock(t):
+                    let own = HostContext.userText(t)
+                    if !own.isEmpty, !own.hasPrefix("[tool result") { out.append(["kind": "user", "text": .string(own)]) }
+                case .text(let t) where m.role == .assistant && !t.isEmpty:
+                    out.append(["kind": "assistant", "text": .string(t)])
+                case .toolUse(let tu):
+                    var item: [String: JSON] = ["kind": "tool", "id": .string(tu.id), "name": .string(tu.name), "input": tu.input]
+                    if let r = results[tu.id] {
+                        var content = r.content
+                        // Results end with their receipt id, e.g. "[receipt r12]".
+                        if let range = content.range(of: #"\n*\[receipt (r\d+)\]\s*$"#, options: .regularExpression) {
+                            item["receipt"] = .string(String(content[range]).filter { $0.isLetter || $0.isNumber }.replacingOccurrences(of: "receipt", with: ""))
+                            content.removeSubrange(range)
+                        }
+                        item["output"] = .string(content)
+                        item["isError"] = .bool(r.isError)
+                    }
+                    out.append(.object(item))
+                default: break
+                }
+            }
+        }
+        return out
     }
 
     /// Task ids name folders under `.sievesci/tasks/`: no separators or `..` from a client.

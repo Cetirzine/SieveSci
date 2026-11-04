@@ -84,7 +84,7 @@ private struct ServeTestError: Error { var message: String }
 
         let opened = try await c.call("task.open")
         let task = try #require(opened.str("task"))
-        #expect(opened["messages"]?.arrayValue?.isEmpty == true && opened["running"]?.boolValue == false)
+        #expect(opened["history"]?.arrayValue?.isEmpty == true && opened["running"]?.boolValue == false)
 
         #expect(try await c.call("task.send", ["text": "Say hello"])["accepted"]?.boolValue == true)
         let done = await c.waitFor { $0.str("type") == "turnFinished" && $0.str("agentId") == "main" }
@@ -98,8 +98,9 @@ private struct ServeTestError: Error { var message: String }
 
         // Reopening replays the saved transcript.
         let again = try await c.call("task.open", ["id": .string(task)])
-        let msgs = try #require(again["messages"]?.arrayValue)
-        #expect(msgs.count >= 2 && msgs.first?.str("role") == "user")
+        let items = try #require(again["history"]?.arrayValue)
+        #expect(items.map { $0.str("kind") ?? "" } == ["user", "assistant"], "\(items)")
+        #expect(items.first?.str("text") == "Say hello", "host context is not shown")
         try await c.call("shutdown")
         #expect(c.server.isClosed)
     }

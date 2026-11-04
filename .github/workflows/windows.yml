@@ -105,3 +105,23 @@ jobs:
         with:
           name: linux-swift-${{ matrix.swift }}-logs
           path: logs/
+
+  desktop-shell:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Typecheck and build the web UI
+        run: npm run build
+      - name: Compile the Tauri shell
+        run: cargo build --manifest-path src-tauri/Cargo.toml
