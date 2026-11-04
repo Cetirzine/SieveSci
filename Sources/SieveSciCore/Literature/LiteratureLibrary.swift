@@ -30,6 +30,16 @@ public struct PaperRecord: Codable, Sendable, Equatable, Identifiable {
     /// Citation count when the source reports one (OpenAlex), with the date it was read.
     public var citedBy: Int? = nil
     public var openAlexId: String? = nil
+
+    /// Every arXiv preprint has a DataCite DOI, `10.48550/arXiv.<id>`, but the arXiv API only reports a DOI when
+    /// the authors attached a journal one, and OpenAlex reports the DOI without the arXiv id. Fill in whichever
+    /// half is missing so preprints show and cite a DOI whichever index they came from.
+    public func withArxivIdentifiers() -> PaperRecord {
+        var r = self
+        if r.arxiv == nil, let d = r.doi, case (.arxiv, let id) = PaperRef.normalize(d) { r.arxiv = id }
+        if r.doi == nil, let ax = r.arxiv, !ax.isEmpty { r.doi = "10.48550/arXiv.\(ax)" }
+        return r
+    }
 }
 
 /// Scholarly search + open-access download into a per-task library:
@@ -62,7 +72,8 @@ public final class LiteratureLibrary: @unchecked Sendable {
         let dec = JSONDecoder()
         dec.dateDecodingStrategy = .iso8601
         if let d = try? Data(contentsOf: dir.appendingPathComponent("library.json")) {
-            records = (try? dec.decode([PaperRecord].self, from: d)) ?? []
+            // Libraries written by 0.2.3 hold arXiv preprints without a DOI.
+            records = ((try? dec.decode([PaperRecord].self, from: d)) ?? []).map { $0.withArxivIdentifiers() }
         }
     }
 
@@ -149,6 +160,7 @@ public final class LiteratureLibrary: @unchecked Sendable {
             oaPdfURL: w["best_oa_location"]?["pdf_url"]?.stringValue, pdfPath: nil, textPath: nil, pdfSHA256: nil,
             source: "openalex", addedAt: Date(), notes: nil,
             citedBy: w.int("cited_by_count"), openAlexId: w.str("id")?.components(separatedBy: "/").last)
+            .withArxivIdentifiers()
     }
 
     private var openAlexAuth: String {
@@ -242,6 +254,7 @@ public final class LiteratureLibrary: @unchecked Sendable {
                 year: Int((all("<published>(\\d{4})", e).first) ?? ""), venue: "arXiv", doi: all("<arxiv:doi[^>]*>(.*?)</arxiv:doi>", e).first,
                 pmid: nil, pmcid: nil, arxiv: bare, url: "https://arxiv.org/abs/\(id)", abstract: clean(all("<summary>(.*?)</summary>", e).first ?? ""),
                 oaPdfURL: "https://arxiv.org/pdf/\(id)", pdfPath: nil, textPath: nil, pdfSHA256: nil, source: "arxiv", addedAt: Date(), notes: nil)
+                .withArxivIdentifiers()
         }
     }
 
@@ -274,8 +287,9 @@ public final class LiteratureLibrary: @unchecked Sendable {
 
     @discardableResult
     public func add(_ rec: PaperRecord) -> PaperRecord {
-        if let doi = rec.doi, let existing = find(doi) { return existing }
+        let rec = rec.withArxivIdentifiers()
         if let ax = rec.arxiv, let existing = find(ax) { return existing }
+        if let doi = rec.doi, let existing = find(doi) { return existing }
         var r = rec
         if r.key.isEmpty { r.key = makeKey(r) }
         lock.lock()
@@ -426,11 +440,11 @@ public enum PaperRef {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         for p in ["https://doi.org/", "http://doi.org/", "https://dx.doi.org/", "doi:", "DOI:", "DOI "] where s.hasPrefix(p) { s = String(s.dropFirst(p.count)) }
         // arXiv's own DOI prefix is minted by DataCite, so Crossref 404s on it: treat it as the preprint id.
-        if let m = Grounding.matches(#"(?i)^10\.48550/arxiv\.(\d{4}\.\d{4,5})(?:v\d+)?$"#, in: s, group: 1).first { return (.arxiv, m) }
+        if let m = Grounding.matches(#"(?i)^10\.48550/arxiv\.(\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?/\d{7})(?:v\d+)?$"#, in: s, group: 1).first { return (.arxiv, m) }
         if s.hasPrefix("10.") { return (.doi, s) }
         if let m = Grounding.matches(#"(?i)^(?:pmid:?\s*)?(\d{5,9})$"#, in: s, group: 1).first { return (.pmid, m) }
         if let m = Grounding.matches(#"(?i)^(?:pmcid:?\s*)?(PMC\d+)$"#, in: s, group: 1).first { return (.pmcid, m.uppercased()) }
-        if let m = Grounding.matches(#"(?i)^(?:arxiv:\s*)?(\d{4}\.\d{4,5})(?:v\d+)?$"#, in: s, group: 1).first { return (.arxiv, m) }
+        if let m = Grounding.matches(#"(?i)^(?:arxiv:\s*)?(\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?/\d{7})(?:v\d+)?$"#, in: s, group: 1).first { return (.arxiv, m) }
         return (.unknown, s)
     }
 }

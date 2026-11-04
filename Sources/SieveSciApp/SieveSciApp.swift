@@ -709,7 +709,7 @@ struct WelcomeView: View {
             .frame(maxWidth: .infinity)
             .appearPop()
         }
-        .background(SieveField().mask(LinearGradient(colors: [.black, .black.opacity(0.25), .clear], startPoint: .top, endPoint: .bottom)))
+        .background(SieveField(fadeMid: 0.25))
         .overlay(alignment: .topLeading) {
             if !sidebarVisible {
                 Button { sidebarVisible = true } label: { Image(systemName: "sidebar.left") }

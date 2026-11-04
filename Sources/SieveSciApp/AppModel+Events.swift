@@ -131,9 +131,9 @@ extension AppModel {
     }
 
     func mutate(_ stream: String, _ i: Int, _ f: (inout TranscriptItem.Kind) -> Void) {
-        guard var s = streams[stream], s.indices.contains(i) else { return }
-        f(&s[i].kind)
-        streams[stream] = s
+        // In place: copying the stream out and back duplicated the whole transcript on every streamed chunk.
+        guard streams[stream]?.indices.contains(i) == true else { return }
+        f(&streams[stream]![i].kind)
     }
 
     static func summary(_ name: String, _ input: JSON) -> String {

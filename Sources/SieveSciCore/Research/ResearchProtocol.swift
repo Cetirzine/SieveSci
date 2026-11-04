@@ -218,6 +218,9 @@ public final class ResearchProtocol: @unchecked Sendable {
         let rev = PlanRevision(at: Date(), rationale: isFirst ? "initial plan" : rationale, changedCriteria: changed,
                                afterResults: analysisDone && !changed.isEmpty)
         var hs = hypotheses
+        // Hypotheses registered earlier (promoted ideas above all) stay registered when a plan update leaves them
+        // out: pre-registration means a hypothesis is resolved by its status, never by disappearing.
+        for old in plan.hypotheses where !hs.contains(where: { $0.id == old.id }) { hs.append(old) }
         for i in hs.indices {
             // Registration time is preserved across revisions; it is what makes pre-registration checkable.
             hs[i].registeredAt = plan.hypotheses.first { $0.id == hs[i].id }?.registeredAt ?? Date()

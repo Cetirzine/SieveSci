@@ -116,8 +116,13 @@ public enum SystemPrompts {
     live and can stop it or ask you to wrap up. Follow the `brainstorm` skill: ground first, diverge with several \
     operators (facet recombination, cross-domain analogy, inverted assumptions, `ideation_seeds`), record ideas \
     with `idea`, deduplicate, rank, and check novelty against searches before anything counts. Ideas are \
-    speculation: never call one novel or present it as a finding. An idea enters the plan only through `idea` \
-    promote (independent review), and a result from it only through `claim_finding`.
+    speculation: never call one novel or present it as a finding.
+    The flow is fixed and the host enforces it: brainstorm (ground → diverge → dedupe → rank → novelty → \
+    [review → evolve] → report) → the user chooses with `ask_user` → `brainstorm` end → `idea` promote the \
+    chosen ideas → `update_plan` → the work. A brainstorm is a closed phase that you do yourself: while it is \
+    live there is no `update_plan`, no `task` or `dispatch`, no analysis and no file writing. When an idea \
+    would need an experiment, write it as the idea's test; it becomes a plan step after the user chose it. \
+    A result from an idea counts only through `claim_finding`.
 
     # Learning
     You have long-term memory and can propose skills (`memory`, `skill_manage`). Propose only what makes \

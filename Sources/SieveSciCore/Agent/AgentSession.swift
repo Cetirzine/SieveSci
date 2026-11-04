@@ -120,7 +120,10 @@ public final class AgentSession: @unchecked Sendable {
             let hook = await services.hooks.run(.userPromptSubmit, payload: ["prompt": .string(text)])
             if hook.blocked { services.emit(.notice(L10n.s("Prompt blocked by hook: %@", hook.message))); return nil }
             if !hook.message.isEmpty { userText += "\n\n<hook_context>\n\(hook.message)\n</hook_context>" }
-            if let delegated = await delegateTurn(text) {
+            // A brainstorm (live or just asked for) is not split across workers or turned into plan steps.
+            if services.ideas.isBrainstorming {
+                // nothing: the brainstorm runs in this agent's own context, stage by stage
+            } else if let delegated = await delegateTurn(text) {
                 hint("plan")
                 userText += "\n\n" + delegated
             } else if services.research.groundingRequired, services.research.snapshot.steps.isEmpty,
@@ -292,7 +295,7 @@ public final class AgentSession: @unchecked Sendable {
     /// Prompt to hand work to workers at the moments it pays (models rarely delegate on their own, CLI
     /// agents least of all): once a multi-step plan is set, and when a turn has run many tool calls.
     func delegationHint(after use: ToolUse, output: ToolOutput) -> String? {
-        guard role == .main, tools.contains(where: { $0.name == "task" }) else { return nil }
+        guard role == .main, tools.contains(where: { $0.name == "task" }), services.ideas.live == nil else { return nil }
         let calls = turnToolCalls.increment()
         let workerModel = services.models.pick(.worker).1
         let pending = services.research.snapshot.steps.filter { $0.status == "pending" }
@@ -434,6 +437,11 @@ public final class AgentSession: @unchecked Sendable {
 
     /// Returns a denial message, or nil if the call may proceed.
     func authorize(_ t: Tool, _ use: ToolUse, _ effect: ToolEffect) async -> String? {
+        // A live brainstorm is a closed phase: no plan, no workers, no analysis until it ends.
+        if role == .main, let why = services.ideas.brainstormBlocker(tool: t.name, input: use.input) {
+            services.log("brainstorm_gate", actor: "host", ["tool": .string(t.name), "agent": .string(id)])
+            return why
+        }
         if role == .main, case .refuse(let why) = services.research.requirePlan(tool: t.name, input: use.input) {
             services.log("preregistration_gate", actor: "host", ["tool": .string(t.name), "agent": .string(id)])
             return why
@@ -618,7 +626,8 @@ public enum TurnContext {
         }
         lines.append("permission mode: \(s.permissions.mode.rawValue)")
         if let b = s.ideas.live {
-            lines.append("brainstorm running: \(b.topic.truncated(80)) (stage \(b.stage); \(s.ideas.snapshot.filter(\.isLive).count) live ideas)")
+            lines.append("brainstorm running: \(b.topic.truncated(80)) (stage \(b.stage); \(s.ideas.snapshot.filter(\.isLive).count) live ideas) — "
+                + "no plan, workers, analysis or file writes until `brainstorm` end")
         } else if !s.ideas.autoAllowed {
             lines.append("autonomous brainstorming: off (brainstorm only when the user asks, e.g. /brainstorm)")
         }

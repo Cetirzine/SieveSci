@@ -349,20 +349,6 @@ struct DotGrid: View {
     }
 }
 
-/// A block cursor that blinks while an agent works (static under Reduce Motion).
-struct BlinkingCursor: View {
-    var color: Color = Theme.accent
-    @State private var on = true
-    var body: some View {
-        Rectangle().fill(color).frame(width: 7, height: 13)
-            .opacity(on ? 1 : 0.15)
-            .onAppear {
-                guard Theme.Motion.allowed else { return }
-                withAnimation(.linear(duration: 0.55).repeatForever(autoreverses: true)) { on = false }
-            }
-            .accessibilityHidden(true)
-    }
-}
 
 /// A hard offset shadow with no blur. The shadow stays where it is; a pressed control moves into it,
 /// abruptly, like a physical key.

@@ -404,6 +404,23 @@ case ideasChanged([Idea])
 9. **交给用户**：用 `ask_user` 让用户勾选要推进的想法（`kind: multi`，`reason: direction`，每个选项带 `idea: I7` 和证据），也可以要求"再发散一轮"或填写其他想法。
 10. 用户选中的想法经 `idea promote` 变为假设，之后走正常研究流程，最终由 `claim_finding` 交给验证者盲法复核。
 
+> **0.2.4 起的实际流程（host 强制执行，取代上面第 2、4、5 步里的 `dispatch`）**
+>
+> 实际使用中，模型会在头脑风暴中途跳步、没排名没查新颖性就结束；更常见的是想跑一段分析，被"计划前不准分析"的闸挡住，于是在头脑风暴中途写了计划，host 又把计划里的并行步骤派给了工作者。现在头脑风暴是计划之前的一个封闭阶段：
+>
+> ```
+> brainstorm start → ground → diverge → dedupe → rank → novelty → [review → evolve] → report
+>   → ask_user（用户选）→ brainstorm end → idea promote（选中的想法）→ update_plan → 执行（此时才用工作者）
+> ```
+>
+> - 阶段只能按顺序前进，review、evolve 可跳过；唯一的回退是 evolve → dedupe/rank，最多两轮。离开一个阶段前它的工作必须做完：ground 要有检索，diverge 至少 6 个存活想法，rank 要有排名，novelty 要查完排名前 3 个。用户点"收尾"后可以直接跳到 report。
+> - `idea add` 只在 diverge/evolve，`idea rank` 只在 rank，`idea novelty` 从 novelty 起，`idea promote` 只能在 `brainstorm end` 之后。
+> - 头脑风暴进行中，`update_plan`、`task`、`dispatch`、`claim_finding`、Python、脚本和写文件一律被拒（只读 shell、检索、读文献照常）。需要实验验证的，写进想法的 `test`，等用户选定后成为计划步骤。
+> - 头脑风暴期间不做轮次拆分、不发"先写计划"的提示、也不发"派工作者"的提示；结束时 `ask_user` 不计入"计划前提问"次数上限。
+> - `update_plan` 不再丢掉之前 promote 进来的假设，先 promote 再写计划、先写计划再 promote 都可以。
+>
+> 实现：`IdeaLedger.stageBlocker` / `ideaActionBlocker` / `brainstormBlocker`（`Research/Ideas.swift`），测试 `Tests/SieveSciCoreTests/BrainstormFlowTests.swift`。
+
 在报告和对话中，想法一律标为**推测**，新颖性一律写成"在 N 个查询、M 篇文献范围内未发现先例"，不写"首次""新颖"。这与系统提示词中区分"测量结果、推断、推测"的规则一致。
 
 #### 触发方式
