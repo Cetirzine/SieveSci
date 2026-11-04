@@ -38,6 +38,12 @@ public enum ProcessRunner {
             if !path.isEmpty { env["PATH"] = path; break }
         }
         #endif
+        #if os(Windows)
+        // Python on Windows reads and writes pipes in the ANSI code page unless told otherwise, which
+        // mangles non-ASCII text between SieveSci and the kernel, skills and MCP servers.
+        if env["PYTHONUTF8"] == nil { env["PYTHONUTF8"] = "1" }
+        if env["PYTHONIOENCODING"] == nil { env["PYTHONIOENCODING"] = "utf-8" }
+        #endif
         return env
     }()
 

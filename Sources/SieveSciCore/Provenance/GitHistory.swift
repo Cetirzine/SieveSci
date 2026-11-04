@@ -45,7 +45,7 @@ public final class GitHistory: @unchecked Sendable {
             // Never snapshot SieveSci's own state, VCS dirs or common caches.
             let exclude = [".sievesci/", ".git/", ".DS_Store", "__pycache__/", ".ipynb_checkpoints/", ".venv/", "venv/", "node_modules/", ".build/"]
             try? FileManager.default.createDirectory(at: gitDir.appendingPathComponent("info"), withIntermediateDirectories: true)
-            try? exclude.joined(separator: "\n").write(to: gitDir.appendingPathComponent("info/exclude"), atomically: true, encoding: .utf8)
+            try? exclude.joined(separator: "\n").writeReliably(to: gitDir.appendingPathComponent("info/exclude"))
         }
         available = true
     }

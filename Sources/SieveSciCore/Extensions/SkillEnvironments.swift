@@ -386,8 +386,8 @@ public final class SkillEnvironments: @unchecked Sendable {
         }
         let marker: JSON = ["skill": .string(skill.name), "python": .string(req.python.spec), "packages": .array(req.packages.map { .string($0) }),
                             "tool": .string(tool), "created": .string(ISO8601DateFormatter().string(from: Date()))]
-        try JSONCodec.pretty(marker).write(to: dir.appendingPathComponent("sievesci-env.json"), atomically: true, encoding: .utf8)
-        try log.joined(separator: "\n").write(to: dir.appendingPathComponent("install.log"), atomically: true, encoding: .utf8)
+        try JSONCodec.pretty(marker).writeReliably(to: dir.appendingPathComponent("sievesci-env.json"))
+        try log.joined(separator: "\n").writeReliably(to: dir.appendingPathComponent("install.log"))
         guard let py = interpreter(for: skill, req) else { throw EnvironmentError(message: "the environment was created but has no Python interpreter (\(Platform.venvPython(dir).lastPathComponent))") }
         return SetupResult(python: py, log: log.joined(separator: "\n"), created: true)
     }

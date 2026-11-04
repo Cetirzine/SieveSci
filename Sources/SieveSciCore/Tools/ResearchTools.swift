@@ -161,7 +161,7 @@ struct DispatchTool: Tool {
             let row: JSON = ["index": .int(i + 1), "item": .string(items[i]), "result": .string(r)]
             lines.append(String(decoding: (try? enc.encode(row)) ?? Data(), as: UTF8.self))
         }
-        try lines.joined(separator: "\n").write(to: out, atomically: true, encoding: .utf8)
+        try lines.joined(separator: "\n").writeReliably(to: out)
         let preview = results.enumerated().prefix(40).map { "\($0.offset + 1). \(items[$0.offset].truncated(80, marker: "…")) → \($0.element.truncated(300, marker: "…"))" }
         return ToolOutput("Batch \(label): \(items.count) items processed with up to \(par) workers. Full results: \(out.path)\n\n" + preview.joined(separator: "\n"),
                           filesWritten: [out.path])
@@ -203,7 +203,7 @@ struct DispatchTool: Tool {
         }
         var jsonl: [String] = []
         for (i, r) in runs.enumerated() { jsonl.append("{\"trajectory\":\(i + 1),\"report\":\(JSON.string(r).canonical)}") }
-        try jsonl.joined(separator: "\n").write(to: out, atomically: true, encoding: .utf8)
+        try jsonl.joined(separator: "\n").writeReliably(to: out)
         return ToolOutput("Consensus over \(n) independent trajectories (reports: \(out.path)):\n"
                           + (lines.isEmpty ? "(no structured results returned)" : lines.joined(separator: "\n"))
                           + "\n\nConclusions:\n" + conclusions.joined(separator: "\n"), filesWritten: [out.path])
@@ -228,7 +228,7 @@ struct DispatchTool: Tool {
             if win == "A" { firstWins += 1 }
             log.append("{\"a\":\(a + 1),\"b\":\(b + 1),\"winner\":\"\(win)\",\"reason\":\(JSON.string(j.str("reason") ?? "").canonical)}")
         }
-        try log.joined(separator: "\n").write(to: out, atomically: true, encoding: .utf8)
+        try log.joined(separator: "\n").writeReliably(to: out)
         return ToolOutput(Self.rankReport(items: items, outcomes: outcomes, planned: pairs.count, unusable: unusable, firstWins: firstWins, log: out.path),
                           filesWritten: [out.path])
     }

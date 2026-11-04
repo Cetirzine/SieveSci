@@ -245,6 +245,6 @@ public enum ProjectMemory {
         var t = (try? String(contentsOf: url, encoding: .utf8)) ?? "# SieveSci project memory\n"
         if !t.hasSuffix("\n") { t += "\n" }
         t += "- \(line.trimmingCharacters(in: .whitespaces))\n"
-        try t.write(to: url, atomically: true, encoding: .utf8)
+        try t.writeReliably(to: url)
     }
 }

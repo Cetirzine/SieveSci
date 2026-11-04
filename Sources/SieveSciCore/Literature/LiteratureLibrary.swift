@@ -289,7 +289,7 @@ public final class LiteratureLibrary: @unchecked Sendable {
             r.pdfSHA256 = Hashing.sha256Hex(data)
             if let text = Self.extractText(dir.appendingPathComponent(pdfRel)), !text.isEmpty {
                 let tRel = "text/\(r.key).txt"
-                try text.write(to: dir.appendingPathComponent(tRel), atomically: true, encoding: .utf8)
+                try text.writeReliably(to: dir.appendingPathComponent(tRel))
                 r.textPath = tRel
             }
             break
@@ -297,12 +297,12 @@ public final class LiteratureLibrary: @unchecked Sendable {
         if r.pdfPath == nil, let pmc = r.pmcid, let text = await europePMCFullText(pmc), text.count > 2000 {
             // PMC open-access articles: the JATS XML full text is more reliable than scraping a PDF.
             let tRel = "text/\(r.key).txt"
-            try text.write(to: dir.appendingPathComponent(tRel), atomically: true, encoding: .utf8)
+            try text.writeReliably(to: dir.appendingPathComponent(tRel))
             r.textPath = tRel
         } else if r.pdfPath == nil, let abs = r.abstract {
             // No OA full text: keep the abstract as the grounding text, clearly labelled.
             let tRel = "text/\(r.key).txt"
-            try ("[abstract only — no open-access full text found]\n\n" + abs).write(to: dir.appendingPathComponent(tRel), atomically: true, encoding: .utf8)
+            try ("[abstract only — no open-access full text found]\n\n" + abs).writeReliably(to: dir.appendingPathComponent(tRel))
             r.textPath = tRel
         }
         update(r)
@@ -382,7 +382,7 @@ public final class LiteratureLibrary: @unchecked Sendable {
         var existing = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
         if existing.contains("{\(key),") { return }
         existing += (existing.isEmpty ? "" : "\n") + entry.trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
-        try? existing.write(to: url, atomically: true, encoding: .utf8)
+        try? existing.writeReliably(to: url)
     }
 
     public static func bibtex(_ r: PaperRecord) -> String {

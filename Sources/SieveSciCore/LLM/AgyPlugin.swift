@@ -65,14 +65,14 @@ public actor AgyPlugin {
         for (path, text) in files {
             let u = dir.appendingPathComponent(path)
             try fm.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try text.write(to: u, atomically: true, encoding: .utf8)
+            try text.writeReliably(to: u)
         }
         let r = try await ProcessRunner.run(exe, ["plugin", "install", dir.path], timeout: 120)
         let after = (try? await ProcessRunner.run(exe, ["agents"], timeout: 60))?.stdout ?? ""
         guard after.contains(CLIAgentProvider.agyAgent) else {
             throw ProviderError.protocolError(L10n.s("Could not install SieveSci's agent into Antigravity CLI, so it cannot be run without its own tools: %@", (r.stderr + r.stdout).truncated(400)))
         }
-        try stamp.write(to: stampFile, atomically: true, encoding: .utf8)
+        try stamp.writeReliably(to: stampFile)
         installed = stamp
     }
 }

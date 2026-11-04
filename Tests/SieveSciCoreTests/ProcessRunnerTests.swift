@@ -83,8 +83,10 @@ import Testing
         let req = LLMRequest(model: "m", system: "s", tools: [], messages: [Message.user("hi")], maxTokens: 10,
                              cache: CacheHints(lineageKey: "stop-test", retention: .short))
         let task = Task { try await p.complete(req) }
-        for _ in 0..<200 where !FileManager.default.fileExists(atPath: pidFile.path) { try await Task.sleep(nanoseconds: 50_000_000) }
-        let pid = Int32((try String(contentsOf: pidFile, encoding: .utf8)).trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+        // The shell creates the file before it writes the pid into it.
+        func readPid() -> Int32? { (try? String(contentsOf: pidFile, encoding: .utf8)).flatMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) } }
+        for _ in 0..<200 where readPid() == nil { try await Task.sleep(nanoseconds: 50_000_000) }
+        let pid = readPid() ?? 0
         let t0 = Date()
         task.cancel()
         _ = try? await task.value

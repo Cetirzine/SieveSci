@@ -155,7 +155,7 @@ public final class SessionStore: @unchecked Sendable {
     public static func setTitle(_ title: String, task: String, in workspace: URL) {
         let f = taskDir(task, in: workspace).appendingPathComponent("title.txt")
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if t.isEmpty { try? FileManager.default.removeItem(at: f) } else { try? t.write(to: f, atomically: true, encoding: .utf8) }
+        if t.isEmpty { try? FileManager.default.removeItem(at: f) } else { try? t.writeReliably(to: f) }
     }
 
     /// Resolves what someone typed as a task reference: an exact id, a unique id prefix, or a unique title match.

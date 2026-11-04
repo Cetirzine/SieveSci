@@ -400,7 +400,7 @@ public enum DreamInbox {
         }
         let prior = (try? String(contentsOf: file, encoding: .utf8)).map { $0 + "\n---\n\n" } ?? ""
         try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? (prior + md).write(to: file, atomically: true, encoding: .utf8)
+        try? (prior + md).writeReliably(to: file)
         return file
     }
 }

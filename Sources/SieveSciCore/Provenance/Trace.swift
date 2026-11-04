@@ -125,7 +125,7 @@ public enum ReportExporter {
         if !FileManager.default.fileExists(atPath: bib.path) { out += "\n(" + L("no library entries") + ")\n" }
         let base = report.deletingPathExtension().lastPathComponent + "-traced"
         let md = report.deletingLastPathComponent().appendingPathComponent(base + ".md")
-        try? out.write(to: md, atomically: true, encoding: .utf8)
+        try? out.writeReliably(to: md)
         var results = [L10n.s("Markdown with provenance: %@ (%@ receipts traced)", md.path, String(used.count))]
         services.log("report_export", actor: "host", ["report": .string(report.path), "sha256": .string(Hashing.sha256Hex(out)),
                                                       "receipts": .array(used.map { .string($0) })])
@@ -163,7 +163,7 @@ public enum EnvironmentSnapshot {
         if let conda = ProcessRunner.loginEnvironment["CONDA_DEFAULT_ENV"] { parts.append("conda env: \(conda)") }
         let text = parts.joined(separator: "\n\n")
         let url = services.taskDir.appendingPathComponent("environment.txt")
-        try? text.write(to: url, atomically: true, encoding: .utf8)
+        try? text.writeReliably(to: url)
         services.log("environment", actor: "host", ["sha256": .string(Hashing.sha256Hex(text)),
                                                     "summary": .string(parts.prefix(3).joined(separator: " | "))])
     }

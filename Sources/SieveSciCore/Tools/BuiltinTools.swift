@@ -202,10 +202,10 @@ struct WriteFileTool: Tool {
         let content = try input.required("content")
         let previous = try? String(contentsOf: url, encoding: .utf8)
         let previouslyValid = previous == nil ? true : (await SyntaxCheck.check(path: url.path) == nil)
-        try content.write(to: url, atomically: true, encoding: .utf8)
+        try content.writeReliably(to: url)
         if let err = await SyntaxCheck.check(path: url.path) {
             if let previous, previouslyValid {
-                try previous.write(to: url, atomically: true, encoding: .utf8)
+                try previous.writeReliably(to: url)
                 return .error("Rejected: the new content does not parse, so the file was left unchanged.\n\(err)")
             }
             return ToolOutput("Wrote \(url.path), but it does not parse — fix it:\n\(err)", isError: true, filesWritten: [url.path])
@@ -236,9 +236,9 @@ struct EditFileTool: Tool {
         let updated = input.bool("replace_all") == true ? text.replacingOccurrences(of: old, with: new)
             : text.replacingCharacters(in: text.range(of: old)!, with: new)
         let previouslyValid = await SyntaxCheck.check(path: url.path) == nil
-        try updated.write(to: url, atomically: true, encoding: .utf8)
+        try updated.writeReliably(to: url)
         if previouslyValid, let err = await SyntaxCheck.check(path: url.path) {
-            try text.write(to: url, atomically: true, encoding: .utf8)
+            try text.writeReliably(to: url)
             return .error("Rejected: this edit would leave \(url.lastPathComponent) unparseable, so it was not applied.\n\(err)")
         }
         return ToolOutput("Edited \(url.path) (\(n) replacement\(n == 1 ? "" : "s"))", filesWritten: [url.path])

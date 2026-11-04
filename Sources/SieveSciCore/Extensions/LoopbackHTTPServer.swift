@@ -77,15 +77,23 @@ final class LoopbackHTTPServer: @unchecked Sendable {
 
     private func serve(_ c: RawSocket) {
         defer { Self.closeSocket(c) }
+        Self.noDelay(c)
         var buffer = Data()
         var chunk = [UInt8](repeating: 0, count: 65_536)
         var request: HTTPRequest?
+        var continued = false
         while request == nil {
             let n = Self.receive(c, &chunk)
             guard n > 0 else { return }
             buffer.append(contentsOf: chunk[0..<n])
             if buffer.count > 8 << 20 { return }
             request = HTTPRequest(buffer)
+            // curl (URLSession off Apple platforms) asks before sending a large body and waits.
+            if request == nil, !continued, let end = buffer.range(of: Data("\r\n\r\n".utf8)),
+               String(decoding: buffer[buffer.startIndex..<end.lowerBound], as: UTF8.self).lowercased().contains("expect: 100-continue") {
+                continued = true
+                Self.sendAll(c, Data("HTTP/1.1 100 Continue\r\n\r\n".utf8))
+            }
         }
         guard let request else { return }
         let done = DispatchSemaphore(value: 0)
@@ -111,6 +119,12 @@ final class LoopbackHTTPServer: @unchecked Sendable {
         _ = WSAStartup(WORD(0x0202), &data)
     }()
     static func startup() { _ = wsa }
+    static func noDelay(_ s: RawSocket) {
+        var one: Int32 = 1
+        _ = withUnsafePointer(to: &one) { p in
+            p.withMemoryRebound(to: CChar.self, capacity: 4) { setsockopt(s, Int32(IPPROTO_TCP.rawValue), TCP_NODELAY, $0, 4) }
+        }
+    }
     static func makeSocket() -> RawSocket { socket(AF_INET, Int32(SOCK_STREAM), Int32(IPPROTO_TCP.rawValue)) }
     static var addrLength: Int32 { Int32(MemoryLayout<sockaddr_in>.size) }
     static func closeSocket(_ s: RawSocket) { closesocket(s) }
@@ -123,6 +137,14 @@ final class LoopbackHTTPServer: @unchecked Sendable {
     }
     #else
     static func startup() {}
+    static func noDelay(_ s: RawSocket) {
+        var one: Int32 = 1
+        #if canImport(Glibc) || canImport(Musl)
+        _ = setsockopt(s, Int32(IPPROTO_TCP), TCP_NODELAY, &one, socklen_t(MemoryLayout<Int32>.size))
+        #else
+        _ = setsockopt(s, IPPROTO_TCP, TCP_NODELAY, &one, socklen_t(MemoryLayout<Int32>.size))
+        #endif
+    }
     static func makeSocket() -> RawSocket {
         #if canImport(Glibc)
         let s = socket(AF_INET, Int32(SOCK_STREAM.rawValue), 0)

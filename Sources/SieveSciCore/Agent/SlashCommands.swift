@@ -335,7 +335,7 @@ public enum SlashCommands {
                 let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
                 try? enc.encode(msgs).write(to: url)
             } else {
-                try? SessionStore.markdown(msgs).write(to: url, atomically: true, encoding: .utf8)
+                try? SessionStore.markdown(msgs).writeReliably(to: url)
             }
             return ok(L10n.s("Exported to %@", url.path))
         case "rewind":

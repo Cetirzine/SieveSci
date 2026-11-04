@@ -18,7 +18,7 @@ public final class LabNotebook: @unchecked Sendable {
             let header = "# " + L10n.s("Lab notebook — task %@", taskId) + "\n\n"
                 + L("Written automatically by SieveSci from the provenance log (`audit.jsonl`). Each entry cites the audit sequence number `§n` and, for tool runs, the receipt id. Verify integrity with `/audit`.")
                 + "\n\n"
-            try? header.write(to: url, atomically: true, encoding: .utf8)
+            try? header.writeReliably(to: url)
         }
     }
 

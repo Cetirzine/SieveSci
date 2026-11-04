@@ -26,9 +26,12 @@ extension String {
     /// Writes the file atomically, retrying once and then writing in place: on Windows the final
     /// rename of an atomic write can fail while a scanner or indexer briefly holds the file.
     public func writeReliably(to url: URL) throws {
-        do { try write(to: url, atomically: true, encoding: .utf8); return } catch {}
-        Thread.sleep(forTimeInterval: 0.1)
-        do { try write(to: url, atomically: true, encoding: .utf8); return } catch {}
+        // Windows: a file written a moment ago can be held by Defender or the indexer, so replacing
+        // it fails with a sharing violation for a few hundred milliseconds.
+        for delay in [0.0, 0.05, 0.15, 0.4] {
+            if delay > 0 { Thread.sleep(forTimeInterval: delay) }
+            do { try write(to: url, atomically: true, encoding: .utf8); return } catch { if !Platform.isWindows { throw error } }
+        }
         try write(to: url, atomically: false, encoding: .utf8)
     }
 }

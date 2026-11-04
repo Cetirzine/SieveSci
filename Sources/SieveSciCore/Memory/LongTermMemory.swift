@@ -61,7 +61,7 @@ public final class MemoryStore: @unchecked Sendable {
         }
         if !moved.isEmpty {
             let all = archived(s) + moved
-            try? all.joined(separator: Self.separator).write(to: archiveURL(s), atomically: true, encoding: .utf8)
+            try? all.joined(separator: Self.separator).writeReliably(to: archiveURL(s))
         }
         return moved.count
     }
@@ -81,7 +81,7 @@ public final class MemoryStore: @unchecked Sendable {
     }
 
     func save(_ s: Store, _ es: [String]) throws {
-        try es.joined(separator: Self.separator).write(to: url(s), atomically: true, encoding: .utf8)
+        try es.joined(separator: Self.separator).writeReliably(to: url(s))
     }
 
     public enum Op: String { case add, replace, remove }

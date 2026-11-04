@@ -66,7 +66,7 @@ public final class EvidenceLedger: @unchecked Sendable {
         if let dir {
             // Output first: a receipt line on disk always has its output next to it.
             try? FileManager.default.createDirectory(at: dir.appendingPathComponent("outputs"), withIntermediateDirectories: true)
-            try? stored.write(to: outputURL(r.id), atomically: true, encoding: .utf8)
+            try? stored.writeReliably(to: outputURL(r.id))
             StateFile.append(line: r, to: dir.appendingPathComponent("receipts.jsonl"))
         }
         return r

@@ -183,7 +183,7 @@ public enum OversightEval {
         let focus: String
         if c.kind == "code" {
             let file = "analysis." + (c.language == "r" ? "R" : "py")
-            try c.text.write(to: ws.appendingPathComponent(file), atomically: true, encoding: .utf8)
+            try c.text.writeReliably(to: ws.appendingPathComponent(file))
             s.ledger.record(tool: c.language == "r" ? "bash" : "python", args: ["file": .string(file)],
                             output: ToolOutput("(ran \(file), exit 0)"), role: .main, startedAt: Date(), duration: 0)
             // Every code case — planted or clean — is a cell from a longer session, so the review is
@@ -334,7 +334,7 @@ public enum VerifierEval {
         for (path, content) in c.files.sorted(by: { $0.key < $1.key }) {
             let u = ws.appendingPathComponent(path)
             try FileManager.default.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try content.write(to: u, atomically: true, encoding: .utf8)
+            try content.writeReliably(to: u)
         }
         let claim = s.claims.add(statement: c.statement, criteria: c.criteria, evidence: [], dataPaths: c.files.keys.sorted())
         let report = await s.supervisor.verify(claim)

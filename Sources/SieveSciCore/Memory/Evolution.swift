@@ -71,7 +71,7 @@ public final class EvolutionGovernor: @unchecked Sendable {
         enc.outputFormatting = [.sortedKeys]
         enc.dateEncodingStrategy = .iso8601
         let lines = proposals.compactMap { try? enc.encode($0) }.map { String(decoding: $0, as: UTF8.self) }
-        try? lines.joined(separator: "\n").write(to: dir.appendingPathComponent("proposals.jsonl"), atomically: true, encoding: .utf8)
+        try? lines.joined(separator: "\n").writeReliably(to: dir.appendingPathComponent("proposals.jsonl"))
     }
 
     /// Step 1 — deterministic screening. Returns the reasons a proposal is rejected outright.
@@ -167,7 +167,7 @@ public final class EvolutionGovernor: @unchecked Sendable {
                 let file = SkillRegistry.learnedDir.appendingPathComponent("\(p.target)/SKILL.md")
                 p.previous = try? String(contentsOf: file, encoding: .utf8)
                 try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try p.content.write(to: file, atomically: true, encoding: .utf8)
+                try p.content.writeReliably(to: file)
                 services.skills.reload()
             }
             p.status = .accepted
@@ -195,11 +195,11 @@ public final class EvolutionGovernor: @unchecked Sendable {
         switch p.kind {
         case .memory:
             if let s = MemoryStore.Store(rawValue: p.target) {
-                try? (p.previous ?? "").write(to: services.memory(for: p.role).url(s), atomically: true, encoding: .utf8)
+                try? (p.previous ?? "").writeReliably(to: services.memory(for: p.role).url(s))
             }
         case .skill:
             let file = SkillRegistry.learnedDir.appendingPathComponent("\(p.target)/SKILL.md")
-            if let prev = p.previous { try? prev.write(to: file, atomically: true, encoding: .utf8) } else { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+            if let prev = p.previous { try? prev.writeReliably(to: file) } else { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
             services.skills.reload()
         }
         p.status = .reverted
