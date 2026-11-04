@@ -29,6 +29,8 @@ struct AppConfig: Codable, Equatable {
     var notifyTurnFinished = true
     var notifyPermission = true
     var showThinking = true
+    /// Let the agent enter brainstorming mode on its own when the work needs new ideas.
+    var autoBrainstorm = true
     /// Look for a newer release on GitHub at launch and once a day.
     var autoCheckUpdates = true
     /// Download it in the background and install it on quit (or from the sidebar banner).
@@ -88,6 +90,7 @@ extension AppConfig {
         notifyTurnFinished = v(.notifyTurnFinished, d.notifyTurnFinished)
         notifyPermission = v(.notifyPermission, d.notifyPermission)
         showThinking = v(.showThinking, d.showThinking)
+        autoBrainstorm = v(.autoBrainstorm, d.autoBrainstorm)
         autoCheckUpdates = v(.autoCheckUpdates, d.autoCheckUpdates)
         autoInstallUpdates = v(.autoInstallUpdates, d.autoInstallUpdates)
     }

@@ -12,6 +12,7 @@ final class AppModel: ObservableObject {
             if config != oldValue, !Self.isDemo { config.save() }
             // Effort applies from the next model call of the open task, not only to new sessions.
             if config.effort != oldValue.effort { bench?.services.effort = config.effort }
+            if config.autoBrainstorm != oldValue.autoBrainstorm { bench?.services.ideas.autoAllowed = config.autoBrainstorm }
             if config.autoCheckUpdates != oldValue.autoCheckUpdates || config.autoInstallUpdates != oldValue.autoInstallUpdates {
                 configureUpdater()
             }
@@ -35,6 +36,13 @@ final class AppModel: ObservableObject {
     @Published var running = false
     @Published var runStarted = Date()
     @Published var pendingPermission: PermissionRequest?
+    /// The structured question (`ask_user`) the open task waits on.
+    @Published var pendingAsk: AskRequest?
+    /// The open task's brainstorm: live while it runs, kept until the next message once it ends.
+    @Published var brainstorm: BrainstormState?
+    @Published var ideas: [Idea] = []
+    /// Workspaces whose dream ideas were already announced this launch.
+    var dreamNoticeShown: Set<String> = []
     @Published var plan = ResearchPlan()
     @Published var claims: [Claim] = []
     @Published var contested: [(thread: String, kind: String, issue: String, reason: String)] = []
@@ -272,6 +280,9 @@ final class AppModel: ObservableObject {
         history = []
         queued = []
         contested = []
+        pendingAsk = nil
+        brainstorm = nil
+        ideas = []
     }
 
     /// Opens a task. A turn still running elsewhere keeps going in the background (switching never
@@ -322,6 +333,15 @@ final class AppModel: ObservableObject {
             services.deliberation.policy.maxExchanges = config.maxDeliberationExchanges
             services.delegation.auto = config.autoDelegate
             services.delegation.maxParallel = max(1, config.maxParallelWorkers)
+            services.ideas.autoAllowed = config.autoBrainstorm
+            services.asks.interactive = true
+            // Ideas a background dream left: said once, when a task of this workspace opens.
+            let unseen = DreamInbox.unseen(ws).count
+            if unseen > 0, !dreamNoticeShown.contains(ws.path) {
+                dreamNoticeShown.insert(ws.path)
+                notifier.post(title: L("SieveSci dreamed"), body: L10n.f("%d new idea(s) from dreaming. Type /ideas dream to read them.", unseen), id: "dream-\(ws.path.hashValue)")
+                if task != nil { append(.notice(L10n.f("%d new idea(s) from dreaming. Type /ideas dream to read them.", unseen)), to: "main") }
+            }
             if let v = config.visionHelper { services.vision.helper = provider(v) }
             services.emit = { [weak self] ev in Task { @MainActor in self?.route(ev, task: id) } }
             services.requestPermission = { [weak self] req in
@@ -405,6 +425,9 @@ final class AppModel: ObservableObject {
             permissionContinuation = cont
             pendingPermission = req
         }
+        pendingAsk = live.services.asks.first
+        ideas = live.services.ideas.snapshot
+        brainstorm = live.services.ideas.live
         refreshSidePanels()
         refreshStage(id, notify: false)
         Task { await refreshHistory() }
@@ -452,6 +475,7 @@ final class AppModel: ObservableObject {
         if trimmed == "/fork" { fork(); return }
         if trimmed == "/doctor" { Task { let r = await Doctor.run(model: self); append(.notice(r), to: "main") }; return }
         append(.user(trimmed, attachments: attachments.map(\.lastPathComponent)), to: "main")
+        if brainstorm?.endedAt != nil { brainstorm = nil }
         openText["main"] = nil
         openThinking["main"] = nil
         if running {
@@ -488,6 +512,7 @@ final class AppModel: ObservableObject {
         case .harking: return L("Criteria changed after results")
         case .breakthrough: return L("Strong claim — needs verification")
         case .checkpoint: return L("Checkpoint")
+        case .ideation: return L("Idea under review")
         }
     }
 
@@ -533,6 +558,23 @@ final class AppModel: ObservableObject {
         submit("/rewind \(n)", attachments: [])
         if let cut = streams["main"]?.firstIndex(where: { $0.id == item.id }) { streams["main"]?.removeSubrange(cut...) }
     }
+
+    /// Answers the open question card (the waiting tool call, or a question left from the last run).
+    func answerAsk(_ outcome: AskOutcome) {
+        guard let req = pendingAsk, let bench else { return }
+        pendingAsk = nil
+        Task {
+            await bench.answerAsk(req.id, outcome)
+            await MainActor.run {
+                self.pendingAsk = bench.services.asks.first
+                self.refreshStage(self.taskId)
+                if case .answered = outcome, !bench.isRunning { self.turnMaybeEnded() }
+            }
+        }
+    }
+
+    /// Brainstorm controls: finish with what is there, or stop the turn.
+    func wrapUpBrainstorm() { bench?.wrapUpBrainstorm() }
 
     func answerPermission(_ d: PermissionDecision) {
         pendingPermission = nil

@@ -886,6 +886,11 @@ struct ModelsSettings: View {
                 Text(L("When a request or plan has independent parts, SieveSci runs them on workers automatically."))
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section(spec: L("Brainstorming")) {
+                Toggle(L("Let the agent start brainstorming on its own when new ideas are needed"), isOn: $model.config.autoBrainstorm)
+                Text(L("You can always ask with /brainstorm. While it brainstorms you see each stage, every idea and what it is thinking, and can wrap up or stop it. Ideas count only after a novelty check and an independent review."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section(spec: L("Vision")) {
                 Picker(L("Image helper for text-only models"), selection: $model.config.visionHelper) {
                     Text(L("None")).tag(ModelRef?.none)

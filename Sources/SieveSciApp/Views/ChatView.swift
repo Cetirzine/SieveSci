@@ -16,6 +16,7 @@ struct ChatView: View {
     /// A new, empty task: the composer moves to the middle of the window (see `EmptyChatHero`).
     var isEmptyTask: Bool {
         model.items.isEmpty && !model.running && model.pendingPermission == nil && model.demoAsk == nil && model.lastError == nil
+            && model.pendingAsk == nil && model.brainstorm == nil
     }
 
     var body: some View {
@@ -48,7 +49,9 @@ struct ChatView: View {
                                 PlanApprovalBar()
                             }
                             if !model.contested.isEmpty { ContestedBanner() }
+                            if let b = model.brainstorm { BrainstormPanel(state: b).id("brainstorm") }
                             if model.running { Spinner().id("spinner") }
+                            if let ask = model.pendingAsk, model.pendingPermission == nil { AskPrompt(request: ask).id("ask") }
                             if let req = model.pendingPermission {
                                 PermissionPrompt(request: PermissionAsk(req)).id("permission")
                             } else if let ask = model.demoAsk {
@@ -66,6 +69,7 @@ struct ChatView: View {
                 .onChange(of: model.items.count) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
                 .onChange(of: model.items.last) { _, _ in if !searching { proxy.scrollTo("bottom", anchor: .bottom) } }
                 .onChange(of: model.pendingPermission?.id) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
+                .onChange(of: model.pendingAsk?.id) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
             }
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 if let e = model.lastError, model.bench == nil { SessionSetupCard(detail: e) }

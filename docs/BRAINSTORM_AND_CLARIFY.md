@@ -1,6 +1,6 @@
 # 头脑风暴与澄清提问：调研与设计方案
 
-状态：设计稿，尚未实现。日期：2026-11-04。
+状态：已实现第 1–4 期的核心功能与界面（见第 8 节）。日期：2026-11-04。
 
 本文讨论两个相关功能：
 
@@ -492,6 +492,39 @@ case ideasChanged([Idea])
 - 各厂商在开启思考模式时能否设置 temperature：需要在第 4 期实现时逐一核实。
 - MeSH、GO、ChEBI 词表的离线打包许可与体积：第 3 期开始前评估。
 - 去重的 Jaccard 阈值、提问次数上限等参数：需要用评测集调整。
+
+## 8. 实现状态（2026-11-04）
+
+已实现的部分，及其与上文方案不同之处：
+
+| 部分 | 位置 | 说明 |
+|---|---|---|
+| `ask_user` 工具 | `Agent/Ask.swift`、`Tools/IdeationTools.swift` | 单选、多选、填空；"其他"由前端自动添加；推荐项排第一；四种结果文案分别对应作答、关掉卡片、超时、无人可问。只允许 main 调用；`direction` 类提问先过检索闸；计划前最多问 3 次 |
+| 决策屏障 | `AgentSession.runTools` | 同一步里与 `ask_user` 一起发出的其他调用一律不执行 |
+| 等待与恢复 | `AskCenter` | 挂起等待用户；待答问题写入 `state/asks.json`。应用重启后卡片仍在，回答作为下一条用户消息送达（`Workbench.answerAsk`） |
+| 事件 | `AgentEvents.swift` | `askRequested`、`askResolved`、`brainstormChanged`、`ideasChanged`，数据类型全部 Codable |
+| 任务状态 / 目标 | `TaskStage`、`GoalTool` | 有待答问题时侧边栏显示"等你回答"；目标激活时提问自动让目标等待，作答后恢复 |
+| 想法登记 | `Research/Ideas.swift` | 词项 Jaccard 去重，阈值 0.6（中文按字的二元组）；新颖性判断需要至少 3 次想法创建之后的成功检索；判为 known 自动搁置 |
+| `brainstorm` 工具 | `IdeationTools.swift` | 包括 start、stage、end。设置关闭时，自主 start 被拒绝；`/brainstorm` 和 `/dream now` 不受影响 |
+| `idea` 工具 | 同上 | 包括 add、list、discard、rank、novelty、promote。promote 先检查闸门条件，再发起检查者的 `ideation` 评审，通过后调用 `ResearchProtocol.addHypothesis` 登记假设；未改动就重试会被拒绝 |
+| `ideation_seeds` | 同上 | 种子来源：文献库词项、文献库中与主题最远的论文、约 90 个跨领域机制词。使用 SplitMix64 和记录下的种子，可以复现 |
+| 收束 / 停止 | `IdeaLedger.requestWrapUp`、`Workbench.interrupt` | "收束"在下一步的工具结果后附加一次 `<brainstorm_wrap_up>`；"停止"中断当前回合，并把本次头脑风暴标记为已停止 |
+| 每回合上下文 | `AgentSession.render` | 进行中时写入主题、阶段和存活想法数；设置关闭时注明"autonomous brainstorming: off" |
+| 提示词 | `SystemPrompts` | main 新增"Asking the user""Brainstorming"两节；checker 新增 ideation 评审规则 |
+| 技能 | `Resources/skills/` | 新增 `brainstorm`、`clarify`；更新 `hypothesis-tournament`、`virtual-lab-meeting`（并行加合并）、`novelty-check`（不写"新颖"） |
+| 命令 | `SlashCommands` | `/brainstorm`、`/clarify`、`/ideas [dream]`、`/dream on [daily HH:MM]\|off\|now\|status` |
+| 做梦 | `DreamProtocol`、`DreamInbox`、`Scheduler` | 定时任务新增 `mode` 字段，做梦任务以 plan 模式（只读）运行；结束时写 `.sievesci/dreams/<日期>.md` 和收件箱；不能登记假设；下次打开工作区时提醒 |
+| 界面 | `Views/AskPrompt.swift`、`Views/BrainstormPanel.swift` | 规格见 `docs/DESIGN_LANGUAGE.md` 第 6 节。设置 → 角色页"头脑风暴"一节有开关（`AppConfig.autoBrainstorm`，默认开）。演示：`SIEVESCI_UI_DEMO=1` 加 `SIEVESCI_UI_BRAINSTORM=1` 或 `SIEVESCI_UI_ASK=1` |
+| CLI | `sievesci-cli/main.swift` | 交互模式下显示编号选项（多选用逗号分隔，直接输入文字即"其他"，q 表示关掉）；`-p` 运行返回无人可问 |
+| 测试 | `Tests/SieveSciCoreTests/BrainstormAndAskTests.swift` | 解析、四种结果、无人可问、等待与恢复、只允许 main、方向提问的检索闸、决策屏障、去重、新颖性闸门、自主开关、收束、promote 全流程、种子可复现 |
+
+尚未做的：
+
+- 做梦产生的想法目前只能用 `/ideas dream` 查看，还没有 `ask_user` 采纳卡片；
+- 第 5 节的统计指标；
+- 温度参数；
+- 提问超时设置：核心已支持 `AskCenter.timeout`，界面还没有入口；
+- 这些交互还没有评测样例（`Eval/`）。
 
 ## 7. 来源
 

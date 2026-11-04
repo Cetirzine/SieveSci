@@ -24,7 +24,8 @@ A native macOS research agent for biology and chemistry, built with SwiftUI. It 
 
 - Scope → background search (web and literature are both required before plans, claims or conclusions) → plan with hypotheses and soft checkpoints → execute → independent review → claims → write-up
 - Plan mode: read-only research and planning until you approve the plan
-- `/goal`: long-running objectives with automatic continuation rounds. A round never polls: running background jobs wake the agent when they report; a round that does no work or repeats the last one hands the goal back to you; 30 rounds by default (`--rounds N`). When the agent needs your decision it asks one concrete question through a structured field
+- `/goal`: long-running objectives with automatic continuation rounds. A round never polls: running background jobs wake the agent when they report; a round that does no work or repeats the last one hands the goal back to you; 30 rounds by default (`--rounds N`). When the agent needs your decision it asks with a choice or fill-in card (`ask_user`, always with "Other")
+- Brainstorming: the agent may enter it on its own when new ideas are needed (switch off in Settings), or you start it with `/brainstorm`; a dot-matrix panel shows each stage, every idea and what it is thinking, and you can wrap up or stop it. Ideas are speculation until a search-backed novelty check and the checker's review register them as hypotheses. `/clarify` searches, then offers directions to choose from when a request is vague; `/dream on` schedules a nightly read-only "dream" that links open threads across tasks into ideas for you to judge the next day
 
 **Independent oversight**
 

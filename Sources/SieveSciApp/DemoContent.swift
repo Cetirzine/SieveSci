@@ -143,6 +143,7 @@ extension AppModel {
             streams = ["main": []]; cards = [:]; contested = []; demoAsk = nil; running = false
             meter = ContextMeter(model: "deepseek-v4-pro", contextWindow: 128_000)
         }
+        if env["SIEVESCI_UI_BRAINSTORM"] == "1" || env["SIEVESCI_UI_ASK"] == "1" { loadBrainstormDemo(ask: env["SIEVESCI_UI_ASK"] == "1") }
         if let path = env["SIEVESCI_UI_SNAPSHOT"] { Self.snapshotWindow(to: path) }
     }
 
