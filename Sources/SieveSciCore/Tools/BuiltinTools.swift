@@ -475,7 +475,8 @@ struct PaperFetchTool: Tool {
         ctx.services.emit(.literature(agentId: ctx.sessionId, action: .added, key: r.key, title: r.title,
                                       detail: "\(r.year.map(String.init) ?? "n.d.") · \(r.venue ?? r.source) · \(abstractOnly ? "abstract only" : "full text")"))
         let status = r.pdfPath != nil ? "Open-access PDF saved (sha256 \(r.pdfSHA256?.prefix(12) ?? "")); text extracted."
-            : (abstractOnly ? "No open-access full text; abstract stored." : "Open-access full text retrieved (Europe PMC).")
+            : (abstractOnly ? (lib.downloadPDFs ? "No open-access full text; abstract stored." : "PDF downloads are off in Settings; abstract stored. Ask the user to turn them on if the full text is needed.")
+               : "Open-access full text retrieved (Europe PMC).")
         return ToolOutput("Added [@\(r.key)] \(r.title) (\(r.year.map(String.init) ?? "n.d.")).\n" + status
             + "\nRead passages with paper_read.", facts: ["paper": .string(r.key)])
     }

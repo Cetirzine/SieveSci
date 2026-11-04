@@ -230,12 +230,18 @@ public final class AgentSession: @unchecked Sendable {
         self.draft = draft
         defer { self.draft = nil }
         let resp: LLMResponse
+        let meterAtStart = meter
         do {
             resp = try await provider.complete(req) { ev in
                 draft?.add(ev)
                 switch ev {
                 case .textDelta(let t): emit(.textDelta(agentId: id, t))
                 case .thinkingDelta(let t): emit(.thinkingDelta(agentId: id, t))
+                case .contextUsage(let tokens, let window):
+                    var m = meterAtStart
+                    m.lastPromptTokens = tokens
+                    if let window, window > 0 { m.contextWindow = window }
+                    emit(.usage(agentId: id, m))
                 default: break
                 }
             }
@@ -258,7 +264,8 @@ public final class AgentSession: @unchecked Sendable {
             ModelCapabilities.shared.learn(images: true, model: model, profile: provider.profile.id)
         }
         lastRequestAt = Date()
-        meter.lastPromptTokens = resp.usage.promptTotal
+        meter.lastPromptTokens = resp.contextTokens ?? resp.usage.promptTotal
+        if let w = resp.contextWindow, w > 0 { meter.contextWindow = w }
         meter.lastOutputTokens = resp.usage.output
         meter.session = meter.session + resp.usage
         SpendTracker.shared.record(resp.usage, model: resp.servedModel ?? model, profile: provider.profile)

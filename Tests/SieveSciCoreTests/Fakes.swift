@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 @testable import SieveSciCore
 
 /// A provider that replies from a script, for exercising the agent machinery without network.

@@ -947,3 +947,5 @@
 "e.g. Every morning, find new papers on CRISPR base editing and summarise the three most relevant." = "e.g. Every morning, find new papers on CRISPR base editing and summarise the three most relevant.";
 "Runs in" = "Runs in";
 "Schedule" = "Schedule";
+"Download open-access PDFs" = "Download open-access PDFs";
+"Saves the PDF of each open-access paper added to the library (OpenAlex, Europe PMC, arXiv, Unpaywall). Off: only Europe PMC's full text or the abstract is kept." = "Saves the PDF of each open-access paper added to the library (OpenAlex, Europe PMC, arXiv, Unpaywall). Off: only Europe PMC's full text or the abstract is kept.";

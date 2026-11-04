@@ -25,5 +25,9 @@ public extension FileHandle {
 public enum Signals {
     /// A write to a pipe whose reader has exited sends SIGPIPE, which by default kills the process
     /// without a crash report. Ignored, the write fails with EPIPE and `writeSafely` returns false.
-    public static func ignoreBrokenPipes() { signal(SIGPIPE, SIG_IGN) }
+    public static func ignoreBrokenPipes() {
+        #if !os(Windows)   // Windows has no SIGPIPE: a broken pipe is just a failed write.
+        signal(SIGPIPE, SIG_IGN)
+        #endif
+    }
 }

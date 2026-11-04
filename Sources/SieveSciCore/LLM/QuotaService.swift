@@ -87,26 +87,33 @@ public actor QuotaService {
     /// one. `usage` is the window's allowance and `currentValue` what has been used. Older accounts
     /// report `TOKENS_LIMIT` (5-hour tokens) and `TIME_LIMIT` (monthly tool calls).
     static func glmMeters(_ limits: [JSON]) -> [QuotaSnapshot.Meter] {
-        let units = [3: ("h", "hour"), 4: ("d", "day"), 5: ("mo", "month"), 6: ("w", "week")]
-        let meters = limits.map { l -> QuotaSnapshot.Meter in
+        let order: [QuotaSnapshot.Meter.Kind] = [.fiveHour, .weekly, .window, .tokens, .prompts]
+        return limits.map(glmMeter).sorted { (order.firstIndex(of: $0.kind) ?? 9) < (order.firstIndex(of: $1.kind) ?? 9) }
+    }
+
+    // A named function, not a closure: inline, this body exceeds the type-checker's time limit on
+    // some toolchains (Swift 6.2 on Linux).
+    static func glmMeter(_ l: JSON) -> QuotaSnapshot.Meter {
+            let units: [Int: (String, String)] = [3: ("h", "hour"), 4: ("d", "day"), 5: ("mo", "month"), 6: ("w", "week")]
             let type = l.str("type") ?? ""
             let number = l["number"]?.intValue, unit = l["unit"]?.intValue
             let allowance = l["usage"]?.numberValue, used = l["currentValue"]?.numberValue
             let pct = l["percentage"]?.numberValue
-            let fraction = allowance.flatMap { a in used.map { a > 0 ? min(1, $0 / a) : 0 } } ?? pct.map { $0 / 100 }
-            let reset = l["nextResetTime"]?.numberValue.map { Date(timeIntervalSince1970: $0 > 1e12 ? $0 / 1000 : $0) }
-            let window = number.flatMap { n in unit.flatMap { units[$0] }.map { "\(n) \($0.0)" } }
+            var fraction: Double? = pct.map { $0 / 100 }
+            if let a = allowance, let u = used { fraction = a > 0 ? min(1, u / a) : 0 }
+            let reset: Date? = l["nextResetTime"]?.numberValue.map { Date(timeIntervalSince1970: $0 > 1e12 ? $0 / 1000 : $0) }
+            var window: String?
+            if let n = number, let u = unit, let name = units[u] { window = "\(n) \(name.0)" }
             var kind: QuotaSnapshot.Meter.Kind = .window
             if (number == 5 && unit == 3) || (type == "TOKENS_LIMIT" && unit == nil) { kind = .fiveHour }
             else if (number == 1 && unit == 6) || (number == 7 && unit == 4) { kind = .weekly }
             else if type == "TIME_LIMIT" { kind = .prompts }
-            let what = type == "TOKENS_LIMIT" ? "tokens" : type == "TIME_LIMIT" ? "tool calls" : nil
-            let left = l["remaining"]?.numberValue.map { "\(Int($0)) left" } ?? fraction.map { "\(Int((1 - $0) * 100))% left" } ?? "?"
-            return .init(label: [type, window].compactMap { $0 }.joined(separator: " "), usedFraction: fraction, remaining: left,
-                         resetsAt: reset, kind: kind, detail: kind == .window ? window : what, exhausted: (fraction ?? 0) >= 1)
-        }
-        let order: [QuotaSnapshot.Meter.Kind] = [.fiveHour, .weekly, .window, .tokens, .prompts]
-        return meters.sorted { (order.firstIndex(of: $0.kind) ?? 9) < (order.firstIndex(of: $1.kind) ?? 9) }
+            let what: String? = type == "TOKENS_LIMIT" ? "tokens" : type == "TIME_LIMIT" ? "tool calls" : nil
+            var left = "?"
+            if let r = l["remaining"]?.numberValue { left = "\(Int(r)) left" } else if let f = fraction { left = "\(Int((1 - f) * 100))% left" }
+            let label = [type, window].compactMap { $0 }.joined(separator: " ")
+            return QuotaSnapshot.Meter(label: label, usedFraction: fraction, remaining: left,
+                                       resetsAt: reset, kind: kind, detail: kind == .window ? window : what, exhausted: (fraction ?? 0) >= 1)
     }
 
     public func refresh(_ p: ProviderProfile, secrets: SecretStore, http: HTTPStreaming = URLSessionStreaming()) async -> QuotaSnapshot {

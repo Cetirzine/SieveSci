@@ -65,6 +65,11 @@ public final class MCPManager: @unchecked Sendable {
                     })
                     _ = try await client.connect(transport: transport)
                 } else if let cmd = cfg.command {
+                    #if os(Windows)
+                    // The SDK's StdioTransport is POSIX-only; a pipe-based transport is still to be written.
+                    _ = cmd
+                    throw ToolError.invalidInput("stdio MCP servers are not supported on Windows yet; use an HTTP MCP server")
+                    #else
                     let p = try ProcessRunner.makeProcess(cmd, cfg.args, cwd: workspace, env: cfg.env)
                     let toServer = Pipe(), fromServer = Pipe()
                     p.standardInput = toServer
@@ -75,6 +80,7 @@ public final class MCPManager: @unchecked Sendable {
                                                    output: FileDescriptor(rawValue: toServer.fileHandleForWriting.fileDescriptor))
                     _ = try await client.connect(transport: transport)
                     lock.lock(); processes[cfg.name] = p; lock.unlock()
+                    #endif
                 } else { continue }
                 var listed: [MCP.Tool] = []
                 var cursor: String?
