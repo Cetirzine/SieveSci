@@ -49,6 +49,18 @@ jobs:
             "| $t | $r |" | Out-File -Append $env:GITHUB_STEP_SUMMARY
           }
           exit 0
+      # Runtime check: the whole suite (minus live network tests). Failures are expected; the log
+      # says which parts of the core still assume macOS/POSIX at run time.
+      - name: Test
+        if: matrix.swift == '6.3.1'
+        shell: pwsh
+        timeout-minutes: 45
+        run: |
+          swift build --build-tests -Xswiftc -continue-building-after-errors -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH *>&1 | Tee-Object -FilePath "logs/build-tests.log"
+          "build-tests exit: $LASTEXITCODE" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          swift test --skip-build --skip LiveDatabase *>&1 | Tee-Object -FilePath "logs/test.log"
+          "test exit: $LASTEXITCODE" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          exit 0
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -79,6 +91,15 @@ jobs:
             [ "$code" = 0 ] && r=ok || r="FAIL ($code)"
             echo "| $t | $r |" >> "$GITHUB_STEP_SUMMARY"
           done
+      - name: Test
+        if: matrix.swift == '6.3'
+        shell: bash
+        timeout-minutes: 45
+        run: |
+          set +e
+          swift build --build-tests 2>&1 | tee logs/build-tests.log
+          swift test --skip-build --skip LiveDatabase 2>&1 | tee logs/test.log
+          exit 0
       - uses: actions/upload-artifact@v4
         if: always()
         with:
