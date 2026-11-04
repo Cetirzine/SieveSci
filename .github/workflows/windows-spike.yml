@@ -30,7 +30,9 @@ jobs:
       - name: Patch MCP SDK for Windows
         shell: pwsh
         run: |
-          $f = ".build/checkouts/swift-sdk/Sources/MCP/Base/Transports/HTTPClientTransport.swift"
+          # Checkouts are read-only; `package edit` makes a writable copy under Packages/.
+          swift package edit swift-sdk
+          $f = "Packages/swift-sdk/Sources/MCP/Base/Transports/HTTPClientTransport.swift"
           (Get-Content $f -Raw) -replace 'os\(Linux\)', 'canImport(FoundationNetworking)' | Set-Content $f -NoNewline
       - name: Build each target
         shell: pwsh
