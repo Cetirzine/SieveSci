@@ -15,16 +15,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        swift: ["6.2", "6.4"]
+        swift: ["6.2.1", "6.3.1"]
     steps:
       - uses: actions/checkout@v4
       - uses: compnerd/gha-setup-swift@main
         with:
-          branch: swift-${{ matrix.swift }}-release
-          tag: ${{ matrix.swift }}-RELEASE
+          swift-version: swift-${{ matrix.swift }}-release
+          swift-build: ${{ matrix.swift }}-RELEASE
       - run: swift --version
       - name: Resolve
         run: swift package resolve
+      # modelcontextprotocol/swift-sdk#261: HTTPClientTransport guards on os(Linux), so Windows
+      # (which also lacks URLSession.bytes) takes the Darwin path. Patch the checkout for the spike.
+      - name: Patch MCP SDK for Windows
+        shell: pwsh
+        run: |
+          $f = ".build/checkouts/swift-sdk/Sources/MCP/Base/Transports/HTTPClientTransport.swift"
+          (Get-Content $f -Raw) -replace 'os\(Linux\)', 'canImport(FoundationNetworking)' | Set-Content $f -NoNewline
       - name: Build each target
         shell: pwsh
         run: |
@@ -33,7 +40,7 @@ jobs:
           "| target | result |`n|---|---|" | Out-File -Append $env:GITHUB_STEP_SUMMARY
           foreach ($t in $targets) {
             Write-Host "::group::$t"
-            swift build --target $t -Xswiftc -continue-building-after-errors *>&1 | Tee-Object -FilePath "logs/$t.log"
+            swift build --target $t -Xswiftc -continue-building-after-errors -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH *>&1 | Tee-Object -FilePath "logs/$t.log"
             $code = $LASTEXITCODE
             Write-Host "::endgroup::"
             $r = if ($code -eq 0) { "ok" } else { "FAIL ($code)" }
@@ -48,7 +55,11 @@ jobs:
 
   linux-control:
     runs-on: ubuntu-latest
-    container: swift:6.2
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ["6.2", "6.3"]
+    container: swift:${{ matrix.swift }}
     steps:
       - uses: actions/checkout@v4
       - name: Build each target
@@ -69,5 +80,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: linux-logs
+          name: linux-swift-${{ matrix.swift }}-logs
           path: logs/

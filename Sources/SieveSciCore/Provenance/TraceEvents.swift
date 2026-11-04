@@ -27,7 +27,12 @@ public enum Trace {
                                             "git_commit", "preregistration_gate", "permission", "compaction", "error", "user_turn"]
 
     public static func events(_ entries: [AuditLog.Entry]) -> [TraceEvent] {
-        entries.compactMap { e -> TraceEvent? in
+        entries.compactMap(event)
+    }
+
+    // A named function, not a closure: inline, this switch exceeds the type-checker's time limit
+    // on some toolchains (Swift 6.2 on Linux).
+    static func event(_ e: AuditLog.Entry) -> TraceEvent? {
             let d = e.data
             let agent = d.str("agent") ?? e.actor
             func ev(_ kind: String, _ text: String, error: Bool = false, _ cat: TraceEvent.Category) -> TraceEvent {
@@ -38,8 +43,10 @@ public enum Trace {
                 let tool = d.str("tool") ?? "tool"
                 guard !quiet.contains(tool) else { return nil }
                 let input = d["input"]
-                let what = input?.str("command") ?? input?.str("query") ?? input?.str("path") ?? input?.str("claim") ?? input?.str("ref")
-                    ?? input?.str("code")?.split(separator: "\n").first.map(String.init) ?? input?.str("purpose") ?? input?.str("action") ?? ""
+                let firstCodeLine: String? = input?.str("code")?.split(separator: "\n").first.map(String.init)
+                let keys = ["command", "query", "path", "claim", "ref"]
+                let what: String = keys.lazy.compactMap { input?.str($0) }.first
+                    ?? firstCodeLine ?? input?.str("purpose") ?? input?.str("action") ?? ""
                 let receipt = d.str("receipt").map { " [\($0)]" } ?? ""
                 let failed = d["success"]?.boolValue == false
                 let cat: TraceEvent.Category = literature.contains(tool) ? .literature
@@ -70,6 +77,5 @@ public enum Trace {
             default:
                 return nil
             }
-        }
     }
 }
