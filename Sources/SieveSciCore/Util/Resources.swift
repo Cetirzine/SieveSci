@@ -27,6 +27,10 @@ public enum FilePaths {
     /// appended. Unlike `URL.resolvingSymlinksInPath()`, it never strips `/private` (which would
     /// make `/private/var/…` and `/var/…` compare unequal, and Seatbelt rules miss).
     public static func canonical(_ path: String) -> String {
+        #if os(Windows)
+        // No /private aliasing (and no realpath) on Windows; Foundation resolves links itself.
+        return URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL.path
+        #else
         var head = URL(fileURLWithPath: path).standardizedFileURL.path
         var tail: [String] = []
         while !head.isEmpty && head != "/" {
@@ -39,5 +43,6 @@ public enum FilePaths {
             head = (head as NSString).deletingLastPathComponent
         }
         return "/" + tail.reversed().joined(separator: "/")
+        #endif
     }
 }

@@ -1,4 +1,7 @@
 import Foundation
+#if os(Windows)
+import WinSDK
+#endif
 
 public struct ProcessResult: Sendable {
     public var exitCode: Int32
@@ -31,7 +34,27 @@ public enum ProcessRunner {
     }()
 
     /// False once the pid is gone (reaped). A zombie still counts as alive until it is reaped.
-    static func alive(_ pid: Int32) -> Bool { pid > 0 && (kill(pid, 0) == 0 || errno != ESRCH) }
+    static func alive(_ pid: Int32) -> Bool {
+        #if os(Windows)
+        guard pid > 0, let h = OpenProcess(DWORD(PROCESS_QUERY_LIMITED_INFORMATION), false, DWORD(pid)) else { return false }
+        defer { CloseHandle(h) }
+        var code: DWORD = 0
+        return GetExitCodeProcess(h, &code) && code == 259   // STILL_ACTIVE
+        #else
+        return pid > 0 && (kill(pid, 0) == 0 || errno != ESRCH)
+        #endif
+    }
+
+    /// Ends the process at once (SIGKILL; TerminateProcess on Windows).
+    static func forceKill(_ pid: Int32) {
+        #if os(Windows)
+        guard let h = OpenProcess(DWORD(PROCESS_TERMINATE), false, DWORD(pid)) else { return }
+        defer { CloseHandle(h) }
+        _ = TerminateProcess(h, 1)
+        #else
+        kill(pid, SIGKILL)
+        #endif
+    }
 
     public static func which(_ name: String) -> String? {
         if name.hasPrefix("/") { return FileManager.default.isExecutableFile(atPath: name) ? name : nil }
@@ -105,8 +128,8 @@ public enum ProcessRunner {
             p.terminate()
             // While cancelled, waitForExit returns at once, so give the child a moment to go.
             let grace = Date().addingTimeInterval(0.5)
-            while Date() < grace && ProcessRunner.alive(pid) && !exit.done { usleep(20_000) }
-            if ProcessRunner.alive(pid) && !exit.done { kill(pid, SIGKILL) }
+            while Date() < grace && ProcessRunner.alive(pid) && !exit.done { Thread.sleep(forTimeInterval: 0.02) }
+            if ProcessRunner.alive(pid) && !exit.done { ProcessRunner.forceKill(pid) }
         }
         // The handler can trail the probe by a moment.
         for _ in 0..<20 where !exit.done { try? await Task.sleep(nanoseconds: 10_000_000) }
