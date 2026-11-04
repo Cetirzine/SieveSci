@@ -278,6 +278,7 @@ struct RespondReviewTool: Tool {
                       required: ["id", "position", "argument"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         guard ctx.role == .main else { return .error("Only the research agent responds to reviews; report disagreements in your result.") }
         guard let pos = Deliberation.Position(rawValue: try input.required("position")) else { return .error("position must be agree, answer, clarify or disagree") }

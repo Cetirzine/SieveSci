@@ -34,6 +34,7 @@ struct AskUserTool: Tool {
         return Schema.object(["questions": Schema.array("1–4 questions asked together", items: question)], required: ["questions"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
 
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         guard ctx.role == .main else { return .error("Only the main agent asks the user; report the open question in your result instead.") }
@@ -85,6 +86,7 @@ struct BrainstormTool: Tool {
                        "summary": Schema.string("end: what came out, in two lines")], required: ["action"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
 
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         guard ctx.role == .main else { return .error("Only the main agent runs a brainstorm; return your ideas in your report.") }
@@ -162,6 +164,7 @@ struct IdeaTool: Tool {
                              required: ["action"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
 
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         let s = ctx.services
@@ -292,6 +295,7 @@ struct IdeationSeedsTool: Tool {
                        "seed": Schema.integer("RNG seed (default: drawn and reported)")], required: ["topic"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
 
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         let topic = try input.required("topic")

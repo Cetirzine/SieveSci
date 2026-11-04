@@ -169,12 +169,17 @@ public final class SessionServices: @unchecked Sendable {
         toolset = (BuiltinTools.all() + mcpTools + extra).sorted { $0.name < $1.name }
     }
 
+    /// One supervisor per session, created on first use. Locked: concurrent tool calls of one step
+    /// reach it at the same time, and two instances would split the review state between them.
     public func supervisor(for session: AgentSession) -> Supervisor {
-        if let s = _supervisor { return s }
-        let s = Supervisor(services: self)
-        _supervisor = s
-        return s
+        supervisorLock.withLock {
+            if let s = _supervisor { return s }
+            let s = Supervisor(services: self)
+            _supervisor = s
+            return s
+        }
     }
+    private let supervisorLock = NSLock()
 
     private var _deliberation: Deliberation?
     private let delibLock = NSLock()
@@ -191,10 +196,12 @@ public final class SessionServices: @unchecked Sendable {
     }
 
     public var supervisor: Supervisor {
-        if let s = _supervisor { return s }
-        let s = Supervisor(services: self)
-        _supervisor = s
-        return s
+        supervisorLock.withLock {
+            if let s = _supervisor { return s }
+            let s = Supervisor(services: self)
+            _supervisor = s
+            return s
+        }
     }
 
     /// Creates a subagent sharing this task's ledger, library and audit trail. Subagents of one

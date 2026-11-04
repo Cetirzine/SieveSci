@@ -563,6 +563,7 @@ struct UpdatePlanTool: Tool {
         ], required: ["action"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
 
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         guard ctx.role == .main else { return .error("Only the main agent manages the plan.") }
@@ -659,6 +660,7 @@ struct TodoWriteTool: Tool {
                                                                                required: ["content", "status"]))], required: ["todos"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         let items = (input["todos"]?.arrayValue ?? []).map { TodoList.Item(content: $0.str("content") ?? "", status: $0.str("status") ?? "pending") }
         if items.filter({ $0.status == "in_progress" }).count > 1 { return .error("Only one item may be in_progress.") }
@@ -672,6 +674,7 @@ struct GoalTool: Tool {
     let description = "Read the session goal, mark it complete (note) or blocked (reason), or wait for the user's decision (note = the one question). Only the user creates, pauses or edits goals."
     var inputSchema: JSON { Schema.object(["action": Schema.stringEnum("Action", ["get", "complete", "wait", "blocked"]), "note": Schema.string("Completion note, the question for the user, or the blocking reason")], required: ["action"]) }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         let g = ctx.services.goal
         switch input.str("action") {

@@ -78,6 +78,17 @@ public final class Workbench: @unchecked Sendable {
             SessionStore.shared.append(m, task: services.taskId, agent: "main", dir: services.taskDir)
             restored.append(m)
         }
+        // Calls left without results (the app stopped mid-step) would make every later request fail.
+        let fixed = TranscriptRepair.repair(restored)
+        if fixed.changed {
+            if let patch = fixed.appended { SessionStore.shared.append(patch, task: services.taskId, agent: "main", dir: services.taskDir) }
+            restored = fixed.messages
+            services.log("transcript_repair", actor: "host", ["closed": .array(fixed.closed.map { .string($0) }),
+                                                               "dropped": .array(fixed.dropped.map { .string($0) })])
+            if !fixed.closed.isEmpty {
+                services.emit(.notice(L10n.s("The last run stopped before %@ tool result(s) were saved. They are marked as not recorded, so the conversation can continue.", String(fixed.closed.count))))
+            }
+        }
         if !restored.isEmpty { main.restore(restored); introduced = true }
         services.log("session_start", actor: "host", ["provider": .string(p.profile.id), "model": .string(m), "tools": .array(services.toolset.map { .string($0.name) }),
                                                       "app_version": .string(SieveSci.version), "workspace": .string(services.workspace.path)])
