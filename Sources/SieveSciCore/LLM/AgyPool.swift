@@ -22,7 +22,7 @@ final class AgyPool: @unchecked Sendable {
         init(process: Process, stdin: FileHandle, signature: String) { self.process = process; self.stdin = stdin; self.signature = signature }
         func kill() {
             try? stdin.close()
-            if process.isRunning { process.terminate() }
+            ProcessRunner.terminate(process)
             lines.finish()
         }
     }

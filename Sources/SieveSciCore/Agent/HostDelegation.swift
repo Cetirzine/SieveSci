@@ -254,7 +254,11 @@ extension AgentSession {
                 continue
             }
             let file = dir.appendingPathComponent("\(s.id.replacingOccurrences(of: "[^A-Za-z0-9_-]", with: "-", options: .regularExpression))-\(workerId).md")
-            try? "# \(s.id) \(s.title)\n\nworker: \(workerId) · model: \(workerModel) · receipts: \(receipts.joined(separator: ", "))\n\n\(report)\n".write(to: file, atomically: true, encoding: .utf8)
+            do {
+                try "# \(s.id) \(s.title)\n\nworker: \(workerId) · model: \(workerModel) · receipts: \(receipts.joined(separator: ", "))\n\n\(report)\n".writeReliably(to: file)
+            } catch {
+                services.log("worker_report_error", actor: "host", ["step": .string(s.id), "file": .string(file.path), "error": .string(String(describing: error).truncated(1000))])
+            }
             let rel = file.path.replacingOccurrences(of: services.workspace.path + "/", with: "")
             var next = ""
             if inPlan {

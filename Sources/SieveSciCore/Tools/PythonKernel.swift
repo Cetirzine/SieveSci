@@ -93,7 +93,7 @@ public final class PythonKernel: @unchecked Sendable {
             g.addTask {
                 try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
                 // A runaway cell: kill the interpreter (state is lost; the agent is told).
-                self.process?.terminate()
+                if let p = self.process { ProcessRunner.terminate(p) }
                 throw ToolError.invalidInput("timed out after \(Int(timeout)) s; the Python kernel was restarted and its variables were lost")
             }
             let r = try await g.next()!
@@ -102,7 +102,7 @@ public final class PythonKernel: @unchecked Sendable {
         }
     }
 
-    public func shutdown() { process?.terminate() }
+    public func shutdown() { if let p = process { ProcessRunner.terminate(p) } }
 }
 
 public final class PythonKernelPool: @unchecked Sendable {

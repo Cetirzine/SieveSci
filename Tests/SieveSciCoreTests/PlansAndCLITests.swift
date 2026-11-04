@@ -269,14 +269,12 @@ private struct Keys: SecretStore {
     @Test func cliErrorFromStdoutBeatsStderr() async throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cx-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let script = dir.appendingPathComponent("fake-codex")
-        try """
-        #!/bin/bash
+        let script = try makeScript(in: dir, name: "fake-codex", """
         echo "Reading additional input from stdin..." >&2
         echo '{"type":"turn.failed","error":{"message":"The model is not supported when using Codex with a ChatGPT account."}}'
         exit 1
-        """.write(to: script, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+
+        """)
         var profile = ProviderPresets.profile(id: "codex")!
         profile.executable = script.path
         let req = LLMRequest(model: "gpt-x", system: "s", tools: [], messages: [Message.user("hi")], maxTokens: 10,

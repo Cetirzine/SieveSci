@@ -32,6 +32,9 @@ public final class MCPManager: @unchecked Sendable {
 
     public init(workspace: URL) { self.workspace = workspace }
 
+    /// Use `PipeTransport` for stdio servers everywhere (tests of the Windows path).
+    static var forcePipeTransport = ProcessInfo.processInfo.environment["SIEVESCI_PIPE_MCP"] == "1"
+
     public var configs: [ServerConfig] {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let files = [workspace.appendingPathComponent(".mcp.json"), workspace.appendingPathComponent(".sievesci/mcp.json"),
@@ -65,21 +68,24 @@ public final class MCPManager: @unchecked Sendable {
                     })
                     _ = try await client.connect(transport: transport)
                 } else if let cmd = cfg.command {
-                    #if os(Windows)
-                    // The SDK's StdioTransport is POSIX-only; a pipe-based transport is still to be written.
-                    _ = cmd
-                    throw ToolError.invalidInput("stdio MCP servers are not supported on Windows yet; use an HTTP MCP server")
-                    #else
                     let p = try ProcessRunner.makeProcess(cmd, cfg.args, cwd: workspace, env: cfg.env)
                     let toServer = Pipe(), fromServer = Pipe()
                     p.standardInput = toServer
                     p.standardOutput = fromServer
                     p.standardError = FileHandle.nullDevice
                     try p.run()
-                    let transport = StdioTransport(input: FileDescriptor(rawValue: fromServer.fileHandleForReading.fileDescriptor),
-                                                   output: FileDescriptor(rawValue: toServer.fileHandleForWriting.fileDescriptor))
-                    _ = try await client.connect(transport: transport)
                     lock.lock(); processes[cfg.name] = p; lock.unlock()
+                    #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+                    if !Self.forcePipeTransport {
+                        let transport = StdioTransport(input: FileDescriptor(rawValue: fromServer.fileHandleForReading.fileDescriptor),
+                                                       output: FileDescriptor(rawValue: toServer.fileHandleForWriting.fileDescriptor))
+                        _ = try await client.connect(transport: transport)
+                    } else {
+                        _ = try await client.connect(transport: PipeTransport(reader: fromServer.fileHandleForReading, writer: toServer.fileHandleForWriting))
+                    }
+                    #else
+                    // Windows: the SDK's StdioTransport is POSIX-only.
+                    _ = try await client.connect(transport: PipeTransport(reader: fromServer.fileHandleForReading, writer: toServer.fileHandleForWriting))
                     #endif
                 } else { continue }
                 var listed: [MCP.Tool] = []
@@ -127,7 +133,7 @@ public final class MCPManager: @unchecked Sendable {
         processes = [:]
         lock.unlock()
         for c in cs.values { await c.disconnect() }
-        for p in ps.values where p.isRunning { p.terminate() }
+        for p in ps.values { ProcessRunner.terminate(p) }
     }
 }
 

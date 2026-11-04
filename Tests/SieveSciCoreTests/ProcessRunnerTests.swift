@@ -9,16 +9,16 @@ import Testing
     @Test func backgroundGrandchildDoesNotHangTheCall() async throws {
         let t0 = Date()
         // The grandchild keeps stdout open for 30 s; the call must return when `bash` itself exits.
-        let r = try await ProcessRunner.run("/bin/bash", ["-c", "echo started; sleep 30 & echo done"], timeout: 60)
+        let r = try await ProcessRunner.run(Platform.bash, ["-c", "echo started; sleep 30 & echo done"], timeout: 60)
         #expect(Date().timeIntervalSince(t0) < 5, "returned after \(Date().timeIntervalSince(t0)) s")
         #expect(r.stdout.contains("started") && r.stdout.contains("done"))
     }
 
     @Test func exitCodeAndTimeoutAreReported() async throws {
-        let ok = try await ProcessRunner.run("/bin/bash", ["-c", "exit 3"], timeout: 10)
+        let ok = try await ProcessRunner.run(Platform.bash, ["-c", "exit 3"], timeout: 10)
         #expect(ok.exitCode == 3 && !ok.timedOut)
         let t0 = Date()
-        let slow = try await ProcessRunner.run("/bin/bash", ["-c", "sleep 30"], timeout: 0.5)
+        let slow = try await ProcessRunner.run(Platform.bash, ["-c", "sleep 30"], timeout: 0.5)
         #expect(slow.timedOut && Date().timeIntervalSince(t0) < 5)
     }
 
@@ -26,7 +26,7 @@ import Testing
     @MainActor @Test func manyShortCallsFromTheMainActorReturn() async throws {
         let t0 = Date()
         for i in 0..<40 {
-            let r = try await ProcessRunner.run("/bin/bash", ["-c", "echo \(i)"], timeout: 10)
+            let r = try await ProcessRunner.run(Platform.bash, ["-c", "echo \(i)"], timeout: 10)
             #expect(r.exitCode == 0 && r.stdout.trimmingCharacters(in: .whitespacesAndNewlines) == "\(i)")
         }
         #expect(Date().timeIntervalSince(t0) < 20)
@@ -35,7 +35,7 @@ import Testing
     @Test func largeOutputIsSplitInLinearTime() async throws {
         let t0 = Date()
         let lines = LockedBox(0)
-        let r = try await ProcessRunner.run("/bin/bash", ["-c", "seq 1 200000"], timeout: 60, onLines: { l in lines.mutate { $0 += l.count } })
+        let r = try await ProcessRunner.run(Platform.bash, ["-c", "seq 1 200000"], timeout: 60, onLines: { l in lines.mutate { $0 += l.count } })
         #expect(r.exitCode == 0)
         #expect(lines.value == 200_000)
         #expect(Date().timeIntervalSince(t0) < 10)
@@ -63,7 +63,7 @@ import Testing
 @Suite struct StopEndsWork {
     @Test func cancellingARunningCommandKillsIt() async throws {
         let t0 = Date()
-        let task = Task { try await ProcessRunner.run("/bin/bash", ["-c", "sleep 30"], timeout: 60) }
+        let task = Task { try await ProcessRunner.run(Platform.bash, ["-c", "sleep 30"], timeout: 60) }
         try await Task.sleep(nanoseconds: 300_000_000)
         task.cancel()
         let r = try await task.value
@@ -75,10 +75,8 @@ import Testing
     @Test func cancellingACLIAgentKillsItsProcess() async throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hung-cli-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let script = dir.appendingPathComponent("fake-agy")
         let pidFile = dir.appendingPathComponent("pid")
-        try "#!/bin/bash\necho $$ > \(pidFile.path)\nexec sleep 60\n".write(to: script, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        let script = try makeScript(in: dir, name: "fake-agy", "\(bashPidCommand) > '\(pidFile.path)'\nsleep 60\n")
         var profile = ProviderPresets.profile(id: "codex")!
         profile.executable = script.path
         let p = CLIAgentProvider(profile: profile)
@@ -205,5 +203,33 @@ extension ToolBridgeHTTP {
             if i % 5 == 0 { try await Task.sleep(nanoseconds: 2_500_000_000) }
         }
         #expect(worst < 3, "slowest call took \(worst) s")
+    }
+}
+
+/// The plain-socket server ToolBridge uses off macOS, exercised on every platform.
+@Suite struct LoopbackServer {
+    @Test func answersLargeAndConcurrentRequests() async throws {
+        let server = try #require(LoopbackHTTPServer { req in
+            ("200 OK", Data(#"{"path":"\#(req.path)","bytes":\#(req.body.count),"auth":"\#(req.headers["authorization"] ?? "")"}"#.utf8))
+        })
+        #expect(server.port > 0)
+        func call(_ i: Int, bytes: Int) async throws -> String {
+            var r = URLRequest(url: URL(string: "http://127.0.0.1:\(server.port)/mcp/\(i)")!)
+            r.httpMethod = "POST"
+            r.setValue("Bearer t\(i)", forHTTPHeaderField: "authorization")
+            r.httpBody = Data(repeating: 65, count: bytes)
+            r.timeoutInterval = 20
+            let (data, resp) = try await URLSession.shared.data(for: r)
+            #expect((resp as? HTTPURLResponse)?.statusCode == 200)
+            return String(decoding: data, as: UTF8.self)
+        }
+        // A body far larger than one read, then many at once.
+        #expect(try await call(0, bytes: 300_000) == #"{"path":"/mcp/0","bytes":300000,"auth":"Bearer t0"}"#)
+        let replies = try await withThrowingTaskGroup(of: (Int, String).self) { g in
+            for i in 1...24 { g.addTask { (i, try await call(i, bytes: 64)) } }
+            return try await g.reduce(into: [Int: String]()) { $0[$1.0] = $1.1 }
+        }
+        #expect(replies.count == 24)
+        #expect(replies.allSatisfy { $0.value == #"{"path":"/mcp/\#($0.key)","bytes":64,"auth":"Bearer t\#($0.key)"}"# })
     }
 }

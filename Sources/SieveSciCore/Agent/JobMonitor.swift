@@ -119,6 +119,17 @@ public final class JobMonitor: @unchecked Sendable {
         p.terminationHandler = { proc in status = proc.terminationStatus; drain.processExited() }
         job.process = p
         try p.run()
+        // The termination callback can go missing while a background grandchild (`cmd &`) keeps the
+        // pipe open (seen on Windows), so the pid is watched as well.
+        let pid = p.processIdentifier
+        Task.detached {
+            while !drain.isDone {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if drain.isDone { return }
+                if !p.isRunning { status = p.terminationStatus; drain.processExited(); return }
+                if !ProcessRunner.alive(pid) { status = ProcessRunner.exitCode(pid) ?? status; drain.processExited(); return }
+            }
+        }
         tick(job)
         return job.id
     }
@@ -295,7 +306,7 @@ public final class JobMonitor: @unchecked Sendable {
         guard let j = jobs[id], j.finished == nil else { lock.unlock(); return false }
         let p = j.process
         lock.unlock()
-        if let p, p.isRunning { p.terminate() } else { finish(j, code: 0) }
+        if let p, p.isRunning { ProcessRunner.terminate(p) } else { finish(j, code: 0) }
         return true
     }
 

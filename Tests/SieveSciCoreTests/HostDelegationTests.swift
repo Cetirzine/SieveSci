@@ -155,7 +155,7 @@ private func plan(_ steps: [PlanStep]) -> ResearchPlan {
         #expect(audit.filter { $0.kind == "tool_call" && $0.actor == "worker" }.count == 3)
         #expect(audit.contains { $0.kind == "host_delegation" })
         let files = try FileManager.default.contentsOfDirectory(atPath: s.taskDir.appendingPathComponent("workers").path).filter { $0.hasSuffix(".md") }
-        #expect(files.count == 3)
+        #expect(files.count == 3, "\(files) \(audit.filter { $0.kind == "worker_report_error" }.map { $0.data.canonical })")
 
         // Steps already handed out are not run again on the next plan update.
         let calls = model.calls.value

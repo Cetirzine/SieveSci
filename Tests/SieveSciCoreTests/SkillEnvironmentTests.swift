@@ -124,7 +124,7 @@ final class FakeInstaller: EnvironmentInstaller, @unchecked Sendable {
         ToolContext(workspace: ws, sessionId: "main", role: .main, ledger: s.ledger, audit: s.audit, services: s)
     }
 
-    @Test func setupWithUvThenRunPythonAndBashInIt() async throws {
+    @Test(.disabled(if: Platform.isWindows, "the fake venv interpreter is a shell script")) func setupWithUvThenRunPythonAndBashInIt() async throws {
         let fake = FakeInstaller(tools: ["uv": "/opt/uv"])
         let (s, ws) = try services(installer: fake)
         let c = ctx(s, ws)
@@ -160,7 +160,7 @@ final class FakeInstaller: EnvironmentInstaller, @unchecked Sendable {
         s.kernel.shutdownAll()
     }
 
-    @Test func withoutUvPicksTheNewestSystemPythonInRange() async throws {
+    @Test(.disabled(if: Platform.isWindows, "the fake venv interpreter is a shell script")) func withoutUvPicksTheNewestSystemPythonInRange() async throws {
         let fake = FakeInstaller(tools: ["python3.13": "/usr/bin/py313", "python3.12": "/usr/bin/py312", "python3.9": "/usr/bin/py39", "python3": "/usr/bin/py313"],
                                  minors: ["/usr/bin/py313": 13, "/usr/bin/py312": 12, "/usr/bin/py39": 9])
         let (s, ws) = try services(installer: fake)

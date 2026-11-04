@@ -58,9 +58,32 @@ public final class ToolBridge: @unchecked Sendable {
         return CLIHost.MCP(url: "http://127.0.0.1:\(port)/mcp", token: token, command: command)
     }
 
+    /// Use the socket server even where Network.framework exists (tests of the Linux/Windows path).
+    static var forceSocketServer = ProcessInfo.processInfo.environment["SIEVESCI_SOCKET_BRIDGE"] == "1"
+    private var server: LoopbackHTTPServer?
+
     private func start() async -> UInt16? {
         if let p = lock.withLock({ port }) { return p }
         #if canImport(Network)
+        if !Self.forceSocketServer { return await networkStart() }
+        #endif
+        return socketStart()
+    }
+
+    /// Linux and Windows: plain sockets on 127.0.0.1.
+    private func socketStart() -> UInt16? {
+        let s = LoopbackHTTPServer { [weak self] req in await self?.handle(req) ?? ("503 Service Unavailable", Data()) }
+        guard let s else { return nil }
+        return lock.withLock {
+            if let p = port { return p }   // another call started one first
+            server = s
+            port = s.port
+            return s.port
+        }
+    }
+
+    #if canImport(Network)
+    private func networkStart() async -> UInt16? {
         return await withCheckedContinuation { (cont: CheckedContinuation<UInt16?, Never>) in
             let params = NWParameters.tcp
             params.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
@@ -81,10 +104,8 @@ public final class ToolBridge: @unchecked Sendable {
             listener = l
             l.start(queue: queue)
         }
-        #else
-        return nil
-        #endif
     }
+    #endif
 
     #if canImport(Network)
     private func serve(_ c: NWConnection) {

@@ -79,3 +79,21 @@ func toolContext(http: HTTPStreaming) throws -> (ToolContext, SessionServices) {
                                 secrets: EnvironmentSecretStore(), http: http)
     return (ToolContext(workspace: ws, sessionId: "main", role: .main, ledger: s.ledger, audit: s.audit, services: s), s)
 }
+
+
+/// A runnable fake program from a bash script body: the script itself on macOS and Linux; on
+/// Windows a `.cmd` that runs it with Git Bash (how npm-installed CLIs are launched there).
+func makeScript(in dir: URL, name: String, _ body: String) throws -> URL {
+    let sh = dir.appendingPathComponent(Platform.isWindows ? name + ".sh" : name)
+    try ("#!/bin/bash\n" + body).write(to: sh, atomically: true, encoding: .utf8)
+    guard Platform.isWindows else {
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: sh.path)
+        return sh
+    }
+    let cmd = dir.appendingPathComponent(name + ".cmd")
+    try "@\"\(Platform.bash)\" \"%~dp0\(name).sh\" %*\r\n".write(to: cmd, atomically: true, encoding: .utf8)
+    return cmd
+}
+
+/// Prints the running bash's process id as the OS knows it (Git Bash numbers its own processes).
+let bashPidCommand = Platform.isWindows ? "cat /proc/$$/winpid" : "echo $$"

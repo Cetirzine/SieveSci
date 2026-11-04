@@ -14,6 +14,8 @@ var dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/mattt/EventSource.git", from: "1.1.0"),
     // FileDescriptor for wiring subprocess pipes into the MCP stdio transport on Linux.
     .package(url: "https://github.com/apple/swift-system.git", from: "1.0.0"),
+    // Logger for the Windows stdio MCP transport (already used by the MCP SDK).
+    .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
 ]
 
 var products: [Product] = [
@@ -32,6 +34,7 @@ var targets: [Target] = [
             .product(name: "Yams", package: "Yams"),
             .product(name: "EventSource", package: "EventSource"),
             .product(name: "SystemPackage", package: "swift-system"),
+            .product(name: "Logging", package: "swift-log"),
         ],
         path: "Sources/SieveSciCore",
         resources: [.copy("Resources"), .process("Localization")],

@@ -22,6 +22,17 @@ public extension FileHandle {
     }
 }
 
+extension String {
+    /// Writes the file atomically, retrying once and then writing in place: on Windows the final
+    /// rename of an atomic write can fail while a scanner or indexer briefly holds the file.
+    public func writeReliably(to url: URL) throws {
+        do { try write(to: url, atomically: true, encoding: .utf8); return } catch {}
+        Thread.sleep(forTimeInterval: 0.1)
+        do { try write(to: url, atomically: true, encoding: .utf8); return } catch {}
+        try write(to: url, atomically: false, encoding: .utf8)
+    }
+}
+
 public enum Signals {
     /// A write to a pipe whose reader has exited sends SIGPIPE, which by default kills the process
     /// without a crash report. Ignored, the write fails with EPIPE and `writeSafely` returns false.

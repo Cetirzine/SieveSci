@@ -95,7 +95,8 @@ import Testing
 }
 
 @Suite struct TempFolderBlinding {
-    @Test func blindAgentCannotReadSharedTempFiles() async throws {
+    /// Seatbelt enforces this; elsewhere blinding is advisory and reported as such.
+    @Test(.enabled(if: Seatbelt.available)) func blindAgentCannotReadSharedTempFiles() async throws {
         let (s, ws) = try makeServices()
         s.sandboxMode = .workspaceWrite
         let planted = URL(fileURLWithPath: "/private/tmp/sievesci-leak-\(UUID().uuidString).txt")

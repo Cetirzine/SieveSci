@@ -53,16 +53,59 @@ public enum ProcessRunner {
         #endif
     }
 
-    /// Ends the process at once (SIGKILL; TerminateProcess on Windows).
+    /// The exit code of a process that has ended, where the OS can still say (Windows, while a
+    /// handle to it is open); nil elsewhere or while it runs.
+    static func exitCode(_ pid: Int32) -> Int32? {
+        #if os(Windows)
+        guard pid > 0, let h = OpenProcess(DWORD(PROCESS_QUERY_LIMITED_INFORMATION), false, DWORD(pid)) else { return nil }
+        defer { CloseHandle(h) }
+        var code: DWORD = 0
+        guard GetExitCodeProcess(h, &code), code != 259 else { return nil }
+        return Int32(bitPattern: UInt32(code))
+        #else
+        return nil
+        #endif
+    }
+
+    /// Ends the process at once (SIGKILL; on Windows the whole tree, see `terminate`).
     static func forceKill(_ pid: Int32) {
         #if os(Windows)
-        guard let h = OpenProcess(DWORD(PROCESS_TERMINATE), false, DWORD(pid)) else { return }
-        defer { CloseHandle(h) }
-        _ = TerminateProcess(h, 1)
+        killTree(pid)
         #else
         kill(pid, SIGKILL)
         #endif
     }
+
+    /// Stops a child process. On Windows CLIs are `.cmd` shims and commands run under Git Bash, so
+    /// the process SieveSci started is only the root of a tree (`cmd` → `node`, `bash` → `sleep`);
+    /// ending just the root would leave the work running, so the tree goes.
+    public static func terminate(_ p: Process) {
+        guard p.isRunning else { return }
+        #if os(Windows)
+        killTree(p.processIdentifier)
+        if p.isRunning { p.terminate() }
+        #else
+        p.terminate()
+        #endif
+    }
+
+    #if os(Windows)
+    static func killTree(_ pid: Int32) {
+        guard pid > 0 else { return }
+        let root = ProcessInfo.processInfo.environment["SystemRoot"] ?? "C:\\Windows"
+        let k = Process()
+        k.executableURL = URL(fileURLWithPath: root + "\\System32\\taskkill.exe")
+        k.arguments = ["/T", "/F", "/PID", String(pid)]
+        k.standardOutput = FileHandle.nullDevice
+        k.standardError = FileHandle.nullDevice
+        k.standardInput = FileHandle.nullDevice
+        if (try? k.run()) != nil { k.waitUntilExit() }
+        if alive(pid), let h = OpenProcess(DWORD(PROCESS_TERMINATE), false, DWORD(pid)) {
+            _ = TerminateProcess(h, 1)
+            CloseHandle(h)
+        }
+    }
+    #endif
 
     public static func which(_ name: String) -> String? { allOnPath(name).first }
 
@@ -95,7 +138,12 @@ public enum ProcessRunner {
         return out
     }
 
+    /// Writing to a child that has exited raises SIGPIPE, which kills the whole process by default;
+    /// the app and CLI ignore it at launch, and anything else spawning through here does too.
+    private static let brokenPipesIgnored: Void = Signals.ignoreBrokenPipes()
+
     static func makeProcess(_ executable: String, _ args: [String], cwd: URL?, env: [String: String]?) throws -> Process {
+        _ = brokenPipesIgnored
         guard let exe = which(executable) else { throw ProviderError.cliNotFound(executable) }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: exe)
@@ -155,7 +203,7 @@ public enum ProcessRunner {
         var timedOut = false
         if !(await waitForExit(timeout)) {
             timedOut = !Task.isCancelled
-            p.terminate()
+            ProcessRunner.terminate(p)
             // While cancelled, waitForExit returns at once, so give the child a moment to go.
             let grace = Date().addingTimeInterval(0.5)
             while Date() < grace && ProcessRunner.alive(pid) && !exit.done { Thread.sleep(forTimeInterval: 0.02) }
@@ -214,7 +262,7 @@ public enum ProcessRunner {
             do { try p.run() } catch { cont.finish(throwing: error); return }
             if let stdin { inPipe.fileHandleForWriting.writeSafely(Data(stdin.utf8)) }
             try? inPipe.fileHandleForWriting.close()
-            cont.onTermination = { _ in if p.isRunning { p.terminate() } }
+            cont.onTermination = { _ in ProcessRunner.terminate(p) }
         }
     }
 }
@@ -235,6 +283,7 @@ final class ExitDrain: @unchecked Sendable {
     private var exited = false, eof = false, done = false
     private let finish: () -> Void
     init(_ finish: @escaping () -> Void) { self.finish = finish }
+    var isDone: Bool { lock.lock(); defer { lock.unlock() }; return done }
     func endOfFile() { lock.lock(); eof = true; let go = exited && !done; if go { done = true }; lock.unlock(); if go { finish() } }
     func processExited() {
         lock.lock(); exited = true; let go = eof && !done; if go { done = true }; lock.unlock()
