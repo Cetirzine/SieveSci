@@ -74,7 +74,7 @@ struct BashTool: Tool {
             """)
         }
         let before = Self.snapshot(cwd)
-        let (exe, args) = Seatbelt.wrap("/bin/bash", ["-lc", cmd], mode: ctx.sandboxMode, writableRoots: [cwd], protected: protected,
+        let (exe, args) = Seatbelt.wrap(Platform.bash, ["-lc", cmd], mode: ctx.sandboxMode, writableRoots: [cwd], protected: protected,
                                         readHidden: read.hidden, readAllowed: read.allowed, readRehidden: read.rehidden)
         let batcher = ProgressBatcher { [ctx] in ctx.progress($0) }
         let r = try await ProcessRunner.run(exe, args, cwd: cwd, env: ["PYTHONUNBUFFERED": "1"], timeout: Double(min(input.int("timeout") ?? 600, 7200)),

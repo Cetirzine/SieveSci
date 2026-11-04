@@ -206,7 +206,7 @@ public final class ToolContext: @unchecked Sendable {
         // SieveSci's own resources (the kernel driver) and the Python installation stay readable even
         // when they live under a temp folder (development builds, venvs created in /tmp).
         var runtime = [SieveSciResources.bundle.bundleURL]
-        if let py = ProcessRunner.which("python3") {
+        if let py = ProcessRunner.which(Platform.python) {
             runtime.append(URL(fileURLWithPath: FilePaths.canonical(py)).deletingLastPathComponent().deletingLastPathComponent())
         }
         return ([workspace] + Self.sharedTempRoots.map { URL(fileURLWithPath: $0) }, roots.map { URL(fileURLWithPath: $0) } + envs + runtime, blinded)

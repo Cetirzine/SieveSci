@@ -19,6 +19,18 @@ public enum SieveSciResources {
         }
         return Bundle.module
     }()
+
+    /// A directory inside the bundle, e.g. `Resources/skills`. `url(forResource:withExtension: nil)`
+    /// does not find directories with corelibs Foundation (Linux, Windows), so the path is built here.
+    public static func directory(_ relative: String) -> URL? {
+        let roots = [bundle.resourceURL, bundle.bundleURL, bundle.bundleURL.appendingPathComponent("Contents/Resources")].compactMap { $0 }
+        for root in roots {
+            let u = root.appendingPathComponent(relative)
+            var dir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: u.path, isDirectory: &dir), dir.boolValue { return u }
+        }
+        return nil
+    }
 }
 
 /// Canonical filesystem paths for security checks and sandbox rules.

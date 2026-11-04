@@ -20,7 +20,7 @@ public final class PythonKernel: @unchecked Sendable {
     private let lock = NSLock()
     private var counter = 0
 
-    init(workspace: URL, python: String = "python3") {
+    init(workspace: URL, python: String = Platform.python) {
         self.workspace = workspace
         self.python = python
     }
@@ -109,7 +109,7 @@ public final class PythonKernelPool: @unchecked Sendable {
     let workspace: URL
     private let lock = NSLock()
     private var kernels: [String: PythonKernel] = [:]
-    public var python = "python3"
+    public var python = Platform.python
 
     init(workspace: URL) { self.workspace = workspace }
 

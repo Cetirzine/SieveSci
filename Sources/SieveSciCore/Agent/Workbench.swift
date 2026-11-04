@@ -170,7 +170,7 @@ public final class Workbench: @unchecked Sendable {
     func route(_ input: String) async -> Routed {
         if input.hasPrefix("!") {
             let cmd = String(input.dropFirst())
-            let r = try? await ProcessRunner.run("/bin/bash", ["-lc", cmd], cwd: services.workspace, timeout: 600)
+            let r = try? await ProcessRunner.run(Platform.bash, ["-lc", cmd], cwd: services.workspace, timeout: 600)
             services.log("user_shell", actor: "user", ["command": .string(cmd), "exit": .int(Int(r?.exitCode ?? -1))])
             return .handled((r?.stdout ?? "") + (r?.stderr.isEmpty == false ? "\n" + r!.stderr : "") + "\n[exit \(r?.exitCode ?? -1)]")
         }

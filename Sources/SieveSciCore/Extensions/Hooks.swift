@@ -47,7 +47,7 @@ public final class HookRunner: @unchecked Sendable {
         var messages: [String] = []
         let input = payload.setting("hook_event_name", .string(event.rawValue)).setting("cwd", .string(workspace.path)).canonical
         for h in hooks {
-            guard let r = try? await ProcessRunner.run("/bin/sh", ["-c", h.command], cwd: workspace, stdin: input, timeout: h.timeout) else { continue }
+            guard let r = try? await ProcessRunner.run(Platform.sh, ["-c", h.command], cwd: workspace, stdin: input, timeout: h.timeout) else { continue }
             if r.exitCode == 2 { return Result(blocked: true, message: r.stderr.trimmingCharacters(in: .whitespacesAndNewlines)) }
             if let j = try? JSONCodec.parse(r.stdout), j.str("decision") == "block" {
                 return Result(blocked: true, message: j.str("reason") ?? "")

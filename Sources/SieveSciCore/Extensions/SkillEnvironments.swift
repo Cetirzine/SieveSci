@@ -289,7 +289,7 @@ public final class SkillEnvironments: @unchecked Sendable {
     /// The environment's interpreter, if it has been set up for these requirements.
     public func interpreter(for skill: Skill, _ req: SkillRequirements) -> String? {
         let dir = directory(for: skill, req)
-        let py = dir.appendingPathComponent("bin/python").path
+        let py = Platform.venvPython(dir).path
         guard FileManager.default.fileExists(atPath: dir.appendingPathComponent("sievesci-env.json").path),
               FileManager.default.isExecutableFile(atPath: py) else { return nil }
         return py
@@ -306,7 +306,9 @@ public final class SkillEnvironments: @unchecked Sendable {
     func systemPython(in range: PythonRange) async -> (String, Int)? {
         var best: (String, Int)?
         var seen = Set<String>()
-        for name in (8...14).reversed().map({ "python3.\($0)" }) + ["python3"] {
+        // Windows installs are plain `python.exe` (no python3.x names on PATH).
+        let names = Platform.isWindows ? [Platform.python] : (8...14).reversed().map({ "python3.\($0)" }) + ["python3"]
+        for name in names {
             guard let exe = installer.which(name), seen.insert(exe).inserted, let m = await minor(of: exe), range.contains(minor: m) else { continue }
             if best == nil || m > best!.1 { best = (exe, m) }
         }
@@ -372,21 +374,21 @@ public final class SkillEnvironments: @unchecked Sendable {
         if let uv = installer.which("uv") {
             tool = "uv"
             try await step(uv, ["venv", "--python", req.python.isUnconstrained ? ">=3.9" : req.python.spec, dir.path])
-            if !req.packages.isEmpty { try await step(uv, ["pip", "install", "--python", dir.appendingPathComponent("bin/python").path] + req.packages) }
+            if !req.packages.isEmpty { try await step(uv, ["pip", "install", "--python", Platform.venvPython(dir).path] + req.packages) }
         } else {
             guard let (exe, m) = await systemPython(in: req.python) else {
                 throw EnvironmentError(message: "No installed Python matches \(req.python), and uv is not installed. Install uv (`brew install uv`), which can fetch a matching Python, or install Python 3.\(req.python.minMinor ?? 11).")
             }
             tool = "venv (python 3.\(m))"
             try await step(exe, ["-m", "venv", dir.path])
-            let py = dir.appendingPathComponent("bin/python").path
+            let py = Platform.venvPython(dir).path
             if !req.packages.isEmpty { try await step(py, ["-m", "pip", "install", "--disable-pip-version-check"] + req.packages) }
         }
         let marker: JSON = ["skill": .string(skill.name), "python": .string(req.python.spec), "packages": .array(req.packages.map { .string($0) }),
                             "tool": .string(tool), "created": .string(ISO8601DateFormatter().string(from: Date()))]
         try JSONCodec.pretty(marker).write(to: dir.appendingPathComponent("sievesci-env.json"), atomically: true, encoding: .utf8)
         try log.joined(separator: "\n").write(to: dir.appendingPathComponent("install.log"), atomically: true, encoding: .utf8)
-        guard let py = interpreter(for: skill, req) else { throw EnvironmentError(message: "the environment was created but has no bin/python") }
+        guard let py = interpreter(for: skill, req) else { throw EnvironmentError(message: "the environment was created but has no Python interpreter (\(Platform.venvPython(dir).lastPathComponent))") }
         return SetupResult(python: py, log: log.joined(separator: "\n"), created: true)
     }
 

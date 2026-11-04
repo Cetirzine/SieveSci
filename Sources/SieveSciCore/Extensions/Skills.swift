@@ -64,7 +64,7 @@ public final class SkillRegistry: @unchecked Sendable {
             (Self.home.appendingPathComponent(".codex/skills"), "user"),
         ]
         // Workflow skills shipped with SieveSci (lowest precedence: users can override them by name).
-        if let builtin = SieveSciResources.bundle.url(forResource: "skills", withExtension: nil, subdirectory: "Resources") { r.append((builtin, "builtin")) }
+        if let builtin = SieveSciResources.directory("Resources/skills") { r.append((builtin, "builtin")) }
         for pack in (try? FileManager.default.contentsOfDirectory(at: Self.packsDir, includingPropertiesForKeys: nil)) ?? [] {
             r.append((pack.appendingPathComponent("skills"), "pack:\(pack.lastPathComponent)"))
             r.append((pack, "pack:\(pack.lastPathComponent)"))
@@ -91,6 +91,8 @@ public final class SkillRegistry: @unchecked Sendable {
     }
 
     public static func frontMatter(_ text: String) -> (meta: [String: Any], body: String) {
+        // Files checked out or edited on Windows may have CRLF line ends.
+        let text = text.contains("\r\n") ? text.replacingOccurrences(of: "\r\n", with: "\n") : text
         guard text.hasPrefix("---") else { return ([:], text) }
         let parts = text.components(separatedBy: "\n---")
         guard parts.count >= 2 else { return ([:], text) }

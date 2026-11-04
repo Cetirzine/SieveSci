@@ -1,0 +1,4 @@
+# Keep LF line ends on every platform: skills, policies and scripts are parsed byte for byte.
+* text=auto eol=lf
+*.png binary
+*.dmg binary

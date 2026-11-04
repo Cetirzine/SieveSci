@@ -149,9 +149,9 @@ public enum ReportExporter {
 public enum EnvironmentSnapshot {
     public static func capture(services: SessionServices) async {
         var parts: [String] = ["SieveSci \(SieveSci.version)", "OS: \(ProcessInfo.processInfo.operatingSystemVersionString)"]
-        if let py = try? await ProcessRunner.run("python3", ["-c", "import sys,platform;print('Python',sys.version.split()[0],platform.platform())"], timeout: 30), py.exitCode == 0 {
+        if let py = try? await ProcessRunner.run(Platform.python, ["-c", "import sys,platform;print('Python',sys.version.split()[0],platform.platform())"], timeout: 30), py.exitCode == 0 {
             parts.append(py.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
-            if let pip = try? await ProcessRunner.run("python3", ["-m", "pip", "freeze", "--disable-pip-version-check"], timeout: 60), pip.exitCode == 0 {
+            if let pip = try? await ProcessRunner.run(Platform.python, ["-m", "pip", "freeze", "--disable-pip-version-check"], timeout: 60), pip.exitCode == 0 {
                 parts.append("pip packages:\n" + pip.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
             }
         }

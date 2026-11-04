@@ -95,7 +95,7 @@ public final class JobMonitor: @unchecked Sendable {
                       readHidden: [URL] = [], readAllowed: [URL] = [], readRehidden: [URL] = [],
                       notifyOn: String? = nil, notifyErrors: Bool = true, stallMinutes: Double? = nil) throws -> String {
         let job = makeJob(.process(command), agentId: agentId, notifyOn: notifyOn, notifyErrors: notifyErrors, stallMinutes: stallMinutes)
-        let (exe, args) = Seatbelt.wrap("/bin/bash", ["-lc", command], mode: sandbox, writableRoots: writableRoots, protected: protected,
+        let (exe, args) = Seatbelt.wrap(Platform.bash, ["-lc", command], mode: sandbox, writableRoots: writableRoots, protected: protected,
                                         readHidden: readHidden, readAllowed: readAllowed, readRehidden: readRehidden)
         let p = try ProcessRunner.makeProcess(exe, args, cwd: cwd, env: ["PYTHONUNBUFFERED": "1"])
         let out = Pipe()

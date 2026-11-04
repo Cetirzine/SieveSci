@@ -64,13 +64,35 @@ public enum ProcessRunner {
         #endif
     }
 
-    public static func which(_ name: String) -> String? {
-        if name.hasPrefix("/") { return FileManager.default.isExecutableFile(atPath: name) ? name : nil }
-        for dir in (loginEnvironment["PATH"] ?? "").split(separator: ":") {
-            let p = "\(dir)/\(name)"
-            if FileManager.default.isExecutableFile(atPath: p) { return p }
+    public static func which(_ name: String) -> String? { allOnPath(name).first }
+
+    /// The login PATH (Windows spells the variable `Path`).
+    static var searchPath: String { loginEnvironment.first { $0.key.uppercased() == "PATH" }?.value ?? "" }
+
+    /// Every match for `name` on PATH, in PATH order. On Windows a bare name also tries the PATHEXT
+    /// extensions (`claude` → `claude.cmd`), and the extensionless shell scripts npm installs beside
+    /// them are skipped, since Windows cannot start those.
+    static func allOnPath(_ name: String) -> [String] {
+        let fm = FileManager.default
+        #if os(Windows)
+        func runnable(_ p: String) -> Bool { var dir: ObjCBool = false; return fm.fileExists(atPath: p, isDirectory: &dir) && !dir.boolValue }
+        let hasExt = !(name as NSString).pathExtension.isEmpty
+        let exts = hasExt ? [""] : (ProcessInfo.processInfo.environment["PATHEXT"] ?? ".COM;.EXE;.BAT;.CMD")
+            .split(separator: ";").map { String($0).lowercased() }
+        if name.contains("\\") || name.contains("/") || name.contains(":") {
+            return exts.map { name + $0 }.first(where: runnable).map { [$0] } ?? []
         }
-        return nil
+        #else
+        func runnable(_ p: String) -> Bool { fm.isExecutableFile(atPath: p) }
+        let exts = [""]
+        if name.hasPrefix("/") { return runnable(name) ? [name] : [] }
+        #endif
+        var out: [String] = []
+        for dir in searchPath.split(separator: Platform.pathSeparator) where !dir.isEmpty {
+            let base = URL(fileURLWithPath: String(dir)).appendingPathComponent(name).path
+            if let hit = exts.map({ base + $0 }).first(where: runnable), !out.contains(hit) { out.append(hit) }
+        }
+        return out
     }
 
     static func makeProcess(_ executable: String, _ args: [String], cwd: URL?, env: [String: String]?) throws -> Process {

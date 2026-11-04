@@ -189,7 +189,7 @@ public struct ChemScreen: Sendable {
             keys.append(Chem.MolToInchiKey(max(frags, key=lambda f: f.GetNumHeavyAtoms())))
         print("\\n".join(k for k in keys if k))
         """
-        guard let r = try? await ProcessRunner.run("python3", ["-c", script, smiles], timeout: 30), r.exitCode == 0 else { return nil }
+        guard let r = try? await ProcessRunner.run(Platform.python, ["-c", script, smiles], timeout: 30), r.exitCode == 0 else { return nil }
         let keys = r.stdout.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespaces) }.filter(isInChIKey)
         return keys.isEmpty ? nil : keys
     }
@@ -328,7 +328,7 @@ struct BioToolSearchTool: Tool {
             if sc > 0 { scoredData.append((sc, k, desc)) }
         }
         let data = scoredData.sorted { $0.0 > $1.0 }.prefix(5)
-        let installed = (try? await ProcessRunner.run("python3", ["-c", "import importlib.util,sys;sys.exit(0 if importlib.util.find_spec('biomni') else 1)"], timeout: 20))?.exitCode == 0
+        let installed = (try? await ProcessRunner.run(Platform.python, ["-c", "import importlib.util,sys;sys.exit(0 if importlib.util.find_spec('biomni') else 1)"], timeout: 20))?.exitCode == 0
         var out = installed ? "biomni is installed.\n" : "biomni is NOT installed in this Python (pip install biomni) — install it or use other methods.\n"
         for (_, t) in tools {
             let req = (t["required"]?.arrayValue ?? []).compactMap(\.stringValue).joined(separator: ", ")
@@ -392,7 +392,7 @@ enum SyntaxCheck {
         let ext = (path as NSString).pathExtension.lowercased()
         switch ext {
         case "py":
-            let r = try? await ProcessRunner.run("python3", ["-c", "import ast,sys;ast.parse(open(sys.argv[1],encoding='utf-8').read(),sys.argv[1])", path], timeout: 30)
+            let r = try? await ProcessRunner.run(Platform.python, ["-c", "import ast,sys;ast.parse(open(sys.argv[1],encoding='utf-8').read(),sys.argv[1])", path], timeout: 30)
             return r.flatMap { $0.exitCode == 0 ? nil : $0.stderr.truncated(800) }
         case "r":
             guard ProcessRunner.which("Rscript") != nil else { return nil }
