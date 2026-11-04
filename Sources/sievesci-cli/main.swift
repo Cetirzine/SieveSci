@@ -110,8 +110,15 @@ func main() async {
         services.effort = o.effort
         services.delegation.auto = o.autoDelegate
         if let n = o.maxWorkers { services.delegation.maxParallel = n }
+        // Only an interactive terminal can answer questions; `-p` runs get "nobody to ask".
+        services.asks.interactive = o.prompt == nil
         services.emit = { ev in
             switch ev {
+            case .askRequested(let req):
+                Task.detached { services.asks.resolve(req.id, TerminalAsk.prompt(req)) }
+            case .brainstormChanged(let b):
+                let mark = b.endedAt == nil ? (b.wrapUpRequested ? "wrapping up" : b.stage) : (b.stopped ? "stopped" : "done")
+                print("\n\(orange)✺ brainstorm · \(mark)\(reset) \(dim)\(b.topic.prefix(80))\(b.stageNote.isEmpty ? "" : " — " + b.stageNote.prefix(120))\(reset)")
             case .textDelta(_, let t): FileHandle.standardOutput.writeSafely(Data(t.utf8))
             case .thinkingDelta: break
             case .toolStarted(_, _, let name, let input):
@@ -456,4 +463,39 @@ if cliArgs.first == "mcp-bridge" {
     }
 } else {
     await main()
+}
+
+
+/// `ask_user` in the terminal: numbered options, several numbers for multiple choice, any other text
+/// as "Other" (or as the answer to a fill-in question), an empty line to skip, `q` to dismiss.
+enum TerminalAsk {
+    static func prompt(_ req: AskRequest) -> AskOutcome {
+        var answers: [AskAnswer] = []
+        print("\n\(orange)? \(req.questions.count == 1 ? "Question" : "\(req.questions.count) questions")\(reset) \(dim)(Enter skips · q dismisses)\(reset)")
+        for q in req.questions {
+            print("\n\(orange)\(q.header)\(reset) \(q.question)")
+            for (i, o) in q.options.enumerated() {
+                let rec = o.recommended ? " \(green)(recommended)\(reset)" : ""
+                print("  \(i + 1). \(o.label)\(rec)\(o.description.map { " \(dim)— \($0)\(reset)" } ?? "")\(o.evidence.isEmpty ? "" : " \(dim)[\(o.evidence.joined(separator: ", "))]\(reset)")")
+            }
+            if q.kind == .text {
+                print("  \(dim)\(q.placeholder.map { "e.g. \($0)" } ?? "type your answer")\(reset)")
+            } else if q.allowOther {
+                print("  \(dim)or type your own answer\(q.kind == .multi ? " · several numbers: 1,3" : "")\(reset)")
+            }
+            print("> ", terminator: "")
+            guard let line = readLine()?.trimmingCharacters(in: .whitespaces) else { return .dismissed(nil) }
+            if line.lowercased() == "q" { return .dismissed(nil) }
+            if line.isEmpty { continue }
+            if q.kind == .text { answers.append(AskAnswer(questionId: q.id, text: line)); continue }
+            let nums = line.split(whereSeparator: { $0 == "," || $0 == " " }).compactMap { Int($0) }
+            let picked = nums.filter { (1...q.options.count).contains($0) }.map { q.options[$0 - 1].label }
+            if !picked.isEmpty, picked.count == nums.count {
+                answers.append(AskAnswer(questionId: q.id, selected: q.kind == .multi ? picked : [picked[0]]))
+            } else if q.allowOther {
+                answers.append(AskAnswer(questionId: q.id, other: line))
+            }
+        }
+        return answers.isEmpty ? .dismissed(nil) : .answered(answers)
+    }
 }

@@ -20,6 +20,9 @@ which data, which model system, how to validate. Not for questions one search an
    Instructions: "As this specialist, answer the agenda question. Give a recommendation, the evidence
    for it with citations or receipts, the main risk, and one thing you would want another specialist
    to check." Each works from the shared brief only.
+   For an open, creative agenda, run the round as Virtual Lab did: the same agenda in 3–5 independent
+   parallel discussions (one `dispatch` item each, varied seeds from `ideation_seeds`), then merge them
+   yourself into one answer that keeps the best parts and says which discussion each part came from.
 4. **Round 2 — cross-examination.** `dispatch` mode `map` again, each specialist now given the other
    positions: "Agree or disagree with each other position, with new evidence only. Revise yours if
    warranted." At most two rounds in total; repeated arguments are not new evidence.

@@ -53,6 +53,8 @@ public enum TaskStage: Equatable, Sendable {
 
     public struct Facts: Sendable {
         public var permissionAsk: String?
+        /// A structured question (`ask_user`) waiting for the user.
+        public var pendingAsk: String?
         public var goal: Goal?
         public var planMode = false
         public var planHasSteps = false
@@ -65,6 +67,7 @@ public enum TaskStage: Equatable, Sendable {
 
     public static func of(_ f: Facts) -> TaskStage {
         if let ask = f.permissionAsk { return .answer(ask) }
+        if let ask = f.pendingAsk { return .answer(ask) }
         if let g = f.goal, g.phase == .waiting { return .answer(g.waitingFor ?? g.objective) }
         if f.running { return .working }
         if f.planMode && f.planHasSteps { return .review }

@@ -260,6 +260,16 @@ extension AppModel {
             }
         case .permissionRequested:
             break
+        case .askRequested(let r):
+            if pendingAsk == nil || pendingAsk?.id == r.id { pendingAsk = r }
+            NSApp.requestUserAttention(.informationalRequest)
+            if config.notifyPermission {
+                notifier.post(title: L("SieveSci has a question"), body: r.summary, id: "ask-\(r.id)")
+            }
+        case .askResolved(let id, _):
+            if pendingAsk?.id == id { pendingAsk = bench?.services.asks.first }
+        case .brainstormChanged(let b): brainstorm = b
+        case .ideasChanged(let i): ideas = i
         }
     }
 }

@@ -166,6 +166,7 @@ public final class AgentSession: @unchecked Sendable {
                 // Job events that arrived meanwhile ride along at the end (append-only: cache-safe).
                 let notes = services.jobs.drain(for: id)
                 if !notes.isEmpty { results.append(.text(notes.map(\.rendered).joined(separator: "\n"))) }
+                if role == .main, let wrap = services.ideas.drainWrapUp() { results.append(.text(wrap)) }
                 if role != .main && steps >= maxSteps - 2 {
                     results.append(.text("<step_budget>This is your last step: do not call more tools. Give your final answer now, from what you have.</step_budget>"))
                 }
@@ -319,6 +320,20 @@ public final class AgentSession: @unchecked Sendable {
     /// Read-only calls run concurrently; anything with side effects runs in order. All results go
     /// back in one user message (splitting them teaches models to stop calling tools in parallel).
     func runTools(_ uses: [ToolUse]) async -> [ContentBlock] {
+        // `ask_user` is a decision barrier: what was written alongside it was written without the
+        // answer, so only the question runs (after Reasonix's ask tool).
+        if uses.count > 1, let ask = uses.first(where: { $0.name == "ask_user" }) {
+            var out: [ContentBlock] = []
+            for u in uses where u.id != ask.id {
+                out.append(.toolResult(ToolResult(toolUseId: u.id, content: "Not run: you asked the user a question in the same step. "
+                    + "Wait for the answer, then call this again if it is still needed.", isError: true)))
+            }
+            let answer = await execute(ask)
+            let order = uses.map(\.id)
+            return (out + [answer]).sorted { a, b in
+                (order.firstIndex(of: a.toolResult?.toolUseId ?? "") ?? 0) < (order.firstIndex(of: b.toolResult?.toolUseId ?? "") ?? 0)
+            }
+        }
         let readOnly = uses.allSatisfy { u in tool(named: u.name)?.effect(for: u.input) == .readOnly }
         if readOnly && uses.count > 1 {
             return await withTaskGroup(of: (Int, ContentBlock).self) { g in
@@ -581,6 +596,11 @@ public enum TurnContext {
                          + running.map { "\($0.id) \($0.label.truncated(60))" }.joined(separator: "; "))
         }
         lines.append("permission mode: \(s.permissions.mode.rawValue)")
+        if let b = s.ideas.live {
+            lines.append("brainstorm running: \(b.topic.truncated(80)) (stage \(b.stage); \(s.ideas.snapshot.filter(\.isLive).count) live ideas)")
+        } else if !s.ideas.autoAllowed {
+            lines.append("autonomous brainstorming: off (brainstorm only when the user asks, e.g. /brainstorm)")
+        }
         if L10n.resolved != "en" { lines.append("user interface language: \(L10n.resolved) (reply in the user's language)") }
         if let n = LearningNudges.nudge(turn: turn) { lines.append(n) }
         lines.append("</context>")

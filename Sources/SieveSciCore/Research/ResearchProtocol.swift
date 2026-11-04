@@ -255,6 +255,21 @@ public final class ResearchProtocol: @unchecked Sendable {
         return (.allow, plan.steps[i].checkpoint && status == "done" ? plan.steps[i] : nil)
     }
 
+    /// Registers one hypothesis (an idea promoted after its novelty check and review) without
+    /// touching the rest of the plan. Recorded as a plan revision with its rationale.
+    public func addHypothesis(statement: String, prediction: String, falsification: String, rationale: String) -> (GateDecision, Hypothesis?) {
+        if case .refuse(let m) = requireGrounding("registering a hypothesis") { return (.refuse(m), nil) }
+        guard !prediction.isEmpty, !falsification.isEmpty else { return (.refuse("A hypothesis needs a prediction and a falsification criterion."), nil) }
+        lock.lock(); defer { lock.unlock() }
+        var n = plan.hypotheses.count + 1
+        while plan.hypotheses.contains(where: { $0.id == "H\(n)" }) { n += 1 }
+        let h = Hypothesis(id: "H\(n)", statement: statement, prediction: prediction, falsification: falsification, status: "open", registeredAt: Date())
+        plan.hypotheses.append(h)
+        plan.revisions.append(PlanRevision(at: Date(), rationale: rationale, changedCriteria: [], afterResults: false))
+        persist()
+        return (.allow, h)
+    }
+
     public func setStage(_ s: ResearchStage) { lock.lock(); plan.stage = s; persist(); lock.unlock() }
 
     public func setHypothesisStatus(_ id: String, _ status: String) {

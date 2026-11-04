@@ -1,0 +1,322 @@
+import Foundation
+
+// MARK: - ask_user
+
+struct AskUserTool: Tool {
+    let name = "ask_user"
+    let description = """
+    Ask the user what only they can supply: a choice between real alternatives (scope, organism, data, method \
+    family, which direction to pursue) or a value the request never gave. Not for anything a search, a file or a \
+    tool can answer, and not for permission. 1–4 questions per call; each has a short `header` (≤12 characters), \
+    the `question`, a `kind` (single | multi | text = fill-in) and, for choices, 2–5 `options` (label, optional \
+    description, evidence [@key or receipt ids], `recommended` on at most one). "Other" with a text box is added \
+    automatically — do not list it. `reason`: user_decision | missing_value | direction (directions found by \
+    searching and brainstorming; needs the background searches first). Calling this ends your step: other tool \
+    calls in the same message do not run. The result is the user's answer, or that they dismissed the question \
+    (then stop and wait), or that nobody could answer (then do not choose for them).
+    """
+    var inputSchema: JSON {
+        let option = Schema.object(["label": Schema.string("Concise choice text"),
+                                    "description": Schema.string("One line: what choosing this means"),
+                                    "evidence": Schema.array("Library keys (@key) or receipt ids this option rests on", items: ["type": "string"]),
+                                    "recommended": Schema.bool("Your recommendation (at most one)"),
+                                    "idea": Schema.string("Idea id (I3) this option came from")], required: ["label"])
+        let question = Schema.object(["id": Schema.string("Short id (optional)"),
+                                      "header": Schema.string("Tab label, ≤12 characters"),
+                                      "question": Schema.string("The full question"),
+                                      "kind": Schema.stringEnum("single | multi | text", ["single", "multi", "text"]),
+                                      "reason": Schema.stringEnum("Why only the user can answer", ["user_decision", "missing_value", "direction"]),
+                                      "options": Schema.array("2–5 choices (none for text)", items: option),
+                                      "allow_other": Schema.bool("Offer \"Other\" with a text box (default true)"),
+                                      "placeholder": Schema.string("Hint for the text box"),
+                                      "optional": Schema.bool("May be left unanswered")],
+                                     required: ["header", "kind", "question"])
+        return Schema.object(["questions": Schema.array("1–4 questions asked together", items: question)], required: ["questions"])
+    }
+    func effect(for input: JSON) -> ToolEffect { .readOnly }
+
+    func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
+        guard ctx.role == .main else { return .error("Only the main agent asks the user; report the open question in your result instead.") }
+        let s = ctx.services
+        let questions = try AskFormat.parse(input)
+        if questions.contains(where: { $0.reason == .direction }),
+           case .refuse(let m) = s.research.requireGrounding("asking the user to choose a research direction") {
+            return .error(m + " Options for a direction must rest on what the searches found.")
+        }
+        if s.research.snapshot.steps.isEmpty {
+            if s.asks.askedBeforePlan >= AskCenter.maxBeforePlan {
+                return .error("You have asked \(AskCenter.maxBeforePlan) times before planning. Proceed with what you have: state your assumptions and plan.")
+            }
+            s.asks.noteAskedBeforePlan()
+        }
+        let req = AskRequest(id: CurrentToolCall.id ?? UUID().uuidString, agentId: ctx.sessionId, questions: questions)
+        s.log("ask", actor: "agent", ["id": .string(req.id), "questions": .array(questions.map { q in
+            ["id": .string(q.id), "header": .string(q.header), "kind": .string(q.kind.rawValue), "reason": .string(q.reason.rawValue),
+             "question": .string(q.question), "options": .array(q.options.map { .string($0.label) })]
+        })])
+        let goalWasActive = s.goal.current?.phase == .active
+        if goalWasActive { s.goal.hostWait(req.summary) }
+        let outcome = await s.asks.ask(req, emit: s.emit)
+        if case .answered = outcome, goalWasActive { s.goal.userReplied() }
+        s.log("ask_answer", actor: outcome == .unavailable ? "host" : "user", ["id": .string(req.id), "outcome": .string(outcome.label),
+                                                                             "answer": (try? JSONCodec.parse(JSONEncoder().encode(outcome))) ?? .null])
+        s.emit(.askResolved(id: req.id, outcome: outcome))
+        return ToolOutput(AskFormat.result(req, outcome), facts: ["ask": .string(req.id), "outcome": .string(outcome.label)])
+    }
+}
+
+// MARK: - brainstorm
+
+struct BrainstormTool: Tool {
+    let name = "brainstorm"
+    let description = """
+    Enter, advance and leave brainstorming mode, which the user watches live. Enter it on your own when the work \
+    needs new ideas (the request asks for them, a direction is unclear, an approach keeps failing, a claim was \
+    refuted) — unless the user turned that off, in which case `start` is refused. Actions: start (topic, reason) · \
+    stage (stage: ground | diverge | dedupe | rank | novelty | review | evolve | report; note: one line on what you \
+    are doing) · end (summary). Record ideas with `idea`; follow the `brainstorm` skill for the procedure.
+    """
+    var inputSchema: JSON {
+        Schema.object(["action": Schema.stringEnum("start | stage | end", ["start", "stage", "end"]),
+                       "topic": Schema.string("start: what the ideas are for"),
+                       "reason": Schema.string("start: why new ideas are needed now"),
+                       "stage": Schema.stringEnum("stage: the step you are entering", BrainstormState.stages),
+                       "note": Schema.string("stage: one line the user sees"),
+                       "summary": Schema.string("end: what came out, in two lines")], required: ["action"])
+    }
+    func effect(for input: JSON) -> ToolEffect { .readOnly }
+
+    func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
+        guard ctx.role == .main else { return .error("Only the main agent runs a brainstorm; return your ideas in your report.") }
+        let led = ctx.services.ideas
+        switch input.str("action") {
+        case "start":
+            let topic = (input.str("topic") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !topic.isEmpty else { return .error("Give the brainstorm a topic.") }
+            switch led.start(topic: topic, reason: input.str("reason") ?? "") {
+            case .failure(let r): return .error(r.message)
+            case .success(let st):
+                ctx.services.log("brainstorm", actor: st.trigger == .auto ? "agent" : "user",
+                                 ["event": "start", "id": .string(st.id), "topic": .string(topic), "trigger": .string(st.trigger.rawValue)])
+                ctx.services.emit(.brainstormChanged(st))
+                let g = ctx.services.research.hasGrounding()
+                return ToolOutput("Brainstorm \(st.id) started (\(st.trigger.rawValue)). The user sees each stage and every idea as you record it, "
+                    + "and may ask you to wrap up. Ideas are speculation until checked."
+                    + (g.web && g.literature ? "" : " First stage: ground — search the background before generating anything."))
+            }
+        case "stage":
+            let stage = input.str("stage") ?? ""
+            guard BrainstormState.stages.contains(stage) else { return .error("Unknown stage \(stage).") }
+            guard let st = led.stage(stage, note: input.str("note") ?? "") else { return .error("No brainstorm is running; start one first.") }
+            ctx.services.emit(.brainstormChanged(st))
+            return ToolOutput("Stage: \(stage).")
+        case "end":
+            guard let st = led.end(summary: input.str("summary") ?? "") else { return .error("No brainstorm is running.") }
+            ctx.services.log("brainstorm", actor: "agent", ["event": "end", "id": .string(st.id), "summary": .string(st.summary ?? "")])
+            ctx.services.emit(.brainstormChanged(st))
+            var text = "Brainstorm ended. Present the ideas as speculation; an idea becomes a hypothesis only through `idea` promote."
+            if st.trigger == .dream {
+                let ws = ctx.services.workspace
+                let mine = led.snapshot.filter { $0.origin == "dream:\(st.id)" && $0.isLive }
+                DreamInbox.add(mine, task: ctx.services.taskId, workspace: ws)
+                let diary = DreamInbox.writeDiary(st, ideas: mine, workspace: ws)
+                text += " Dream diary: \(diary.path)"
+            }
+            return ToolOutput(text)
+        default:
+            return .error("action must be start, stage or end")
+        }
+    }
+}
+
+// MARK: - idea
+
+struct IdeaTool: Tool {
+    let name = "idea"
+    let description = """
+    The idea ledger (speculation, kept apart from hypotheses and claims). Actions: add (ideas: [{statement, \
+    mechanism, test, falsifier, operator, seeds, evidence}]; near-duplicates are merged automatically) · list · \
+    discard (id, reason) · rank (order: ids best first, e.g. from `dispatch` rank) · novelty (id, verdict: \
+    not_found_in_search | incremental | known, closest_prior: [@key…], receipts: ids of ≥3 searches run after the \
+    idea was written) · promote (id, prediction): an independent checker reviews the novelty check, then the idea is \
+    registered as a hypothesis in the plan. Never call an idea novel: say "no prior work found in these searches".
+    """
+    var inputSchema: JSON {
+        let idea = Schema.object(["statement": Schema.string("The idea in one or two sentences"),
+                                  "mechanism": Schema.string("How it would work"),
+                                  "test": Schema.string("The experiment or analysis that tests it"),
+                                  "falsifier": Schema.string("The result that would refute it"),
+                                  "operator": Schema.string("facet | analogy | invert | seed | verbalized | merge | evolve:<id> | free"),
+                                  "seeds": Schema.array("Seed concepts used", items: ["type": "string"]),
+                                  "evidence": Schema.array("[@key] or receipt ids it builds on", items: ["type": "string"])],
+                                 required: ["statement"])
+        return Schema.object(["action": Schema.stringEnum("Action", ["add", "list", "discard", "rank", "novelty", "promote"]),
+                              "ideas": Schema.array("add: new ideas", items: idea),
+                              "id": Schema.string("Idea id (I3)"),
+                              "reason": Schema.string("discard: why"),
+                              "order": Schema.array("rank: idea ids, best first", items: ["type": "string"]),
+                              "verdict": Schema.stringEnum("novelty verdict", ["not_found_in_search", "incremental", "known"]),
+                              "closest_prior": Schema.array("novelty: closest prior work", items: ["type": "string"]),
+                              "receipts": Schema.array("novelty: receipt ids of the searches", items: ["type": "string"]),
+                              "prediction": Schema.string("promote: the prediction the hypothesis makes")],
+                             required: ["action"])
+    }
+    func effect(for input: JSON) -> ToolEffect { .readOnly }
+
+    func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
+        let s = ctx.services
+        let led = s.ideas
+        func changed() { s.emit(.ideasChanged(led.snapshot)) }
+        switch input.str("action") {
+        case "add":
+            guard ctx.role == .main else { return .error("Workers return ideas in their report; the main agent records them.") }
+            let raw = input["ideas"]?.arrayValue ?? []
+            guard !raw.isEmpty else { return .error("No ideas given.") }
+            let origin = led.live.map { $0.trigger == .dream ? "dream:\($0.id)" : "brainstorm:\($0.id)" } ?? "session"
+            let now = Date()
+            let new = raw.compactMap { j -> Idea? in
+                let st = (j.str("statement") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !st.isEmpty else { return nil }
+                return Idea(id: "", statement: st, mechanism: j.str("mechanism") ?? "", test: j.str("test") ?? "", falsifier: j.str("falsifier") ?? "",
+                            op: j.str("operator") ?? "free", seeds: j["seeds"]?.arrayValue?.compactMap(\.stringValue) ?? [],
+                            evidence: j["evidence"]?.arrayValue?.compactMap(\.stringValue) ?? [], status: .raw, mergedInto: nil, novelty: nil,
+                            noveltyReceipts: [], closestPrior: [], rank: nil, review: nil, reviewFingerprint: nil, hypothesisId: nil, note: nil,
+                            origin: origin, createdAt: now)
+            }
+            let added = led.add(new)
+            changed()
+            s.log("idea", actor: "agent", ["event": "add", "ids": .array(added.map { .string($0.id) }),
+                                           "merged": .array(added.filter { $0.status == .merged }.map { .string("\($0.id)→\($0.mergedInto ?? "")") })])
+            let merged = added.filter { $0.status == .merged }
+            let all = led.snapshot
+            let liveCount = all.filter(\.isLive).count
+            return ToolOutput(added.map { "\($0.id)\($0.status == .merged ? " (duplicate of \($0.mergedInto ?? ""))" : "") \($0.statement.truncated(100))" }.joined(separator: "\n")
+                + "\n\(added.count) recorded, \(merged.count) merged as duplicates; \(liveCount) live ideas of \(all.count)."
+                + (merged.count * 2 > added.count ? " Over half were duplicates: switch operator or seeds instead of generating more of the same." : ""))
+        case "list":
+            let all = led.snapshot
+            guard !all.isEmpty else { return ToolOutput("No ideas yet.") }
+            return ToolOutput(all.map { i in
+                "\(i.id) [\(i.status.rawValue)\(i.novelty.map { ", \($0.rawValue)" } ?? "")\(i.rank.map { ", #\($0)" } ?? "")] \(i.statement.truncated(140)) · \(i.op)"
+            }.joined(separator: "\n"))
+        case "discard":
+            guard let id = input.str("id"), let i = led.discard(id, reason: input.str("reason") ?? "") else { return .error("No such idea.") }
+            changed()
+            return ToolOutput("\(i.id) discarded.")
+        case "rank":
+            let order = input["order"]?.arrayValue?.compactMap(\.stringValue) ?? []
+            guard !order.isEmpty else { return .error("Give the ids in order, best first.") }
+            led.setRanks(order)
+            changed()
+            return ToolOutput("Ranked \(order.count) ideas.")
+        case "novelty":
+            guard let id = input.str("id"), let v = Idea.Novelty(rawValue: input.str("verdict") ?? "") else { return .error("Give id and verdict.") }
+            let r = led.setNovelty(id, v, prior: input["closest_prior"]?.arrayValue?.compactMap(\.stringValue) ?? [],
+                                   receipts: input["receipts"]?.arrayValue?.compactMap(\.stringValue) ?? [], ledger: s.ledger)
+            switch r {
+            case .failure(let g): return .error(g.message)
+            case .success(let i):
+                changed()
+                s.log("idea", actor: "agent", ["event": "novelty", "id": .string(i.id), "verdict": .string(v.rawValue),
+                                               "receipts": .array(i.noveltyReceipts.map { .string($0) }), "prior": .array(i.closestPrior.map { .string($0) })])
+                return ToolOutput("\(i.id): \(v.rawValue)" + (v == .known ? " — discarded as already published." : " (searches \(i.noveltyReceipts.joined(separator: ", "))). The checker reviews this verdict when the idea is promoted."))
+            }
+        case "promote":
+            guard ctx.role == .main else { return .error("Only the main agent registers hypotheses.") }
+            guard let id = input.str("id") else { return .error("Give the idea id.") }
+            if led.live?.trigger == .dream || led.current?.trigger == .dream && !s.asks.interactive {
+                return .error("A dreaming run does not register hypotheses; the user decides when they read the ideas.")
+            }
+            if let b = led.promotionBlocker(id) { return .error(b) }
+            if case .refuse(let m) = s.research.requireGrounding("registering a hypothesis") { return .error(m) }
+            guard let idea = led.snapshot.first(where: { $0.id == id }) else { return .error("No idea \(id).") }
+            let prediction = (input.str("prediction") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !prediction.isEmpty else { return .error("State the prediction the hypothesis makes.") }
+            let fp = (idea.statement + idea.falsifier + idea.noveltyReceipts.joined() + idea.closestPrior.joined() + prediction).stableHash
+            if idea.reviewFingerprint == fp, let v = idea.review, v != "pass" {
+                return .error("The checker returned \(v) on this idea and nothing has changed since. Address its points (more searches, a sharper test) first.")
+            }
+            let searches = idea.noveltyReceipts.compactMap { s.ledger.receipt($0) }.map { "\($0.id) · \($0.tool) · \($0.argsSummary.prefix(200))" }
+            let focus = """
+            Idea \(idea.id) is about to be registered as a hypothesis. Review its novelty check and testability.
+            Statement: \(idea.statement)
+            Mechanism: \(idea.mechanism)
+            Test: \(idea.test)
+            Falsifier: \(idea.falsifier)
+            Prediction: \(prediction)
+            Novelty verdict: \(idea.novelty?.rawValue ?? "none") · closest prior: \(idea.closestPrior.joined(separator: ", "))
+            Searches cited (open them with `receipt`):
+            \(searches.joined(separator: "\n"))
+            Check: do the queries cover synonyms, the mechanism, the method and the organism? Is the closest prior work really \
+            different, or is this already published (search yourself)? Is the test feasible and could the falsifier actually occur? \
+            Use "block" if it is already published or the verdict is unsupported, "revise" if more searching or a sharper test is needed.
+            """
+            let review = await s.supervisor.review(kind: "ideation",
+                                                   signals: [IntegritySignal(kind: .ideation, severity: 2, detail: "idea \(idea.id) → hypothesis (\(fp.prefix(8)))", location: nil)],
+                                                   focus: focus)
+            let verdict = review.map { $0.contains("verdict=\"block\"") ? "block" : $0.contains("verdict=\"unavailable\"") ? "unavailable" : "revise" } ?? "pass"
+            led.setReview(id, verdict: verdict, fingerprint: fp)
+            if let review {
+                changed()
+                return .error("Not registered: the independent review did not pass.\n" + review)
+            }
+            let (gate, h) = s.research.addHypothesis(statement: idea.statement, prediction: prediction, falsification: idea.falsifier,
+                                                     rationale: "promoted from idea \(idea.id) after novelty check and review")
+            if case .refuse(let m) = gate { return .error(m) }
+            guard let h else { return .error("Could not register the hypothesis.") }
+            _ = led.markPromoted(id, hypothesis: h.id)
+            changed()
+            s.emit(.planChanged(s.research.snapshot))
+            s.log("idea", actor: "host", ["event": "promoted", "id": .string(id), "hypothesis": .string(h.id)])
+            return ToolOutput("\(idea.id) passed review and is registered as hypothesis \(h.id). Add plan steps that test it; any finding goes through `claim_finding`.")
+        default:
+            return .error("Unknown action.")
+        }
+    }
+}
+
+// MARK: - ideation_seeds
+
+struct IdeationSeedsTool: Tool {
+    let name = "ideation_seeds"
+    let description = """
+    Draw seed concepts for divergent thinking — provocations, not facts. Sources: library (distinctive terms from \
+    the task library), far_papers (library papers least related to the topic, for analogy), cross_domain (mechanisms \
+    and design patterns from other fields). The draw is seeded and recorded, so it can be replayed. Whatever a seed \
+    suggests must still be searched before you rely on it.
+    """
+    var inputSchema: JSON {
+        Schema.object(["topic": Schema.string("What the ideas are for"),
+                       "sources": Schema.array("library | far_papers | cross_domain (default all)", items: ["type": "string"]),
+                       "k": Schema.integer("Seeds per source (default 4, max 12)"),
+                       "seed": Schema.integer("RNG seed (default: drawn and reported)")], required: ["topic"])
+    }
+    func effect(for input: JSON) -> ToolEffect { .readOnly }
+
+    func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
+        let topic = try input.required("topic")
+        let k = max(1, min(12, input.int("k") ?? 4))
+        let seed = UInt64(truncatingIfNeeded: input.int("seed") ?? Int.random(in: 1...999_999))
+        var rng = IdeationSeeds.RNG(seed: seed)
+        let sources = input["sources"]?.arrayValue?.compactMap(\.stringValue) ?? ["library", "far_papers", "cross_domain"]
+        let records = ctx.services.library.records
+        var out = ["rng seed: \(seed)"]
+        for src in sources {
+            switch src {
+            case "library":
+                let pool = IdeationSeeds.libraryTerms(records).filter { !IdeaLedger.terms(topic).contains($0) }
+                out.append("library terms: " + (pool.isEmpty ? "(library is empty — fetch papers first)" : IdeationSeeds.sample(pool, k: k, rng: &rng).joined(separator: ", ")))
+            case "far_papers":
+                let far = IdeationSeeds.farPapers(records, topic: topic, k: max(k * 3, 6))
+                let pick = IdeationSeeds.sample(far, k: k, rng: &rng)
+                out.append("distant library papers: " + (pick.isEmpty ? "(none)" : pick.map { "[@\($0.key)] \($0.title.truncated(90))" }.joined(separator: "; ")))
+            case "cross_domain":
+                out.append("cross-domain mechanisms: " + IdeationSeeds.sample(IdeationSeeds.crossDomain, k: k, rng: &rng).joined(separator: ", "))
+            default:
+                out.append("unknown source \(src)")
+            }
+        }
+        out.append("Use each seed as a forced association (\"what if \(topic.truncated(60)) worked like …?\"); keep only ideas you can state with a mechanism and a test, and search before relying on any.")
+        return ToolOutput(out.joined(separator: "\n"), facts: ["rng_seed": .int(Int(seed % UInt64(Int.max)))])
+    }
+}

@@ -13,6 +13,7 @@ public struct IntegritySignal: Codable, Sendable, Equatable {
         case harking           // criteria changed after results
         case breakthrough      // strong-claim language → independent verification
         case checkpoint        // plan checkpoint reached
+        case ideation          // an idea is about to become a hypothesis: review its novelty check
     }
     public var kind: Kind
     public var severity: Int           // 1 info, 2 warn, 3 high

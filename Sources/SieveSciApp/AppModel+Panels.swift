@@ -22,6 +22,7 @@ extension AppModel {
         var f = TaskStage.Facts()
         let s = b.services
         f.permissionAsk = id == taskId ? pendingPermission.map { "\($0.tool): \($0.summary)" } : backgroundAsks[id].map { "\($0.0.tool): \($0.0.summary)" }
+        f.pendingAsk = s.asks.first?.summary
         f.goal = s.goal.current
         f.planMode = s.permissions.mode == .plan
         f.planHasSteps = !s.research.snapshot.steps.isEmpty

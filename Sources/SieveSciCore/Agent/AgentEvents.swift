@@ -38,6 +38,14 @@ public enum AgentEvent: Sendable {
     case jobNotification(JobNotification)
     /// One message in a bounded deliberation between agents (question, rebuttal, concession).
     case deliberation(thread: String, from: String, to: String, kind: String, text: String)
+    /// A structured question waits for the user (`ask_user`); answer with `AskCenter.resolve`.
+    case askRequested(AskRequest)
+    /// The question was answered, dismissed, timed out or could not be asked; the card seals.
+    case askResolved(id: String, outcome: AskOutcome)
+    /// Brainstorming mode started, moved to another stage, was asked to wrap up, or ended.
+    case brainstormChanged(BrainstormState)
+    /// The idea ledger changed (ideas added, merged, checked, ranked, discarded or promoted).
+    case ideasChanged([Idea])
 }
 
 public enum LiteratureAction: String, Sendable {
