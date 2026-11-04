@@ -947,3 +947,5 @@
 "e.g. Every morning, find new papers on CRISPR base editing and summarise the three most relevant." = "p. ex. Chaque matin, trouver les nouveaux articles sur l’édition de bases CRISPR et résumer les trois plus pertinents.";
 "Runs in" = "S’exécute dans";
 "Schedule" = "Planifier";
+"Download open-access PDFs" = "Télécharger les PDF en accès libre";
+"Saves the PDF of each open-access paper added to the library (OpenAlex, Europe PMC, arXiv, Unpaywall). Off: only Europe PMC's full text or the abstract is kept." = "Enregistre le PDF de chaque article en accès libre ajouté à la bibliothèque (OpenAlex, Europe PMC, arXiv, Unpaywall). Désactivé : seuls le texte intégral Europe PMC ou le résumé sont conservés.";

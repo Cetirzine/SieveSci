@@ -947,3 +947,5 @@
 "e.g. Every morning, find new papers on CRISPR base editing and summarise the three most relevant." = "例如：每天早上查找 CRISPR 碱基编辑的新论文，总结最相关的三篇。";
 "Runs in" = "运行于";
 "Schedule" = "添加定时";
+"Download open-access PDFs" = "下载开放获取论文的 PDF";
+"Saves the PDF of each open-access paper added to the library (OpenAlex, Europe PMC, arXiv, Unpaywall). Off: only Europe PMC's full text or the abstract is kept." = "把加入文献库的开放获取论文的 PDF 保存下来（OpenAlex、Europe PMC、arXiv、Unpaywall）。关闭后只保留 Europe PMC 全文或摘要。";

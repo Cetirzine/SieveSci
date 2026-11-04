@@ -316,6 +316,7 @@ final class AppModel: ObservableObject {
                                                webSearch: config.webSearch, permissionMode: config.permissionMode,
                                                contactEmail: config.contactEmail, retention: config.retention)
             services.research.groundingRequired = config.groundingRequired
+            services.library.downloadPDFs = config.downloadOAPDFs
             services.effort = config.effort
             services.sandboxMode = config.sandboxMode
             services.supervisorPolicy.maxReviewsPerSession = config.maxReviewsPerSession

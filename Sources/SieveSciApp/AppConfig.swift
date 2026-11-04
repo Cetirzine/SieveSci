@@ -13,6 +13,8 @@ struct AppConfig: Codable, Equatable {
     var retention: CacheRetention = .short
     var effort: Effort? = nil
     var contactEmail = ""
+    /// Save open-access PDFs of papers added to the library.
+    var downloadOAPDFs = true
     var groundingRequired = true
     var visionHelper: ModelRef? = nil
     var recentWorkspaces: [String] = []
@@ -74,6 +76,7 @@ extension AppConfig {
         retention = v(.retention, d.retention)
         effort = try? c.decodeIfPresent(Effort.self, forKey: .effort)
         contactEmail = v(.contactEmail, d.contactEmail)
+        downloadOAPDFs = v(.downloadOAPDFs, d.downloadOAPDFs)
         groundingRequired = v(.groundingRequired, d.groundingRequired)
         visionHelper = try? c.decodeIfPresent(ModelRef.self, forKey: .visionHelper)
         recentWorkspaces = v(.recentWorkspaces, d.recentWorkspaces)

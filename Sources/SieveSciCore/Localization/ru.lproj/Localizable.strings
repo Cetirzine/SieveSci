@@ -947,3 +947,5 @@
 "e.g. Every morning, find new papers on CRISPR base editing and summarise the three most relevant." = "Например: каждое утро находить новые статьи о редактировании оснований CRISPR и кратко излагать три самые важные.";
 "Runs in" = "Выполняется в";
 "Schedule" = "Запланировать";
+"Download open-access PDFs" = "Скачивать PDF статей в открытом доступе";
+"Saves the PDF of each open-access paper added to the library (OpenAlex, Europe PMC, arXiv, Unpaywall). Off: only Europe PMC's full text or the abstract is kept." = "Сохраняет PDF каждой статьи в открытом доступе, добавленной в библиотеку (OpenAlex, Europe PMC, arXiv, Unpaywall). Если выключено, сохраняется только полный текст Europe PMC или аннотация.";
