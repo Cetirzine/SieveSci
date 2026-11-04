@@ -104,6 +104,8 @@ export const symbols: Record<string, LucideIcon> = {
   "chart.xyaxis.line": I.ChartLine, "flask": I.FlaskConical, "text.book.closed": I.BookText, "globe.americas": I.Globe2,
   "arrow.uturn.backward": I.Undo2, "photo": I.Image, "trash": I.Trash2, "paperclip": I.Paperclip, "bell": I.Bell,
   "cpu": I.Cpu, "server.rack": I.Server, "testtube.2": I.TestTubes, "calendar": I.Calendar, "arrow.clockwise": I.RotateCw,
+  "hand.raised": I.Hand, "bolt": I.Zap, "pause.circle": I.CirclePause, "exclamationmark.bubble.fill": I.MessageSquareWarning,
+  "checkmark.circle.fill": I.CircleCheck, "chevron.up.chevron.down": I.ChevronsUpDown, "ellipsis": I.Ellipsis,
 };
 
 export function Symbol({ name, size = 13, strokeWidth = 1.75, className, style }: { name: string; size?: number; strokeWidth?: number; className?: string; style?: React.CSSProperties }) {

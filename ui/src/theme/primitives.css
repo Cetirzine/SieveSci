@@ -69,3 +69,13 @@
 
 @keyframes appear-pop { from { opacity: 0; transform: scale(0.96); } }
 .appear-pop { animation: appear-pop 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.05); transform-origin: top left; }
+
+.menu { position: relative; display: inline-flex; }
+.menu-label { display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; padding: 0; color: inherit; font: inherit; cursor: pointer; white-space: nowrap; }
+.menu-list { position: absolute; top: calc(100% + 4px); z-index: 50; min-width: 200px; padding: 4px; background: var(--raised); border: 1px solid var(--rule);
+             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); font: 13px/1.4 var(--sans); color: var(--text); }
+.menu-list.left { left: 0; } .menu-list.right { right: 0; }
+.menu-item { display: flex; align-items: center; gap: 6px; width: 100%; padding: 4px 8px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: var(--r-s); white-space: nowrap; }
+.menu-item:hover { background: var(--accent); color: #fff; }
+.menu-check { width: 12px; flex: none; }
+.menu-divider { height: 1px; background: var(--hairline); margin: 4px 0; }

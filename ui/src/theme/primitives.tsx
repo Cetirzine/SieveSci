@@ -1,5 +1,5 @@
 // Shared building blocks, one per SwiftUI primitive in Sources/SieveSciApp/Theme.swift.
-import type { CSSProperties, ReactNode, ButtonHTMLAttributes, InputHTMLAttributes } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes } from "react";
 import { Symbol } from "./theme";
 
 /** BoxStyle: framed block; dashed when provisional, a leading colour rule, a label tab on the top edge. */
@@ -104,5 +104,34 @@ export function ActionRow({ title, detail, children }: { title: string; detail?:
       </div>
       <div className="action-row-trailing">{children}</div>
     </div>
+  );
+}
+
+/** A borderless dropdown (SwiftUI Menu with .borderlessButton): label button, item list below. */
+export function Menu({ label, items, className = "", align = "left", title }:
+  { label: ReactNode; items: { label: ReactNode; onSelect: () => void; checked?: boolean; destructive?: boolean; divider?: boolean }[]; className?: string; align?: "left" | "right"; title?: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  return (
+    <span ref={ref} className={`menu ${className}`}>
+      <button type="button" className="menu-label" onClick={() => setOpen(!open)} title={title} aria-haspopup="menu" aria-expanded={open}>{label}</button>
+      {open && (
+        <div className={`menu-list ${align}`} role="menu">
+          {items.map((it, i) => it.divider ? <div key={i} className="menu-divider" /> : (
+            <button key={i} type="button" role="menuitem" className={`menu-item ${it.destructive ? "c-bad" : ""}`} onClick={() => { setOpen(false); it.onSelect(); }}>
+              <span className="menu-check">{it.checked ? "✓" : ""}</span>{it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
   );
 }
