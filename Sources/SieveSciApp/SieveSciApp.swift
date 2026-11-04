@@ -466,10 +466,12 @@ struct TopBar: View {
     @Binding var sidebarVisible: Bool
     @State private var width: CGFloat = 1000
 
-    /// The task's first question stands in for a title.
+    /// The same title as the sidebar row: the user's name for it, the generated title, or (until one
+    /// arrives) the first question.
     var title: String {
+        if let t = model.taskTitles[model.taskId] { return t }
         for it in model.items { if case .user(let t, _) = it.kind { return String(t.prefix(60)) } }
-        return model.taskTitles[model.taskId] ?? L("New task")
+        return L("New task")
     }
 
     func badge(_ t: MainTab) -> Int {

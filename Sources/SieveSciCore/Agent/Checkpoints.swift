@@ -93,10 +93,35 @@ public final class SessionStore: @unchecked Sendable {
         return s.split(separator: "\n").compactMap { try? dec.decode(Message.self, from: Data($0.utf8)) }
     }
 
-    /// A task's title: the first thing the user asked (first line, at most 80 characters).
+    /// The name the user gave a task (Rename). Its presence is the "named by hand" mark: generated
+    /// titles never replace it.
+    static let manualTitleFile = "title.txt"
+    /// A title the worker model summarized from the first exchange (`TitleSummarizer`).
+    static let autoTitleFile = "title-auto.txt"
+
+    static func readTitle(_ url: URL) -> String? {
+        guard let t = try? String(contentsOf: url, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
+        return t
+    }
+
+    /// Whether the user named this task by hand.
+    public static func hasManualTitle(dir: URL) -> Bool { readTitle(dir.appendingPathComponent(manualTitleFile)) != nil }
+
+    /// The generated title, if one was made.
+    public static func autoTitle(dir: URL) -> String? { readTitle(dir.appendingPathComponent(autoTitleFile)) }
+
+    /// Stores a generated title (an empty one removes it).
+    public static func setAutoTitle(_ title: String, dir: URL) {
+        let f = dir.appendingPathComponent(autoTitleFile)
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.isEmpty { try? FileManager.default.removeItem(at: f) } else { try? t.write(to: f, atomically: true, encoding: .utf8) }
+    }
+
+    /// A task's title: the user's own name for it, else the generated one, else the first thing the
+    /// user asked (first line, at most 80 characters).
     public static func title(dir: URL) -> String? {
-        if let t = try? String(contentsOf: dir.appendingPathComponent("title.txt"), encoding: .utf8)
-            .trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty { return t }
+        if let t = readTitle(dir.appendingPathComponent(manualTitleFile)) { return t }
+        if let t = autoTitle(dir: dir) { return t }
         let url = dir.appendingPathComponent("transcript-main.jsonl")
         guard let h = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? h.close() }
@@ -151,9 +176,10 @@ public final class SessionStore: @unchecked Sendable {
         workspace.appendingPathComponent(".sievesci/tasks").appendingPathComponent(task)
     }
 
-    /// A user-set name (`title.txt`) wins over the first question.
+    /// A user-set name (`title.txt`) wins over the generated title and the first question. An empty
+    /// name clears it, so the generated title (or the first question) shows again.
     public static func setTitle(_ title: String, task: String, in workspace: URL) {
-        let f = taskDir(task, in: workspace).appendingPathComponent("title.txt")
+        let f = taskDir(task, in: workspace).appendingPathComponent(manualTitleFile)
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if t.isEmpty { try? FileManager.default.removeItem(at: f) } else { try? t.write(to: f, atomically: true, encoding: .utf8) }
     }

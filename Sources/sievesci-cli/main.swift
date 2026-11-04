@@ -31,6 +31,8 @@ struct Options {
     var grounding = true
     /// Run independent parts of a request or plan on workers without waiting for the model to call `task`.
     var autoDelegate = true
+    /// Name the conversation with the worker model after the first exchange (as the app does).
+    var autoTitle = true
     var maxWorkers: Int?
     var prompt: String?
     var effort: Effort?
@@ -55,12 +57,13 @@ func parse() -> Options {
         case "--effort": o.effort = Effort(rawValue: v())
         case "--no-grounding": o.grounding = false
         case "--no-auto-delegate": o.autoDelegate = false
+        case "--no-auto-title": o.autoTitle = false
         case "--max-workers":
             guard let n = Int(v()), n >= 1 else { print("--max-workers needs a number of at least 1"); exit(2) }
             o.maxWorkers = n
         case "-p", "--print": o.prompt = v()
         case "-h", "--help":
-            print("sievesci [--workspace DIR] [--provider ID] [--model M] [--task ID] [--mode ask|acceptEdits|auto|plan] [--checker P/M] [--worker P/M] [--search backend] [--retention short|long] [--effort level] [--no-grounding] [--no-auto-delegate] [--max-workers N] [-p prompt]")
+            print("sievesci [--workspace DIR] [--provider ID] [--model M] [--task ID] [--mode ask|acceptEdits|auto|plan] [--checker P/M] [--worker P/M] [--search backend] [--retention short|long] [--effort level] [--no-grounding] [--no-auto-delegate] [--no-auto-title] [--max-workers N] [-p prompt]")
             print("       sievesci eval oversight --help")
             print("providers: " + ProviderPresets.all.map(\.id).joined(separator: ", "))
             exit(0)
@@ -143,6 +146,7 @@ func main() async {
                 print("\(orange)✻ \(id) finished\(reset) \(dim)\(result.prefix(200).replacingOccurrences(of: "\n", with: " "))\(reset)")
             case .error(let e): print("\(red)Error: \(e)\(reset)")
             case .turnFinished(let a, _) where a == "main": print("")
+            case .titleChanged(_, let t): print("\(dim)✻ title · \(t)\(reset)")
             case .toolProgress(_, _, let lines):
                 for l in lines.suffix(20) { print("\(dim)  │ \(l.prefix(200))\(reset)") }
             case .jobOutput(let job, let lines):
@@ -161,12 +165,13 @@ func main() async {
         }
         let bench = Workbench(services: services)
         bench.onOutput = { print($0) }
+        bench.autoTitle = o.autoTitle
         await bench.start()
         print("\(orange)✻ SieveSci \(SieveSci.version)\(reset) \(dim)task \(task) · \(mainModel.0.profile.displayName) / \(mainModel.1) · \(services.toolset.count) tools · \(o.mode.rawValue)\(reset)")
         if let p = o.prompt {
             await bench.submit(p)
             // Headless: stay alive while background jobs run; their notifications wake the agent.
-            while services.jobs.runningCount > 0 || bench.isRunning || services.jobs.hasPendingAny {
+            while services.jobs.runningCount > 0 || bench.isRunning || services.jobs.hasPendingAny || bench.isNamingConversation {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
         } else {

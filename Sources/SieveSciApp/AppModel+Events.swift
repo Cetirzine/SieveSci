@@ -73,6 +73,7 @@ extension AppModel {
         switch ev {
         case .turnStarted(_, "main"): turnFailures[task] = nil
         case .error(let e): turnFailures[task] = e
+        case .titleChanged(let id, let title): applyGeneratedTitle(title, task: id, workspace: backgroundWorkspaces[task])
         default: break
         }
         deliver(ev, task: task)
@@ -270,6 +271,7 @@ extension AppModel {
             if pendingAsk?.id == id { pendingAsk = bench?.services.asks.first }
         case .brainstormChanged(let b): brainstorm = b
         case .ideasChanged(let i): ideas = i
+        case .titleChanged: break   // applied in `route` for every task, open or in the background
         }
     }
 }

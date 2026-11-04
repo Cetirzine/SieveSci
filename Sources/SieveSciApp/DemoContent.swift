@@ -152,7 +152,20 @@ extension AppModel {
             meter = ContextMeter(model: "deepseek-v4-pro", contextWindow: 128_000)
         }
         if env["SIEVESCI_UI_BRAINSTORM"] == "1" || env["SIEVESCI_UI_ASK"] == "1" { loadBrainstormDemo(ask: env["SIEVESCI_UI_ASK"] == "1") }
+        if env["SIEVESCI_UI_AUTOTITLE"] == "1" { demoGeneratedTitles() }
         if let path = env["SIEVESCI_UI_SNAPSHOT"] { Self.snapshotWindow(to: path) }
+    }
+
+    /// `SIEVESCI_UI_AUTOTITLE=1`: the conversations carry generated titles; the open one starts with its
+    /// first question and receives its title through the same event path a live session uses.
+    func demoGeneratedTitles() {
+        taskTitles["guide-design-vegfa"] = "VEGFA exon 1 guide design"
+        taskTitles["amplicon-qc"] = "March amplicon run QC"
+        taskTitles["kinase-hits-2026"] = "Kinase hit selectivity ranking"
+        taskTitles["ic50-refit"] = "IC50 four-parameter refit"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            self.route(.titleChanged(task: self.taskId, title: "SpCas9-HF1 off-targets at EMX1"), task: self.taskId)
+        }
     }
 
     /// `SIEVESCI_UI_SNAPSHOT=<file.png>`: renders the window into a PNG and quits. The app draws its own

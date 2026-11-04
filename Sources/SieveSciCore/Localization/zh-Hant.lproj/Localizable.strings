@@ -194,6 +194,8 @@
 "Light" = "淺色";
 "Dark" = "深色";
 "Show thinking" = "顯示思考過程";
+"Generate conversation titles automatically" = "自動產生對話標題";
+"After the first reply, the worker model names the conversation after its topic. A name you give with Rename is never replaced." = "第一次回覆後，由 執行者模型依話題為對話命名。你用「重新命名」取的名稱不會被取代。";
 "Live monitoring" = "即時監控";
 "Wake the agent when background jobs finish, fail, match a pattern or stall" = "背景工作完成、失敗、符合模式或停滯時喚醒代理";
 "Notify me about job events" = "通知我工作事件";

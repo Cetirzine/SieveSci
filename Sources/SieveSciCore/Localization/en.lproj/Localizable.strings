@@ -194,6 +194,8 @@
 "Light" = "Light";
 "Dark" = "Dark";
 "Show thinking" = "Show thinking";
+"Generate conversation titles automatically" = "Generate conversation titles automatically";
+"After the first reply, the worker model names the conversation after its topic. A name you give with Rename is never replaced." = "After the first reply, the worker model names the conversation after its topic. A name you give with Rename is never replaced.";
 "Live monitoring" = "Live monitoring";
 "Wake the agent when background jobs finish, fail, match a pattern or stall" = "Wake the agent when background jobs finish, fail, match a pattern or stall";
 "Notify me about job events" = "Notify me about job events";

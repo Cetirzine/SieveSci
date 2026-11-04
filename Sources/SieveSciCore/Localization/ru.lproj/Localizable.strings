@@ -194,6 +194,8 @@
 "Light" = "Светлая";
 "Dark" = "Тёмная";
 "Show thinking" = "Показывать размышления";
+"Generate conversation titles automatically" = "Автоматически создавать названия разговоров";
+"After the first reply, the worker model names the conversation after its topic. A name you give with Rename is never replaced." = "После первого ответа модель-исполнитель называет разговор по его теме. Название, заданное через «Переименовать», никогда не заменяется.";
 "Live monitoring" = "Мониторинг в реальном времени";
 "Wake the agent when background jobs finish, fail, match a pattern or stall" = "Будить агента, когда фоновые задания завершаются, падают, совпадают с шаблоном или зависают";
 "Notify me about job events" = "Уведомлять о событиях заданий";
