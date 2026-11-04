@@ -11,6 +11,7 @@ Signals.ignoreBrokenPipes()
 //   sievesci [--workspace DIR] [--provider ID] [--model M] [--task ID] [--mode ask|acceptEdits|auto|plan]
 //            [--checker PROVIDER/MODEL] [--worker PROVIDER/MODEL] [--search brave|tavily|exa|googleCSE|searxng|duckduckgo]
 //            [--retention short|long] [--no-grounding] [--no-auto-delegate] [--max-workers N] [-p "prompt"]
+//   sievesci serve [same options]   JSON-RPC over stdio for a front end (docs/SERVE_PROTOCOL.md)
 //   sievesci eval oversight [--checker PROVIDER/MODEL | --provider ID [--model M]] [--deterministic-only]
 //            [--corpus FILE] [--out DIR]
 //   sievesci eval verifier  [--checker PROVIDER/MODEL | --provider ID [--model M]] [--corpus FILE] [--out DIR]
@@ -36,9 +37,9 @@ struct Options {
     var effort: Effort?
 }
 
-func parse() -> Options {
+func parse(_ args: [String] = Array(CommandLine.arguments.dropFirst())) -> Options {
     var o = Options()
-    var a = Array(CommandLine.arguments.dropFirst())
+    var a = args
     while !a.isEmpty {
         let k = a.removeFirst()
         func v() -> String { a.isEmpty ? "" : a.removeFirst() }
@@ -80,39 +81,71 @@ setvbuf(stdout, nil, _IONBF, 0)
 let cliSecrets = KeychainFallbackSecretStore()
 let dim = "\u{1B}[2m", reset = "\u{1B}[0m", orange = "\u{1B}[38;5;173m", red = "\u{1B}[31m", green = "\u{1B}[32m"
 
+/// Models, search and session settings from the command line, for one task.
+func buildServices(_ o: Options, task: String) throws -> (SessionServices, (LLMProvider, String)) {
+    let mainModel = try makeProvider(o.provider, o.model)
+    var checker: (LLMProvider, String)?
+    if let c = o.checker {
+        let parts = c.split(separator: "/", maxSplits: 1).map(String.init)
+        checker = try makeProvider(parts[0], parts.count > 1 ? parts[1] : nil)
+    }
+    var search = WebSearchConfig()
+    if let b = o.search {
+        search.backend = b
+        search.apiKeyRef = ["brave": "BRAVE_API_KEY", "tavily": "TAVILY_API_KEY", "exa": "EXA_API_KEY", "googleCSE": "GOOGLE_CSE_KEY"][b.rawValue] ?? ""
+    }
+    search.searxngURL = ProcessInfo.processInfo.environment["SEARXNG_URL"] ?? search.searxngURL
+    var worker: (LLMProvider, String)?
+    if let w = o.worker {
+        let parts = w.split(separator: "/", maxSplits: 1).map(String.init)
+        worker = try makeProvider(parts[0], parts.count > 1 ? parts[1] : nil)
+    }
+    var roleModels = RoleModels(main: mainModel, checker: checker, verifier: checker, worker: worker)
+    // A second reviewer when the first declines or fails (the main model when a separate checker is set).
+    if checker != nil { roleModels.alternates = [mainModel] }
+    let services = try SessionServices(taskId: task, workspace: URL(fileURLWithPath: o.workspace),
+                                       models: roleModels,
+                                       secrets: cliSecrets, webSearch: search, permissionMode: o.mode,
+                                       contactEmail: ProcessInfo.processInfo.environment["SIEVESCI_EMAIL"] ?? "", retention: o.retention)
+    services.research.groundingRequired = o.grounding
+    services.effort = o.effort
+    services.delegation.auto = o.autoDelegate
+    if let n = o.maxWorkers { services.delegation.maxParallel = n }
+    return (services, mainModel)
+}
+
+/// `sievesci serve [options]`: JSON-RPC over stdio for a front end (docs/SERVE_PROTOCOL.md).
+func serve(_ args: [String]) async {
+    let o = parse(args)
+    let model: String
+    do { model = try makeProvider(o.provider, o.model).1 } catch {
+        FileHandle.standardError.writeSafely(Data("sievesci serve: \(error.localizedDescription)\n".utf8))
+        exit(1)
+    }
+    let out = NSLock()
+    let server = ServeServer(workspace: URL(fileURLWithPath: o.workspace),
+                             info: ["provider": .string(o.provider), "model": .string(model), "mode": .string(o.mode.rawValue)],
+                             makeServices: { id in try buildServices(o, task: id).0 },
+                             write: { line in out.withLock { _ = FileHandle.standardOutput.writeSafely(Data((line + "\n").utf8)) } })
+    // Each request is handled on its own, so an answer to a permission request never waits behind
+    // a slow one. A `shutdown` ends the process once it has answered.
+    await withTaskGroup(of: Void.self) { group in
+        while let line = readLine(strippingNewline: true) {
+            group.addTask {
+                await server.handle(line)
+                if server.isClosed { exit(0) }
+            }
+        }
+    }
+    await server.shutdown()
+}
+
 @MainActor
 func main() async {
     let o = parse()
     do {
-        let mainModel = try makeProvider(o.provider, o.model)
-        var checker: (LLMProvider, String)?
-        if let c = o.checker {
-            let parts = c.split(separator: "/", maxSplits: 1).map(String.init)
-            checker = try makeProvider(parts[0], parts.count > 1 ? parts[1] : nil)
-        }
-        var search = WebSearchConfig()
-        if let b = o.search {
-            search.backend = b
-            search.apiKeyRef = ["brave": "BRAVE_API_KEY", "tavily": "TAVILY_API_KEY", "exa": "EXA_API_KEY", "googleCSE": "GOOGLE_CSE_KEY"][b.rawValue] ?? ""
-        }
-        search.searxngURL = ProcessInfo.processInfo.environment["SEARXNG_URL"] ?? search.searxngURL
         let task = o.task ?? ISO8601DateFormatter.string(from: Date(), timeZone: .current, formatOptions: [.withFullDate]) + "-" + String(UUID().uuidString.prefix(6)).lowercased()
-        var worker: (LLMProvider, String)?
-        if let w = o.worker {
-            let parts = w.split(separator: "/", maxSplits: 1).map(String.init)
-            worker = try makeProvider(parts[0], parts.count > 1 ? parts[1] : nil)
-        }
-        var roleModels = RoleModels(main: mainModel, checker: checker, verifier: checker, worker: worker)
-        // A second reviewer when the first declines or fails (the main model when a separate checker is set).
-        if checker != nil { roleModels.alternates = [mainModel] }
-        let services = try SessionServices(taskId: task, workspace: URL(fileURLWithPath: o.workspace),
-                                           models: roleModels,
-                                           secrets: cliSecrets, webSearch: search, permissionMode: o.mode,
-                                           contactEmail: ProcessInfo.processInfo.environment["SIEVESCI_EMAIL"] ?? "", retention: o.retention)
-        services.research.groundingRequired = o.grounding
-        services.effort = o.effort
-        services.delegation.auto = o.autoDelegate
-        if let n = o.maxWorkers { services.delegation.maxParallel = n }
+        let (services, mainModel) = try buildServices(o, task: task)
         // Only an interactive terminal can answer questions; `-p` runs get "nobody to ask".
         services.asks.interactive = o.prompt == nil
         services.emit = { ev in
@@ -454,6 +487,8 @@ ToolBridge.shared.bridgeCommand = (Bundle.main.executableURL?.resolvingSymlinksI
 let cliArgs = Array(CommandLine.arguments.dropFirst())
 if cliArgs.first == "mcp-bridge" {
     await mcpBridge()
+} else if cliArgs.first == "serve" {
+    await serve(Array(cliArgs.dropFirst()))
 } else if cliArgs.first == "quota" {
     await quota(Array(cliArgs.dropFirst()))
 } else if cliArgs.first == "ping" {
