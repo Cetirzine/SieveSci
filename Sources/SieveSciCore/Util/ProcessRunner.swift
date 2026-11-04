@@ -18,16 +18,24 @@ public enum ProcessRunner {
         var env = ProcessInfo.processInfo.environment
         #if os(macOS)
         let shell = env["SHELL"] ?? "/bin/zsh"
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: shell)
-        p.arguments = ["-ilc", "printf %s \"$PATH\""]
-        let out = Pipe()
-        p.standardOutput = out
-        p.standardError = FileHandle.nullDevice
-        if (try? p.run()) != nil {
-            p.waitUntilExit()
+        // Interactive first (conda and friends extend PATH in .zshrc), then a plain login shell.
+        // Started from a terminal, an interactive shell with job control tries to take over that
+        // terminal from its background process group and stops: `+m` turns job control off, stdin
+        // is closed, and each try still has a deadline.
+        for flags in [["-i", "+m", "-l", "-c"], ["-l", "-c"]] {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: shell)
+            p.arguments = flags + ["printf %s \"$PATH\""]
+            let out = Pipe()
+            p.standardInput = FileHandle.nullDevice
+            p.standardOutput = out
+            p.standardError = FileHandle.nullDevice
+            guard (try? p.run()) != nil else { continue }
+            let deadline = Date().addingTimeInterval(5)
+            while p.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.02) }
+            if p.isRunning { p.terminate(); continue }
             let path = String(decoding: out.fileHandleForReading.readRest(), as: UTF8.self)
-            if !path.isEmpty { env["PATH"] = path }
+            if !path.isEmpty { env["PATH"] = path; break }
         }
         #endif
         return env
