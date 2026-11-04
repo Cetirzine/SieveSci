@@ -76,7 +76,7 @@ import Testing
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hung-cli-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let pidFile = dir.appendingPathComponent("pid")
-        let script = try makeScript(in: dir, name: "fake-agy", "\(bashPidCommand) > '\(pidFile.path)'\nsleep 60\n")
+        let script = try makeScript(in: dir, name: "fake-agy", "\(bashPidCommand) > '\(pidFile.path)'\n\(Platform.isWindows ? "" : "exec ")sleep 60\n")
         var profile = ProviderPresets.profile(id: "codex")!
         profile.executable = script.path
         let p = CLIAgentProvider(profile: profile)
@@ -225,8 +225,11 @@ extension ToolBridgeHTTP {
             #expect((resp as? HTTPURLResponse)?.statusCode == 200)
             return String(decoding: data, as: UTF8.self)
         }
-        // A body far larger than one read, then many at once.
-        #expect(try await call(0, bytes: 300_000) == #"{"path":"/mcp/0","bytes":300000,"auth":"Bearer t0"}"#)
+        // A body far larger than one read, over the bridge's own client (URLSession on Apple
+        // platforms, raw sockets elsewhere), then many at once.
+        let big = try await LoopbackHTTPClient.post(URL(string: "http://127.0.0.1:\(server.port)/mcp/0")!, headers: ["Authorization": "Bearer t0"],
+                                                    body: Data(repeating: 65, count: 300_000))
+        #expect(big.0 == 200 && String(decoding: big.1, as: UTF8.self) == #"{"path":"/mcp/0","bytes":300000,"auth":"Bearer t0"}"#)
         let replies = try await withThrowingTaskGroup(of: (Int, String).self) { g in
             for i in 1...24 { g.addTask { (i, try await call(i, bytes: 64)) } }
             return try await g.reduce(into: [Int: String]()) { $0[$1.0] = $1.1 }

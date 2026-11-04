@@ -20,7 +20,7 @@ enum StateFile {
         guard let url else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         guard let d = try? encoder().encode(value) else { return }
-        try? d.write(to: url, options: .atomic)
+        try? d.writeReliably(to: url)
     }
 
     static func load<T: Decodable>(_ type: T.Type, from url: URL?) -> T? {
@@ -37,7 +37,7 @@ enum StateFile {
             try? h.write(contentsOf: d)
         } else {
             try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? d.write(to: url, options: .atomic)
+            try? d.writeReliably(to: url)
         }
     }
 

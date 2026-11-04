@@ -658,7 +658,7 @@ final class TurnDraft: @unchecked Sendable {
     private func write() {
         guard let m = message(), let data = try? JSONCodec.canonicalData(encodable: m) else { return }
         lock.withLock { lastWrite = Date() }
-        try? data.write(to: url, options: .atomic)
+        try? data.writeReliably(to: url)
     }
 
     func clear() { try? FileManager.default.removeItem(at: url) }

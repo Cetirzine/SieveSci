@@ -41,6 +41,20 @@ public enum Platform {
         #endif
     }
 
+    /// Where SieveSci writes diagnostic logs: ~/Library/Logs/SieveSci on macOS,
+    /// %LOCALAPPDATA%\SieveSci\Logs on Windows, ~/.sievesci/logs elsewhere.
+    public static var logsDirectory: URL {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        #if os(macOS)
+        return home.appendingPathComponent("Library/Logs/SieveSci")
+        #elseif os(Windows)
+        let base = ProcessInfo.processInfo.environment["LOCALAPPDATA"].map { URL(fileURLWithPath: $0) } ?? home.appendingPathComponent("AppData/Local")
+        return base.appendingPathComponent("SieveSci").appendingPathComponent("Logs")
+        #else
+        return home.appendingPathComponent(".sievesci/logs")
+        #endif
+    }
+
     /// A virtual environment's interpreter.
     public static func venvPython(_ dir: URL) -> URL {
         isWindows ? dir.appendingPathComponent("Scripts").appendingPathComponent("python.exe")

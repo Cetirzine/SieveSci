@@ -203,7 +203,7 @@ public enum ScienceConnectors {
                          "env": .object(c.env.mapValues { .string($0) })]
         root["mcpServers"] = .object(servers)
         try FileManager.default.createDirectory(at: config.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data(JSONCodec.pretty(.object(root)).utf8).write(to: config, options: .atomic)
+        try Data(JSONCodec.pretty(.object(root)).utf8).writeReliably(to: config)
         let missing = ProcessRunner.which(c.requires) == nil
         return "Connected \(c.title) in \(config.path). It starts with the next session." +
             (missing ? " It needs `\(c.requires)` (install uv: https://docs.astral.sh/uv/)." : "")

@@ -178,7 +178,7 @@ public final class ModelCapabilities: @unchecked Sendable {
 
     func save() {
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if let d = try? JSONEncoder().encode(store) { try? d.write(to: url, options: .atomic) }
+        if let d = try? JSONEncoder().encode(store) { try? d.writeReliably(to: url) }
     }
 
     public func remember(listing: [DiscoveredModel], profile: String) {

@@ -200,7 +200,7 @@ public enum NotebookExport {
             "nbformat": 4, "nbformat_minor": 5,
         ]
         let url = services.taskDir.appendingPathComponent("analysis.ipynb")
-        guard (try? Data(nb.canonical.utf8).write(to: url, options: .atomic)) != nil else { return nil }
+        guard (try? Data(nb.canonical.utf8).writeReliably(to: url)) != nil else { return nil }
         return url
     }
 }

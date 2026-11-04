@@ -232,7 +232,7 @@ extension CLIAgentProvider {
         let server: JSON = ["type": "stdio", "command": .string(mcp.command[0]), "args": .array(mcp.command.dropFirst().map { .string($0) }),
                             "env": .object(mcp.env.mapValues { .string($0) })]
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("sievesci-mcp-\(mcp.token.prefix(8)).json")
-        guard (try? Data(JSON.object(["mcpServers": ["sievesci": server]]).canonical.utf8).write(to: url, options: .atomic)) != nil else { return nil }
+        guard (try? Data(JSON.object(["mcpServers": ["sievesci": server]]).canonical.utf8).writeReliably(to: url)) != nil else { return nil }
         return url.path
     }
 

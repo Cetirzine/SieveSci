@@ -392,7 +392,7 @@ func mcpBridge() async {
     let out = NSLock()
     func emit(_ s: String) { out.withLock { FileHandle.standardOutput.writeSafely(Data((s + "\n").utf8)) }; trace("→cli " + s.prefix(120)) }
     // A timing trace, to see where a call waits: ~/Library/Logs/SieveSci/mcp-bridge.log (kept small).
-    let logURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/SieveSci/mcp-bridge.log")
+    let logURL = Platform.logsDirectory.appendingPathComponent("mcp-bridge.log")
     try? FileManager.default.createDirectory(at: logURL.deletingLastPathComponent(), withIntermediateDirectories: true)
     if ((try? FileManager.default.attributesOfItem(atPath: logURL.path)[.size] as? Int) ?? 0) ?? 0 > 2_000_000 { try? FileManager.default.removeItem(at: logURL) }
     let pid = ProcessInfo.processInfo.processIdentifier
@@ -427,9 +427,13 @@ func mcpBridge() async {
         r.timeoutInterval = 3600   // a tool call (a long analysis) can take a while
         do {
             trace("→sieve id \(msg["id"]?.canonical ?? "-")")
+            #if canImport(Darwin)
             let (data, resp) = try await URLSession.shared.data(for: r)
-            trace("←sieve id \(msg["id"]?.canonical ?? "-") status \((resp as? HTTPURLResponse)?.statusCode ?? 0)")
             let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            #else
+            let (status, data) = try await LoopbackHTTPClient.post(target, headers: ["Content-Type": "application/json", "Authorization": "Bearer \(token)"], body: r.httpBody ?? Data())
+            #endif
+            trace("←sieve id \(msg["id"]?.canonical ?? "-") status \(status)")
             if status == 200, !data.isEmpty { emit(String(decoding: data, as: UTF8.self).replacingOccurrences(of: "\n", with: " ")) }
             else if status >= 400, let id = msg["id"], !id.isNull {
                 emit(JSON.object(["jsonrpc": "2.0", "id": id, "error": ["code": -32000, "message": .string("SieveSci session unavailable (HTTP \(status))")]]).canonical)

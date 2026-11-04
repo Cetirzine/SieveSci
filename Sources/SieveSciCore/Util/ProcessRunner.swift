@@ -226,7 +226,7 @@ public enum ProcessRunner {
             let tail = [outLines.flush(), errLines.flush()].compactMap { $0 }
             if !tail.isEmpty { onLines(tail) }
         }
-        return ProcessResult(exitCode: exit.status ?? (timedOut ? 137 : -1), stdout: collector.out, stderr: collector.err,
+        return ProcessResult(exitCode: exit.status ?? ProcessRunner.exitCode(pid) ?? (timedOut ? 137 : -1), stdout: collector.out, stderr: collector.err,
                              timedOut: timedOut, duration: Date().timeIntervalSince(start))
     }
 

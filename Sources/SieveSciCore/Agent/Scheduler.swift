@@ -35,7 +35,7 @@ public enum Scheduler {
     static func save(_ ts: [ScheduledTask]) {
         let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]; enc.dateEncodingStrategy = .iso8601
         try? FileManager.default.createDirectory(at: registry.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? enc.encode(ts).write(to: registry, options: .atomic)
+        try? enc.encode(ts).writeReliably(to: registry)
     }
 
     /// Parses the schedule into launchd keys: either StartCalendarInterval or StartInterval.
@@ -118,7 +118,7 @@ public enum Scheduler {
         try? FileManager.default.createDirectory(at: agentsDir, withIntermediateDirectories: true)
         try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
         let url = agentsDir.appendingPathComponent(label + t.id + ".plist")
-        do { try data.write(to: url, options: .atomic) } catch { return L10n.s("Could not write %@: %@", url.path, error.localizedDescription) }
+        do { try data.writeReliably(to: url) } catch { return L10n.s("Could not write %@: %@", url.path, error.localizedDescription) }
         let r = try? await ProcessRunner.run("launchctl", ["bootstrap", "gui/\(getuid())", url.path], timeout: 30)
         save(list() + [t])
         return L10n.s("Scheduled %@: “%@” %@ in %@", t.id, prompt.truncated(80, marker: "…"), when, workspace.lastPathComponent)

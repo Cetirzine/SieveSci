@@ -50,7 +50,7 @@ private func record(_ s: SessionServices, _ tool: String, _ text: String, role: 
         let ws = try tempWorkspace()
         do { record(try services(at: ws), "python", "p = 0.20") }
         let out = ws.appendingPathComponent(".sievesci/tasks/t1/state/outputs/r1.txt")
-        try "p = 0.001".write(to: out, atomically: true, encoding: .utf8)
+        try "p = 0.001".writeReliably(to: out)
         let s = try services(at: ws)
         #expect(s.ledger.tamperedOutputs == ["r1"])
         #expect(s.ledger.output("r1") == nil)
@@ -79,9 +79,9 @@ private func record(_ s: SessionServices, _ tool: String, _ text: String, role: 
     func fixture() throws -> Fixture {
         let ws = try tempWorkspace()
         let s = try services(at: ws)
-        try "print('secret method')".write(to: ws.appendingPathComponent("analysis.py"), atomically: true, encoding: .utf8)
+        try "print('secret method')".writeReliably(to: ws.appendingPathComponent("analysis.py"))
         try FileManager.default.createDirectory(at: ws.appendingPathComponent("data"), withIntermediateDirectories: true)
-        try "a,b\n1,2\n".write(to: ws.appendingPathComponent("data/raw.csv"), atomically: true, encoding: .utf8)
+        try "a,b\n1,2\n".writeReliably(to: ws.appendingPathComponent("data/raw.csv"))
         let sandbox = s.taskDir.appendingPathComponent("verify/C1")
         try FileManager.default.createDirectory(at: sandbox, withIntermediateDirectories: true)
         let v = s.makeSubagent(role: .verifier, writeRoot: sandbox, readable: [sandbox.path, ws.appendingPathComponent("data/raw.csv").path])

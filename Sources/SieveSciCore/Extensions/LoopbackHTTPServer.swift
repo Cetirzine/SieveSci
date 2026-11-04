@@ -33,17 +33,7 @@ final class LoopbackHTTPServer: @unchecked Sendable {
         Self.startup()
         let s = Self.makeSocket()
         guard s != Self.invalid else { return nil }
-        var addr = sockaddr_in()
-        #if canImport(Darwin)
-        addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
-        #endif
-        #if os(Windows)
-        addr.sin_family = ADDRESS_FAMILY(AF_INET)
-        #else
-        addr.sin_family = sa_family_t(AF_INET)
-        #endif
-        addr.sin_port = 0
-        withUnsafeMutableBytes(of: &addr.sin_addr) { b in b[0] = 127; b[1] = 0; b[2] = 0; b[3] = 1 }
+        var addr = Self.loopback(port: 0)
         let bound = withUnsafePointer(to: &addr) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(s, $0, Self.addrLength) }
         }
@@ -109,6 +99,22 @@ final class LoopbackHTTPServer: @unchecked Sendable {
         var head = "HTTP/1.1 \(status)\r\nContent-Length: \(body.count)\r\nConnection: close\r\n"
         if !body.isEmpty { head += "Content-Type: application/json\r\n" }
         Self.sendAll(c, Data((head + "\r\n").utf8) + body)
+    }
+
+    /// 127.0.0.1:port.
+    static func loopback(port: UInt16) -> sockaddr_in {
+        var addr = sockaddr_in()
+        #if canImport(Darwin)
+        addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        #endif
+        #if os(Windows)
+        addr.sin_family = ADDRESS_FAMILY(AF_INET)
+        #else
+        addr.sin_family = sa_family_t(AF_INET)
+        #endif
+        addr.sin_port = port.bigEndian
+        withUnsafeMutableBytes(of: &addr.sin_addr) { b in b[0] = 127; b[1] = 0; b[2] = 0; b[3] = 1 }
+        return addr
     }
 
     // MARK: Platform shims
@@ -183,5 +189,52 @@ final class LoopbackHTTPServer: @unchecked Sendable {
                 offset += n
             }
         }
+    }
+}
+
+/// The client side for 127.0.0.1: one POST, read to the end. The CLI's MCP bridge uses it off Apple
+/// platforms, where URLSession (libcurl) has upload quirks a localhost hop does not need.
+public enum LoopbackHTTPClient {
+    public struct Failure: Error, CustomStringConvertible { public var description: String }
+
+    /// POSTs `body` to `url` (which must be http://127.0.0.1:port/...) and returns status and body.
+    public static func post(_ url: URL, headers: [String: String], body: Data) async throws -> (Int, Data) {
+        guard url.host == "127.0.0.1", let port = url.port else { throw Failure(description: "not a loopback URL: \(url)") }
+        let path = url.path.isEmpty ? "/" : url.path
+        return try await withCheckedThrowingContinuation { cont in
+            let t = Thread { cont.resume(with: Result { try postSync(port: UInt16(port), path: path, headers: headers, body: body) }) }
+            t.start()
+        }
+    }
+
+    static func postSync(port: UInt16, path: String, headers: [String: String], body: Data) throws -> (Int, Data) {
+        typealias S = LoopbackHTTPServer
+        S.startup()
+        let s = S.makeSocket()
+        guard s != S.invalid else { throw Failure(description: "socket() failed") }
+        defer { S.closeSocket(s) }
+        var addr = S.loopback(port: port)
+        let ok = withUnsafePointer(to: &addr) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(s, $0, S.addrLength) } }
+        guard ok == 0 else { throw Failure(description: "cannot connect to 127.0.0.1:\(port)") }
+        S.noDelay(s)
+        var head = "POST \(path) HTTP/1.1\r\nHost: 127.0.0.1:\(port)\r\nContent-Length: \(body.count)\r\nConnection: close\r\n"
+        for (k, v) in headers { head += "\(k): \(v)\r\n" }
+        S.sendAll(s, Data((head + "\r\n").utf8) + body)
+        var reply = Data()
+        var chunk = [UInt8](repeating: 0, count: 65_536)
+        while true {
+            let n = S.receive(s, &chunk)
+            if n <= 0 { break }
+            reply.append(contentsOf: chunk[0..<n])
+        }
+        guard let sep = reply.range(of: Data("\r\n\r\n".utf8)) else { throw Failure(description: "no HTTP reply") }
+        let headText = String(decoding: reply[reply.startIndex..<sep.lowerBound], as: UTF8.self)
+        let status = headText.split(separator: " ", maxSplits: 2).dropFirst().first.flatMap { Int($0) } ?? 0
+        var payload = Data(reply[sep.upperBound...])
+        if let line = headText.components(separatedBy: "\r\n").first(where: { $0.lowercased().hasPrefix("content-length:") }),
+           let n = Int(line.split(separator: ":")[1].trimmingCharacters(in: .whitespaces)), payload.count > n {
+            payload = payload.prefix(n)
+        }
+        return (status, payload)
     }
 }

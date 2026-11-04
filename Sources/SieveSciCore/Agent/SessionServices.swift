@@ -274,11 +274,11 @@ public enum ReadOnlyFolders {
         guard !paths.contains(p), p != FilePaths.canonical(workspace.path) else { return }
         paths.append(p)
         try FileManager.default.createDirectory(at: url(workspace).deletingLastPathComponent(), withIntermediateDirectories: true)
-        try JSONEncoder().encode(paths.sorted()).write(to: url(workspace), options: .atomic)
+        try JSONEncoder().encode(paths.sorted()).writeReliably(to: url(workspace))
     }
 
     public static func remove(_ folder: URL, workspace: URL) throws {
         let paths = load(workspace: workspace).map(\.path).filter { $0 != FilePaths.canonical(folder.path) }
-        try JSONEncoder().encode(paths).write(to: url(workspace), options: .atomic)
+        try JSONEncoder().encode(paths).writeReliably(to: url(workspace))
     }
 }

@@ -36,6 +36,18 @@ extension String {
     }
 }
 
+extension Data {
+    /// `write(to:options: .atomic)` that survives a scanner briefly holding the file on Windows
+    /// (see `String.writeReliably`).
+    public func writeReliably(to url: URL) throws {
+        for delay in [0.0, 0.05, 0.15, 0.4] {
+            if delay > 0 { Thread.sleep(forTimeInterval: delay) }
+            do { try write(to: url, options: .atomic); return } catch { if !Platform.isWindows { throw error } }
+        }
+        try write(to: url)
+    }
+}
+
 public enum Signals {
     /// A write to a pipe whose reader has exited sends SIGPIPE, which by default kills the process
     /// without a crash report. Ignored, the write fails with EPIPE and `writeSafely` returns false.
