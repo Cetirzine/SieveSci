@@ -37,3 +37,26 @@ import Testing
         #expect(out.isError && out.text.contains("OpenAlex has no work"))
     }
 }
+
+/// Settings → Literature → "Download open-access PDFs".
+struct OAPDFSetting {
+    func paper() -> PaperRecord {
+        PaperRecord(key: "kim2024oa", title: "An open paper", authors: [], year: 2024, venue: nil, doi: nil, pmid: nil, pmcid: nil, arxiv: "2401.00001",
+                    url: nil, abstract: "We show X.", oaPdfURL: "https://example.org/kim.pdf", pdfPath: nil, textPath: nil, pdfSHA256: nil,
+                    source: "manual", addedAt: Date(), notes: nil)
+    }
+
+    @Test func pdfIsSavedWhenOnAndNotFetchedWhenOff() async throws {
+        for on in [true, false] {
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("lib-\(UUID().uuidString)")
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let http = RoutedHTTP([(".pdf", "%PDF-1.4 not really"), ("arxiv.org/pdf", "%PDF-1.4 not really")])
+            let lib = try LiteratureLibrary(dir: dir, http: http)
+            lib.downloadPDFs = on
+            let r = try await lib.download(lib.add(paper()).key)
+            #expect((r.pdfPath != nil) == on)
+            #expect(http.urls.contains { $0.contains("pdf") } == on, "off means no PDF request at all")
+            if !on { #expect(lib.text(r.key)?.hasPrefix("[abstract only") == true) }
+        }
+    }
+}

@@ -29,6 +29,14 @@ extension AppModel {
                  ("amplicon-qc", Date().addingTimeInterval(-3 * 86400))]
         taskTitles = ["emx1-hf1-offtarget": "Does SpCas9-HF1 reduce off-target editing at EMX1?",
                       "guide-design-vegfa": "Design guides for VEGFA exon 1", "amplicon-qc": "QC the amplicon run from March"]
+        // Another folder's conversations, listed when it is expanded (SIEVESCI_UI_FOLDERS=1 expands it;
+        // =collapsed also collapses the open workspace's folder).
+        let kinase = "/Users/demo/Research/kinase-screen"
+        folderTasks[kinase] = [("kinase-hits-2026", Date().addingTimeInterval(-5 * 3600)), ("ic50-refit", Date().addingTimeInterval(-6 * 86400))]
+        taskTitles["kinase-hits-2026"] = "Rank the screen hits by selectivity"
+        taskTitles["ic50-refit"] = "Refit the IC50 curves with a 4PL model"
+        if env["SIEVESCI_UI_FOLDERS"] == "1" { config.folderOpen = [kinase: true] }
+        if env["SIEVESCI_UI_FOLDERS"] == "collapsed" { config.folderOpen = [kinase: true, ws.path: false] }
         meter = ContextMeter(model: "deepseek-v4-pro", contextWindow: 128_000, lastPromptTokens: 41_300,
                              session: Self.decode(Usage.self, #"{"input":5200,"cacheRead":118000,"cacheWrite":9400,"output":6100,"reasoning":0}"#) ?? Usage())
         figures = [fig]
@@ -143,6 +151,7 @@ extension AppModel {
             streams = ["main": []]; cards = [:]; contested = []; demoAsk = nil; running = false
             meter = ContextMeter(model: "deepseek-v4-pro", contextWindow: 128_000)
         }
+        if env["SIEVESCI_UI_BRAINSTORM"] == "1" || env["SIEVESCI_UI_ASK"] == "1" { loadBrainstormDemo(ask: env["SIEVESCI_UI_ASK"] == "1") }
         if let path = env["SIEVESCI_UI_SNAPSHOT"] { Self.snapshotWindow(to: path) }
     }
 

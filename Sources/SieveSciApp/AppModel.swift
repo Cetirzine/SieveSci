@@ -12,6 +12,7 @@ final class AppModel: ObservableObject {
             if config != oldValue, !Self.isDemo { config.save() }
             // Effort applies from the next model call of the open task, not only to new sessions.
             if config.effort != oldValue.effort { bench?.services.effort = config.effort }
+            if config.autoBrainstorm != oldValue.autoBrainstorm { bench?.services.ideas.autoAllowed = config.autoBrainstorm }
             if config.autoCheckUpdates != oldValue.autoCheckUpdates || config.autoInstallUpdates != oldValue.autoInstallUpdates {
                 configureUpdater()
             }
@@ -35,6 +36,13 @@ final class AppModel: ObservableObject {
     @Published var running = false
     @Published var runStarted = Date()
     @Published var pendingPermission: PermissionRequest?
+    /// The structured question (`ask_user`) the open task waits on.
+    @Published var pendingAsk: AskRequest?
+    /// The open task's brainstorm: live while it runs, kept until the next message once it ends.
+    @Published var brainstorm: BrainstormState?
+    @Published var ideas: [Idea] = []
+    /// Workspaces whose dream ideas were already announced this launch.
+    var dreamNoticeShown: Set<String> = []
     @Published var plan = ResearchPlan()
     @Published var claims: [Claim] = []
     @Published var contested: [(thread: String, kind: String, issue: String, reason: String)] = []
@@ -43,6 +51,8 @@ final class AppModel: ObservableObject {
     @Published var literatureLog: [LiteratureEvent] = []
     @Published var proposals: [EvolutionProposal] = []
     @Published var tasks: [(id: String, modified: Date)] = [] { didSet { refreshTaskTitles() } }
+    /// Conversations of the other sidebar folders that are expanded, by folder path.
+    @Published var folderTasks: [String: [(id: String, modified: Date)]] = [:]
     /// task id → its first question, shown instead of the generated id.
     @Published var taskTitles: [String: String] = [:]
     @Published var commandCatalog: [SlashCommandInfo] = SlashCommands.builtins
@@ -60,6 +70,11 @@ final class AppModel: ObservableObject {
     @Published var showInspector = false
     /// What the main area shows: the conversation or one of the research views.
     @Published var mainTab: MainTab = .chat
+    /// Where each task's conversation was scrolled to, as the distance from its top. A task that is
+    /// absent was at the end, and opens there. Not published: scrolling must not redraw the window.
+    var chatScroll: [String: CGFloat] = [:]
+    /// How many of each task's first rows the conversation leaves undrawn (see `ChatView.page`).
+    var chatHidden: [String: Int] = [:]
     /// Settings open as a full page inside the window.
     @Published var showSettingsPage = false {
         // Coming back from Settings (a key was added, a provider enabled): start the session if none runs.
@@ -249,6 +264,9 @@ final class AppModel: ObservableObject {
                 return
             }
         }
+        // The folder being left stays as it was shown: open by default while current, it would
+        // otherwise fold away in the sidebar on the switch.
+        if let old = workspace?.path, old != url.path, config.folderOpen[old] == nil { config.folderOpen[old] = true }
         workspace = url
         config.recentWorkspaces.removeAll { $0 == url.path }
         config.recentWorkspaces.insert(url.path, at: 0)
@@ -272,6 +290,9 @@ final class AppModel: ObservableObject {
         history = []
         queued = []
         contested = []
+        pendingAsk = nil
+        brainstorm = nil
+        ideas = []
     }
 
     /// Opens a task. A turn still running elsewhere keeps going in the background (switching never
@@ -316,12 +337,22 @@ final class AppModel: ObservableObject {
                                                webSearch: config.webSearch, permissionMode: config.permissionMode,
                                                contactEmail: config.contactEmail, retention: config.retention)
             services.research.groundingRequired = config.groundingRequired
+            services.library.downloadPDFs = config.downloadOAPDFs
             services.effort = config.effort
             services.sandboxMode = config.sandboxMode
             services.supervisorPolicy.maxReviewsPerSession = config.maxReviewsPerSession
             services.deliberation.policy.maxExchanges = config.maxDeliberationExchanges
             services.delegation.auto = config.autoDelegate
             services.delegation.maxParallel = max(1, config.maxParallelWorkers)
+            services.ideas.autoAllowed = config.autoBrainstorm
+            services.asks.interactive = true
+            // Ideas a background dream left: said once, when a task of this workspace opens.
+            let unseen = DreamInbox.unseen(ws).count
+            if unseen > 0, !dreamNoticeShown.contains(ws.path) {
+                dreamNoticeShown.insert(ws.path)
+                notifier.post(title: L("SieveSci dreamed"), body: L10n.f("%d new idea(s) from dreaming. Type /ideas dream to read them.", unseen), id: "dream-\(ws.path.hashValue)")
+                if task != nil { append(.notice(L10n.f("%d new idea(s) from dreaming. Type /ideas dream to read them.", unseen)), to: "main") }
+            }
             if let v = config.visionHelper { services.vision.helper = provider(v) }
             services.emit = { [weak self] ev in Task { @MainActor in self?.route(ev, task: id) } }
             services.requestPermission = { [weak self] req in
@@ -405,6 +436,9 @@ final class AppModel: ObservableObject {
             permissionContinuation = cont
             pendingPermission = req
         }
+        pendingAsk = live.services.asks.first
+        ideas = live.services.ideas.snapshot
+        brainstorm = live.services.ideas.live
         refreshSidePanels()
         refreshStage(id, notify: false)
         Task { await refreshHistory() }
@@ -452,6 +486,7 @@ final class AppModel: ObservableObject {
         if trimmed == "/fork" { fork(); return }
         if trimmed == "/doctor" { Task { let r = await Doctor.run(model: self); append(.notice(r), to: "main") }; return }
         append(.user(trimmed, attachments: attachments.map(\.lastPathComponent)), to: "main")
+        if brainstorm?.endedAt != nil { brainstorm = nil }
         openText["main"] = nil
         openThinking["main"] = nil
         if running {
@@ -488,6 +523,7 @@ final class AppModel: ObservableObject {
         case .harking: return L("Criteria changed after results")
         case .breakthrough: return L("Strong claim — needs verification")
         case .checkpoint: return L("Checkpoint")
+        case .ideation: return L("Idea under review")
         }
     }
 
@@ -533,6 +569,23 @@ final class AppModel: ObservableObject {
         submit("/rewind \(n)", attachments: [])
         if let cut = streams["main"]?.firstIndex(where: { $0.id == item.id }) { streams["main"]?.removeSubrange(cut...) }
     }
+
+    /// Answers the open question card (the waiting tool call, or a question left from the last run).
+    func answerAsk(_ outcome: AskOutcome) {
+        guard let req = pendingAsk, let bench else { return }
+        pendingAsk = nil
+        Task {
+            await bench.answerAsk(req.id, outcome)
+            await MainActor.run {
+                self.pendingAsk = bench.services.asks.first
+                self.refreshStage(self.taskId)
+                if case .answered = outcome, !bench.isRunning { self.turnMaybeEnded() }
+            }
+        }
+    }
+
+    /// Brainstorm controls: finish with what is there, or stop the turn.
+    func wrapUpBrainstorm() { bench?.wrapUpBrainstorm() }
 
     func answerPermission(_ d: PermissionDecision) {
         pendingPermission = nil

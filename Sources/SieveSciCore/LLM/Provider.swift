@@ -285,13 +285,21 @@ public struct LLMResponse: Sendable {
     public var usage: Usage
     public var providerRequestId: String?
     public var servedModel: String?
+    /// Prompt tokens of the last model request, when that differs from `usage`: a CLI agent's turn
+    /// is many requests and its `usage` is their sum, which is not how full the context is.
+    public var contextTokens: Int?
+    /// The context window the provider reported for the served model (Claude Code, Codex).
+    public var contextWindow: Int?
 
-    public init(message: Message, stopReason: StopReason, usage: Usage, providerRequestId: String? = nil, servedModel: String? = nil) {
+    public init(message: Message, stopReason: StopReason, usage: Usage, providerRequestId: String? = nil, servedModel: String? = nil,
+                contextTokens: Int? = nil, contextWindow: Int? = nil) {
         self.message = message
         self.stopReason = stopReason
         self.usage = usage
         self.providerRequestId = providerRequestId
         self.servedModel = servedModel
+        self.contextTokens = contextTokens
+        self.contextWindow = contextWindow
     }
 }
 
@@ -300,6 +308,9 @@ public enum StreamEvent: Sendable {
     case thinkingDelta(String)
     case toolCallStarted(id: String, name: String)
     case toolInputDelta(id: String, partialJSON: String)
+    /// Mid-turn context fill (prompt tokens of the request just made), for providers whose one call
+    /// spans many model requests (CLI agents), so the context ring moves during a long turn.
+    case contextUsage(tokens: Int, window: Int?)
     case completed(LLMResponse)
 }
 

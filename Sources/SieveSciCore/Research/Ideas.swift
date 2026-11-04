@@ -1,0 +1,427 @@
+import Foundation
+
+/// Brainstorming: ideas are speculation, kept apart from hypotheses (registered in the plan) and
+/// claims (verified by the blind verifier). After Google's AI co-scientist (generate → review →
+/// rank → evolve), Stanford's Virtual Lab (parallel creative meetings merged with attribution),
+/// Scideator (facet recombination) and Si et al. (LLM ideas repeat themselves, so deduplicate).
+///
+/// An idea becomes a hypothesis only through `IdeaLedger.promote`, which the host gates: a novelty
+/// verdict backed by searches run after the idea was written, a stated test and falsifier, and an
+/// independent checker review.
+public struct Idea: Codable, Sendable, Equatable, Identifiable {
+    public enum Status: String, Codable, Sendable { case raw, merged, checked, promoted, discarded }
+    public enum Novelty: String, Codable, Sendable {
+        /// Never "novel": only "no prior work found by these searches".
+        case notFound = "not_found_in_search"
+        case incremental, known
+    }
+    public var id: String
+    public var statement: String
+    public var mechanism: String
+    public var test: String
+    public var falsifier: String
+    /// The divergence operator that produced it: facet, analogy, invert, seed, verbalized, merge, evolve:<id>, free.
+    public var op: String
+    public var seeds: [String]
+    public var evidence: [String]
+    public var status: Status
+    /// For `merged`: the idea it duplicates.
+    public var mergedInto: String?
+    public var novelty: Novelty?
+    public var noveltyReceipts: [String]
+    public var closestPrior: [String]
+    public var rank: Int?
+    public var review: String?
+    public var reviewFingerprint: String?
+    public var hypothesisId: String?
+    public var note: String?
+    /// session | brainstorm:<id> | dream:<yyyy-mm-dd>
+    public var origin: String
+    public var createdAt: Date
+
+    public var isLive: Bool { status != .merged && status != .discarded && novelty != .known }
+}
+
+/// One brainstorming episode, as the UI shows it: what it is about, who started it, which stage it
+/// is in, and how the ideas thin out through the sieve.
+public struct BrainstormState: Codable, Sendable, Equatable, Identifiable {
+    public enum Trigger: String, Codable, Sendable { case user, auto, dream }
+    public static let stages = ["ground", "diverge", "dedupe", "rank", "novelty", "review", "evolve", "report"]
+    public var id: String
+    public var topic: String
+    public var reason: String
+    public var trigger: Trigger
+    public var stage: String
+    public var stageNote: String
+    public var stagesDone: [String]
+    public var startedAt: Date
+    public var endedAt: Date?
+    public var summary: String?
+    /// The user asked to wrap up with what is there.
+    public var wrapUpRequested: Bool
+    public var stopped: Bool
+}
+
+public final class IdeaLedger: @unchecked Sendable {
+    private let lock = NSLock()
+    private let stateURL: URL?
+    public private(set) var ideas: [Idea] = []
+    public private(set) var current: BrainstormState?
+    /// Whether the agent may start brainstorming on its own (a setting; the user can always ask).
+    public var autoAllowed = true
+    /// Set by `/brainstorm` and `/dream now`: the next `brainstorm start` was asked for.
+    var requested: BrainstormState.Trigger?
+    private var wrapUpPending = false
+    /// Searches an idea needs, after it was written, before its novelty verdict counts.
+    public static let minNoveltySearches = 3
+    /// Two ideas sharing this much of their vocabulary are the same idea.
+    public static let duplicateThreshold = 0.6
+
+    struct Saved: Codable { var ideas: [Idea]; var current: BrainstormState? }
+
+    public init(stateURL: URL? = nil) {
+        self.stateURL = stateURL
+        if let s = StateFile.load(Saved.self, from: stateURL) {
+            ideas = s.ideas
+            // A brainstorm cut off by a quit is over.
+            current = s.current.map { var c = $0; if c.endedAt == nil { c.endedAt = Date(); c.stopped = true }; return c }
+        }
+    }
+
+    public var snapshot: [Idea] { lock.withLock { ideas } }
+    public var live: BrainstormState? { lock.withLock { current?.endedAt == nil ? current : nil } }
+
+    public func request(_ t: BrainstormState.Trigger) { lock.withLock { requested = t } }
+
+    // MARK: Episodes
+
+    public func start(topic: String, reason: String) -> Result<BrainstormState, GateRefusal> {
+        lock.lock(); defer { lock.unlock() }
+        if let c = current, c.endedAt == nil { return .success(c) }
+        let trigger = requested ?? .auto
+        if trigger == .auto && !autoAllowed {
+            return .failure(GateRefusal("Autonomous brainstorming is turned off in the user's settings. Continue without it; "
+                + "suggest /brainstorm in your reply if new ideas would help."))
+        }
+        requested = nil
+        wrapUpPending = false
+        let s = BrainstormState(id: "B" + String(UUID().uuidString.prefix(6)).lowercased(), topic: topic, reason: reason, trigger: trigger,
+                                stage: "ground", stageNote: "", stagesDone: [], startedAt: Date(), endedAt: nil, summary: nil,
+                                wrapUpRequested: false, stopped: false)
+        current = s
+        persist()
+        return .success(s)
+    }
+
+    public func stage(_ name: String, note: String) -> BrainstormState? {
+        lock.lock(); defer { lock.unlock() }
+        guard var c = current, c.endedAt == nil else { return nil }
+        if c.stage != name, !c.stagesDone.contains(c.stage) { c.stagesDone.append(c.stage) }
+        c.stage = name
+        c.stageNote = note
+        current = c
+        persist()
+        return c
+    }
+
+    public func end(summary: String, stopped: Bool = false) -> BrainstormState? {
+        lock.lock(); defer { lock.unlock() }
+        guard var c = current, c.endedAt == nil else { return nil }
+        if !c.stagesDone.contains(c.stage) { c.stagesDone.append(c.stage) }
+        c.endedAt = Date()
+        c.summary = summary
+        c.stopped = stopped
+        current = c
+        wrapUpPending = false
+        persist()
+        return c
+    }
+
+    /// The user pressed "wrap up": the agent is told at its next step.
+    public func requestWrapUp() -> BrainstormState? {
+        lock.lock(); defer { lock.unlock() }
+        guard var c = current, c.endedAt == nil, !c.wrapUpRequested else { return nil }
+        c.wrapUpRequested = true
+        current = c
+        wrapUpPending = true
+        persist()
+        return c
+    }
+
+    /// The wrap-up note, delivered once with the next tool results.
+    func drainWrapUp() -> String? {
+        lock.lock(); defer { lock.unlock() }
+        guard wrapUpPending else { return nil }
+        wrapUpPending = false
+        return "<brainstorm_wrap_up>The user asked you to wrap up the brainstorm now: generate no more ideas and start no new batches. "
+            + "Finish only the checks already running, then report the best ideas so far (marked as speculation, with what was and was not checked) "
+            + "and call `brainstorm` end.</brainstorm_wrap_up>"
+    }
+
+    // MARK: Ideas
+
+    /// Adds ideas; near-duplicates of a live idea are recorded as `merged` into it.
+    public func add(_ new: [Idea]) -> [Idea] {
+        lock.lock(); defer { lock.unlock() }
+        var added: [Idea] = []
+        for var idea in new {
+            idea.id = "I\(ideas.count + 1)"
+            let words = Self.terms(idea.statement + " " + idea.mechanism)
+            if let dup = ideas.first(where: { $0.status != .merged && $0.status != .discarded
+                && Self.similarity(words, Self.terms($0.statement + " " + $0.mechanism)) >= Self.duplicateThreshold }) {
+                idea.status = .merged
+                idea.mergedInto = dup.id
+            }
+            ideas.append(idea)
+            added.append(idea)
+        }
+        persist()
+        return added
+    }
+
+    public func discard(_ id: String, reason: String) -> Idea? {
+        mutate(id) { $0.status = .discarded; $0.note = reason }
+    }
+
+    public func setRanks(_ order: [String]) {
+        lock.lock(); defer { lock.unlock() }
+        for (i, id) in order.enumerated() { if let k = ideas.firstIndex(where: { $0.id == id }) { ideas[k].rank = i + 1 } }
+        persist()
+    }
+
+    /// Records a novelty verdict. The searches must exist, have succeeded, and postdate the idea.
+    public func setNovelty(_ id: String, _ verdict: Idea.Novelty, prior: [String], receipts: [String], ledger: EvidenceLedger) -> Result<Idea, GateRefusal> {
+        guard let idea = snapshot.first(where: { $0.id == id }) else { return .failure(GateRefusal("No idea \(id).")) }
+        let searchTools = ResearchProtocol.webSearchTools.union(ResearchProtocol.literatureTools)
+        let valid = receipts.filter { r in
+            guard let rc = ledger.receipt(r) else { return false }
+            return rc.success && searchTools.contains(rc.tool) && rc.startedAt >= idea.createdAt.addingTimeInterval(-1)
+        }
+        if verdict != .known && valid.count < Self.minNoveltySearches {
+            return .failure(GateRefusal("A novelty verdict needs at least \(Self.minNoveltySearches) successful searches (web_search, literature_search, paper_graph …) "
+                + "run after \(id) was written; cite their receipt ids. Valid so far: \(valid.isEmpty ? "none" : valid.joined(separator: ", ")). "
+                + "Search synonyms, the mechanism, the method and the organism, read the closest papers, then record the verdict."))
+        }
+        if verdict == .incremental && prior.isEmpty || verdict == .known && prior.isEmpty {
+            return .failure(GateRefusal("Name the prior work ([@key] or a URL) that makes \(id) \(verdict.rawValue)."))
+        }
+        guard let out = mutate(id, { i in
+            i.novelty = verdict
+            i.noveltyReceipts = valid
+            i.closestPrior = prior
+            if i.status == .raw { i.status = .checked }
+            if verdict == .known { i.status = .discarded; i.note = "already published" }
+        }) else { return .failure(GateRefusal("No idea \(id).")) }
+        return .success(out)
+    }
+
+    /// What must hold before an idea may become a hypothesis (the review comes on top).
+    public func promotionBlocker(_ id: String) -> String? {
+        guard let i = snapshot.first(where: { $0.id == id }) else { return "No idea \(id)." }
+        if i.status == .promoted { return "\(id) is already hypothesis \(i.hypothesisId ?? "?")." }
+        if i.status == .merged { return "\(id) duplicates \(i.mergedInto ?? "another idea"); promote that one." }
+        if i.status == .discarded { return "\(id) was discarded (\(i.note ?? ""))." }
+        guard let n = i.novelty else {
+            return "\(id) has no novelty check yet: search for prior work (at least \(Self.minNoveltySearches) searches) and record it with `idea` action novelty."
+        }
+        if n == .known { return "\(id) is already published." }
+        if i.test.trimmingCharacters(in: .whitespaces).isEmpty || i.falsifier.trimmingCharacters(in: .whitespaces).isEmpty {
+            return "\(id) needs a concrete test and a falsifier (what result would refute it) before it can be registered."
+        }
+        return nil
+    }
+
+    public func setReview(_ id: String, verdict: String, fingerprint: String) {
+        _ = mutate(id) { $0.review = verdict; $0.reviewFingerprint = fingerprint }
+    }
+
+    public func markPromoted(_ id: String, hypothesis: String) -> Idea? {
+        mutate(id) { $0.status = .promoted; $0.hypothesisId = hypothesis }
+    }
+
+    @discardableResult
+    func mutate(_ id: String, _ f: (inout Idea) -> Void) -> Idea? {
+        lock.lock(); defer { lock.unlock() }
+        guard let k = ideas.firstIndex(where: { $0.id == id }) else { return nil }
+        f(&ideas[k])
+        persist()
+        return ideas[k]
+    }
+
+    private func persist() { StateFile.save(Saved(ideas: ideas, current: current), to: stateURL) }
+
+    // MARK: Similarity (cheap and language-agnostic: words, plus character bigrams for CJK)
+
+    static let stop: Set<String> = ["the", "and", "for", "with", "that", "this", "from", "into", "are", "was", "via", "its", "their",
+                                    "which", "can", "may", "will", "not", "but", "has", "have", "been", "more", "less", "than", "by", "of", "in", "on", "to", "a", "an", "is", "be", "as", "or", "at"]
+
+    static func terms(_ s: String) -> Set<String> {
+        var out: Set<String> = []
+        var word = ""
+        var cjk: [Character] = []
+        func flushWord() { let w = word.lowercased(); if w.count >= 3, !stop.contains(w) { out.insert(w) }; word = "" }
+        func flushCJK() {
+            if cjk.count == 1 { out.insert(String(cjk)) }
+            if cjk.count >= 2 { for i in 0..<(cjk.count - 1) { out.insert(String(cjk[i...i + 1])) } }
+            cjk = []
+        }
+        for ch in s {
+            if ch.unicodeScalars.first.map({ (0x4E00...0x9FFF).contains($0.value) || (0x3400...0x4DBF).contains($0.value) }) == true {
+                flushWord(); cjk.append(ch)
+            } else if ch.isLetter || ch.isNumber {
+                flushCJK(); word.append(ch)
+            } else {
+                flushWord(); flushCJK()
+            }
+        }
+        flushWord(); flushCJK()
+        return out
+    }
+
+    static func similarity(_ a: Set<String>, _ b: Set<String>) -> Double {
+        guard !a.isEmpty, !b.isEmpty else { return 0 }
+        return Double(a.intersection(b).count) / Double(a.union(b).count)
+    }
+}
+
+public struct GateRefusal: Error, Sendable { public let message: String; public init(_ m: String) { message = m } }
+
+/// Seeds for divergent thinking. Not random tokens: concepts drawn from controlled sources (the task
+/// library's own vocabulary, a curated cross-domain list), with a recorded RNG seed so a run can be
+/// replayed. A seed is a provocation; whatever it suggests still has to be searched.
+public enum IdeationSeeds {
+    /// Mechanisms and design patterns from many fields, for forced association and analogy.
+    public static let crossDomain: [String] = [
+        "negative feedback loop", "positive feedback / bistability", "phase separation", "percolation threshold", "allostery",
+        "kinetic proofreading", "error-correcting codes", "redundancy and degeneracy", "modularity", "scale-free networks",
+        "quorum sensing", "public goods dilemma", "predator–prey oscillation", "niche construction", "island biogeography",
+        "evolutionary arms race", "bet hedging", "division of labour", "self-assembly", "templating",
+        "catalytic cycle", "autocatalysis", "chirality transfer", "host–guest recognition", "metal–organic frameworks",
+        "click chemistry", "photoswitching", "mechanochemistry", "flow chemistry", "directed evolution",
+        "compartmentalisation", "gradient sensing", "temporal coding", "adaptation / desensitisation", "hysteresis",
+        "load balancing", "caching", "garbage collection", "backpressure", "consensus protocols",
+        "supply chains / bottlenecks", "inventory buffers", "auction mechanisms", "insurance / risk pooling", "market makers",
+        "lock-and-key", "induced fit", "conformational selection", "lever and fulcrum", "springs and dampers",
+        "resonance", "impedance matching", "signal-to-noise / averaging", "stochastic resonance", "sparsity",
+        "dimensionality reduction", "transfer learning", "adversarial examples", "active learning", "curriculum",
+        "origami folding", "tensegrity", "porous media transport", "capillarity", "biofilms",
+        "symbiosis", "horizontal gene transfer", "genetic drift", "founder effect", "epistasis",
+        "circadian timing", "dormancy", "regeneration", "senescence", "immune memory",
+        "decoys and sinks", "sequestration", "prodrugs / latent activation", "targeted degradation", "molecular glues",
+        "barcoding", "lineage tracing", "pooled screens", "multiplexing", "single-molecule counting",
+        "inverse problems", "tomography", "interferometry", "time-resolved snapshots", "perturbation–response mapping",
+    ]
+
+    /// Distinctive words from the library's titles and abstracts (frequent but not ubiquitous).
+    public static func libraryTerms(_ records: [PaperRecord]) -> [String] {
+        var df: [String: Int] = [:]
+        for r in records {
+            for t in IdeaLedger.terms(r.title + " " + (r.abstract ?? "")) where t.count >= 5 || t.unicodeScalars.contains(where: { $0.value >= 0x3400 }) {
+                df[t, default: 0] += 1
+            }
+        }
+        let n = max(records.count, 1)
+        return df.filter { $0.value >= 1 && Double($0.value) / Double(n) < 0.5 }
+            .sorted { ($0.value, $0.key) > ($1.value, $1.key) }.prefix(200).map(\.key)
+    }
+
+    /// Library papers sharing the least vocabulary with the topic: distant material for analogy.
+    public static func farPapers(_ records: [PaperRecord], topic: String, k: Int) -> [PaperRecord] {
+        let t = IdeaLedger.terms(topic)
+        return records.map { ($0, IdeaLedger.similarity(t, IdeaLedger.terms($0.title + " " + ($0.abstract ?? "")))) }
+            .sorted { $0.1 < $1.1 }.prefix(k).map(\.0)
+    }
+
+    /// SplitMix64: small, seedable and the same on every platform.
+    public struct RNG: RandomNumberGenerator {
+        var state: UInt64
+        public init(seed: UInt64) { state = seed }
+        public mutating func next() -> UInt64 {
+            state &+= 0x9E37_79B9_7F4A_7C15
+            var z = state
+            z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+            z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+            return z ^ (z >> 31)
+        }
+    }
+
+    public static func sample<T>(_ pool: [T], k: Int, rng: inout RNG) -> [T] {
+        var p = pool
+        p.shuffle(using: &rng)
+        return Array(p.prefix(k))
+    }
+}
+
+/// Ideas from background dreaming, kept per workspace until the user has seen them.
+public enum DreamInbox {
+    public struct Entry: Codable, Sendable, Equatable {
+        public var task: String
+        public var idea: Idea
+        public var seen: Bool
+    }
+    static func url(_ ws: URL) -> URL { ws.appendingPathComponent(".sievesci/dreams/inbox.json") }
+    static let lock = NSLock()
+
+    public static func load(_ ws: URL) -> [Entry] { StateFile.load([Entry].self, from: url(ws)) ?? [] }
+    public static func unseen(_ ws: URL) -> [Entry] { load(ws).filter { !$0.seen } }
+
+    public static func add(_ ideas: [Idea], task: String, workspace ws: URL) {
+        lock.withLock {
+            var all = load(ws)
+            all += ideas.map { Entry(task: task, idea: $0, seen: false) }
+            StateFile.save(Array(all.suffix(200)), to: url(ws))
+        }
+    }
+
+    public static func markSeen(_ ws: URL) {
+        lock.withLock {
+            var all = load(ws)
+            for i in all.indices { all[i].seen = true }
+            StateFile.save(all, to: url(ws))
+        }
+    }
+
+    /// The dream diary for people: what was looked at, what came out, and what was checked.
+    public static func writeDiary(_ s: BrainstormState, ideas: [Idea], workspace ws: URL) -> URL {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        let file = ws.appendingPathComponent(".sievesci/dreams/\(f.string(from: s.startedAt)).md")
+        var md = "# Dream \(f.string(from: s.startedAt)) — \(s.topic)\n\n"
+        md += "Ideas below are speculation. None has been tested or verified.\n\n"
+        if let sum = s.summary, !sum.isEmpty { md += sum + "\n\n" }
+        for i in ideas {
+            md += "## \(i.id) \(i.statement)\n\n"
+            if !i.mechanism.isEmpty { md += "- Mechanism: \(i.mechanism)\n" }
+            if !i.test.isEmpty { md += "- Test: \(i.test)\n" }
+            if !i.falsifier.isEmpty { md += "- Would be refuted by: \(i.falsifier)\n" }
+            md += "- Operator: \(i.op)" + (i.seeds.isEmpty ? "" : " · seeds: \(i.seeds.joined(separator: ", "))") + "\n"
+            md += "- Novelty: \(i.novelty?.rawValue ?? "not checked")" + (i.closestPrior.isEmpty ? "" : " · closest: \(i.closestPrior.joined(separator: ", "))") + "\n"
+            if !i.evidence.isEmpty { md += "- Evidence: \(i.evidence.joined(separator: ", "))\n" }
+            md += "\n"
+        }
+        let prior = (try? String(contentsOf: file, encoding: .utf8)).map { $0 + "\n---\n\n" } ?? ""
+        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? (prior + md).write(to: file, atomically: true, encoding: .utf8)
+        return file
+    }
+}
+
+/// The background "dream": consolidate open threads across the workspace's tasks and brainstorm a
+/// few grounded ideas, read-only. Runs headless in plan mode (`/dream on` schedules it).
+public enum DreamProtocol {
+    public static let schedulePrompt = "/dream now"
+    public static let prompt = """
+    <dream>
+    This is a background dreaming run: no user is present, the workspace is read-only, and nothing you produce \
+    here is a result. Work in three phases and keep it short.
+    1. Light — gather open threads: use `session_search` and `session_read` on recent tasks in this workspace for \
+    unanswered questions, refuted or inconclusive claims, contested points and recurring checker issues; note new \
+    papers in the library (`library_search`).
+    2. REM — call `brainstorm` start (topic: the open thread worth most), then generate 5–10 ideas linking those \
+    threads, using `ideation_seeds` with the facet and analogy operators; every idea states mechanism, test and \
+    falsifier and cites what it builds on. Record them with `idea` add.
+    3. Deep — deduplicate, rank the survivors, run a light novelty check on the top 3 (3 searches each, recorded with \
+    `idea` novelty), then `brainstorm` end with a two-line summary.
+    Do not register hypotheses, claims or plans, and do not edit memory: the user decides tomorrow.
+    </dream>
+    """
+}

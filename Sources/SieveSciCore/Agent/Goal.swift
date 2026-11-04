@@ -96,7 +96,7 @@ public final class GoalController: @unchecked Sendable {
         <goal_round n="\(g.roundsStarted)">
         Goal: \(g.objective)
         Do the next most valuable step and verify it. Achieved and verified → `goal` complete. Need the user's \
-        decision → `goal` wait with one concrete question. Waiting for a background job → end the turn without \
+        decision → `ask_user` with concrete options (or `goal` wait with one question). Waiting for a background job → end the turn without \
         polling; its result wakes you. Blocked after several different attempts → `goal` blocked.
         </goal_round>
         """

@@ -24,7 +24,8 @@ A native macOS research agent for biology and chemistry, built with SwiftUI. It 
 
 - Scope → background search (web and literature are both required before plans, claims or conclusions) → plan with hypotheses and soft checkpoints → execute → independent review → claims → write-up
 - Plan mode: read-only research and planning until you approve the plan
-- `/goal`: long-running objectives with automatic continuation rounds. A round never polls: running background jobs wake the agent when they report; a round that does no work or repeats the last one hands the goal back to you; 30 rounds by default (`--rounds N`). When the agent needs your decision it asks one concrete question through a structured field
+- `/goal`: long-running objectives with automatic continuation rounds. A round never polls: running background jobs wake the agent when they report; a round that does no work or repeats the last one hands the goal back to you; 30 rounds by default (`--rounds N`). When the agent needs your decision it asks with a choice or fill-in card (`ask_user`, always with "Other")
+- Brainstorming: the agent may enter it on its own when new ideas are needed (switch off in Settings), or you start it with `/brainstorm`; a dot-matrix panel shows each stage, every idea and what it is thinking, and you can wrap up or stop it. Ideas are speculation until a search-backed novelty check and the checker's review register them as hypotheses. `/clarify` searches, then offers directions to choose from when a request is vague; `/dream on` schedules a nightly read-only "dream" that links open threads across tasks into ideas for you to judge the next day
 
 **Independent oversight**
 
@@ -36,7 +37,7 @@ A native macOS research agent for biology and chemistry, built with SwiftUI. It 
 **Literature**
 
 - OpenAlex, Europe PMC, arXiv and Crossref search with citation counts; citation-graph traversal
-- Open-access full text, a per-task library with BibTeX, citation verification including retractions, contradiction search
+- Open-access full text (PDF downloads can be switched off in Settings), a per-task library with BibTeX, citation verification including retractions, contradiction search
 - `@cite key` comments link code to papers both ways
 
 **Databases and chemical safety**
@@ -64,7 +65,7 @@ Literature review, deep research, systematic review and meta-analysis (PRISMA), 
 **Models**
 
 - Claude, OpenAI, Gemini, DeepSeek, GLM, OpenRouter, CloseAI and other relays, with native protocols and per-vendor prompt-cache optimisation
-- Subscription plans through the official Claude Code, Codex, Antigravity and Gemini CLIs (driven in their official headless modes; OAuth tokens are never touched)
+- Subscription plans through the official Claude Code, Codex, Antigravity and Gemini CLIs (driven in their official headless modes; OAuth tokens are never touched), with their thinking and context fill shown live
 - Per-role model assignment (by benchmark, same for all, or custom); plan quota and balance display; context ring
 - Capability detection from catalog rules, models.dev, the provider's own listing, and what the model showed in use: a model the catalogs call text-only gets an image once, and a refusal is remembered and falls back to the vision helper
 - A stepped reasoning-effort slider in the composer, applied from the next model call

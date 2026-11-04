@@ -7,15 +7,50 @@ struct ChatView: View {
     @EnvironmentObject var model: AppModel
     @State private var searching = false
     @State private var query = ""
+    /// Bumped to scroll the transcript to its end.
+    @State private var jumpToEnd = 0
+    /// Bumped when the drawn window of rows changes (`AppModel.chatHidden` is not published).
+    @State private var windowTick = 0
+
+    /// Rows drawn at once, and how many more come in each time you scroll to the top. Every drawn row
+    /// takes part in each frame of any animation in the window, so a long task draws only its end.
+    static let page = 60
+
+    /// Rows before this index are not drawn; remembered per task.
+    var hidden: Int {
+        let n = model.items.count
+        if let h = model.chatHidden[model.taskId], h <= n { return h }
+        return max(0, n - Self.page)
+    }
 
     var visible: [TranscriptItem] {
-        guard searching, !query.isEmpty else { return model.items }
-        return model.items.filter { $0.searchableText.localizedCaseInsensitiveContains(query) }
+        if searching, !query.isEmpty {
+            return model.items.filter { $0.searchableText.localizedCaseInsensitiveContains(query) }
+        }
+        let h = hidden
+        return h == 0 ? model.items : Array(model.items.dropFirst(h))
+    }
+
+    /// A task opened at its end starts from a fresh window; one left mid-way keeps the rows it had,
+    /// so its remembered offset lands on the same text.
+    func openWindow() {
+        if model.chatScroll[model.taskId] == nil { model.chatHidden[model.taskId] = max(0, model.items.count - Self.page) }
+        windowTick += 1
+    }
+
+    /// Draws the next page of earlier rows. False when everything is drawn already.
+    func showEarlier() -> Bool {
+        let h = hidden
+        guard h > 0, !searching else { return false }
+        model.chatHidden[model.taskId] = max(0, h - Self.page)
+        windowTick += 1
+        return true
     }
 
     /// A new, empty task: the composer moves to the middle of the window (see `EmptyChatHero`).
     var isEmptyTask: Bool {
         model.items.isEmpty && !model.running && model.pendingPermission == nil && model.demoAsk == nil && model.lastError == nil
+            && model.pendingAsk == nil && model.brainstorm == nil
     }
 
     var body: some View {
@@ -37,9 +72,19 @@ struct ChatView: View {
                 .background(.bar)
                 .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
             }
-            ScrollViewReader { proxy in
+            let _ = windowTick
+            // The reader sizes itself from what it is offered, never from the transcript, so layout
+            // passes elsewhere in the window (a ticking placeholder, an animated gauge) do not
+            // re-measure every row of a long conversation.
+            GeometryReader { _ in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
+                    // A plain VStack, not a lazy one: a lazy stack guesses the height of rows it has not
+                    // drawn yet, so the scroller jumped while scrolling and the view ran past the end of
+                    // the conversation (or stopped short of it) until the guesses were corrected.
+                    VStack(alignment: .leading, spacing: 0) {
+                        if hidden > 0, !(searching && !query.isEmpty) {
+                            EarlierRowsLabel(count: hidden)
+                        }
                         ForEach(visible) { item in
                             TranscriptRow(item: item, stream: "main", showThinking: model.config.showThinking).equatable().id(item.id)
                         }
@@ -48,7 +93,9 @@ struct ChatView: View {
                                 PlanApprovalBar()
                             }
                             if !model.contested.isEmpty { ContestedBanner() }
+                            if let b = model.brainstorm { BrainstormPanel(state: b).id("brainstorm") }
                             if model.running { Spinner().id("spinner") }
+                            if let ask = model.pendingAsk, model.pendingPermission == nil { AskPrompt(request: ask).id("ask") }
                             if let req = model.pendingPermission {
                                 PermissionPrompt(request: PermissionAsk(req)).id("permission")
                             } else if let ask = model.demoAsk {
@@ -57,16 +104,27 @@ struct ChatView: View {
                         }
                         .padding(.vertical, Theme.Space.s)
                         .frame(maxWidth: Theme.readingWidth, alignment: .leading)
-                        Color.clear.frame(height: Theme.Space.s).id("bottom")
+                        Color.clear.frame(height: Theme.Space.s)
                     }
                     .transcriptColumn()
                     .padding(.vertical, Theme.Space.l)
+                    .background(ChatScrollKeeper(link: ModelLink(model), task: model.taskId, jump: jumpToEnd, earlier: showEarlier))
                 }
-                .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
-                .onChange(of: model.items.count) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
-                .onChange(of: model.items.last) { _, _ in if !searching { proxy.scrollTo("bottom", anchor: .bottom) } }
-                .onChange(of: model.pendingPermission?.id) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
             }
+            // Your own message, a permission request and a question bring the end into view; everything else
+            // follows only while you are already at the end (see `ChatScrollKeeper`).
+            .onChange(of: model.items.count) { old, new in
+                if new > old, case .user = model.items.last?.kind { jumpToEnd += 1 }
+                // Following a long run at its end: let the rows that scrolled far out of view go.
+                if model.chatScroll[model.taskId] == nil, new - hidden > 2 * Self.page {
+                    model.chatHidden[model.taskId] = new - Self.page
+                    windowTick += 1
+                }
+            }
+            .onAppear(perform: openWindow)
+            .onChange(of: model.taskId) { _, _ in openWindow() }
+            .onChange(of: model.pendingPermission?.id) { _, id in if id != nil { jumpToEnd += 1 } }
+            .onChange(of: model.pendingAsk?.id) { _, id in if id != nil { jumpToEnd += 1 } }
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 if let e = model.lastError, model.bench == nil { SessionSetupCard(detail: e) }
                 if !model.queued.isEmpty {
@@ -107,6 +165,182 @@ extension View {
         frame(maxWidth: Theme.readingWidth, alignment: .leading)
             .padding(.horizontal, Theme.Space.xl)
             .frame(maxWidth: .infinity)
+    }
+}
+
+/// Keeps the conversation's scroll position, working on the `NSScrollView` behind the SwiftUI one.
+///
+/// - It remembers each task's position (`AppModel.chatScroll`), so coming back from a research view or
+///   another task opens the conversation where it was left, not at the top.
+/// - While the view is at the end it stays there as the transcript grows (streaming replies, new
+///   rows); once you scroll up, new output no longer pulls the view down.
+/// - `jump` changes scroll it to the end (your own message, a permission request).
+struct ChatScrollKeeper: NSViewRepresentable {
+    let link: ModelLink
+    let task: String
+    let jump: Int
+    /// Draws earlier rows above the current ones; called when you scroll near the top.
+    var earlier: () -> Bool = { false }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSView {
+        let v = Probe()
+        v.coordinator = context.coordinator
+        context.coordinator.link = link
+        context.coordinator.task = task
+        context.coordinator.jump = jump
+        context.coordinator.earlier = earlier
+        return v
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        let c = context.coordinator
+        c.link = link
+        c.earlier = earlier
+        if c.task != task {
+            c.task = task
+            c.restore()
+        }
+        if c.jump != jump {
+            c.jump = jump
+            c.toEnd()
+        }
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) { coordinator.detach() }
+
+    /// Finds the scroll view once it is in a window.
+    final class Probe: NSView {
+        weak var coordinator: Coordinator?
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window == nil { coordinator?.detach() } else { coordinator?.attach(enclosingScrollView) }
+        }
+    }
+
+    @MainActor final class Coordinator {
+        var link = ModelLink()
+        var task = ""
+        var jump = 0
+        var earlier: () -> Bool = { false }
+        private weak var scroll: NSScrollView?
+        /// Rows are being added above: hold the visible text at this distance from the end.
+        private var holdFromEnd: CGFloat?
+        private var observers: [NSObjectProtocol] = []
+        /// True while the view shows the end of the transcript.
+        private var atEnd = true
+        /// Layout is still settling after the view appeared or the task changed: keep re-applying the
+        /// remembered position, and do not record the offsets layout passes through.
+        private var restoringUntil = Date.distantPast
+        private var programmatic = false
+
+        func attach(_ sv: NSScrollView?) {
+            guard let sv, sv !== scroll, let doc = sv.documentView else { return }
+            detach()
+            scroll = sv
+            sv.contentView.postsBoundsChangedNotifications = true
+            doc.postsFrameChangedNotifications = true
+            let nc = NotificationCenter.default
+            observers = [
+                nc.addObserver(forName: NSView.boundsDidChangeNotification, object: sv.contentView, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.scrolled() }
+                },
+                nc.addObserver(forName: NSView.frameDidChangeNotification, object: doc, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.resized() }
+                },
+            ]
+            restore()
+        }
+
+        func detach() {
+            observers.forEach(NotificationCenter.default.removeObserver)
+            observers = []
+            scroll = nil
+        }
+
+        /// Distance of the visible top from the top of the transcript, and the largest it can be.
+        private var offset: (top: CGFloat, max: CGFloat)? {
+            guard let sv = scroll, let doc = sv.documentView else { return nil }
+            let clip = sv.contentView.bounds
+            let max = Swift.max(0, doc.frame.height - clip.height)
+            let top = doc.isFlipped ? clip.minY : doc.frame.height - clip.maxY
+            return (top, max)
+        }
+
+        private func set(top: CGFloat) {
+            guard let sv = scroll, let doc = sv.documentView, let o = offset else { return }
+            let t = Swift.min(Swift.max(0, top), o.max)
+            let y = doc.isFlipped ? t : o.max - t
+            guard abs(sv.contentView.bounds.minY - y) > 0.5 else { return }
+            programmatic = true
+            sv.contentView.scroll(to: NSPoint(x: sv.contentView.bounds.minX, y: y))
+            sv.reflectScrolledClipView(sv.contentView)
+            programmatic = false
+        }
+
+        /// Opens the current task where it was left (its end when it was at the end, or is new).
+        func restore() {
+            restoringUntil = Date().addingTimeInterval(0.6)
+            let saved = link.model?.chatScroll[task]
+            atEnd = saved == nil
+            apply()
+            // Rows finish laying out over the next passes; place it again once they have.
+            DispatchQueue.main.async { [weak self] in self?.apply() }
+        }
+
+        private func apply() {
+            if atEnd { set(top: .greatestFiniteMagnitude) } else if let t = link.model?.chatScroll[task] { set(top: t) }
+        }
+
+        func toEnd() {
+            atEnd = true
+            link.model?.chatScroll[task] = nil
+            set(top: .greatestFiniteMagnitude)
+            DispatchQueue.main.async { [weak self] in if self?.atEnd == true { self?.set(top: .greatestFiniteMagnitude) } }
+        }
+
+        private func scrolled() {
+            guard !programmatic, Date() >= restoringUntil, let o = offset, o.max > 0 || o.top == 0 else { return }
+            record(o)
+            // Near the top of the drawn rows: bring in the earlier ones, keeping what you see in place.
+            if !atEnd, holdFromEnd == nil, o.top < 600 {
+                holdFromEnd = o.max - o.top
+                if !earlier() { holdFromEnd = nil }
+            }
+        }
+
+        private func record(_ o: (top: CGFloat, max: CGFloat)) {
+            atEnd = o.max - o.top <= 24
+            if atEnd { link.model?.chatScroll[task] = nil } else { link.model?.chatScroll[task] = o.top }
+        }
+
+        private func resized() {
+            if let d = holdFromEnd, let o = offset {
+                holdFromEnd = nil
+                set(top: o.max - d)
+                if let o = offset { record(o) }
+            } else if Date() < restoringUntil {
+                apply()
+            } else if atEnd {
+                set(top: .greatestFiniteMagnitude)
+            }
+        }
+    }
+}
+
+/// Heads the transcript while earlier rows are not drawn; they come in as you scroll up to it.
+struct EarlierRowsLabel: View {
+    let count: Int
+    var body: some View {
+        HStack(spacing: Theme.Space.s) {
+            Rectangle().fill(Theme.rule).frame(height: 1).frame(maxWidth: .infinity)
+            Text(L10n.f("%d earlier steps", count)).font(Theme.label).textCase(.uppercase).tracking(0.8)
+                .foregroundStyle(.secondary).monospacedDigit()
+            Rectangle().fill(Theme.rule).frame(height: 1).frame(maxWidth: .infinity)
+        }
+        .padding(.vertical, Theme.Space.s)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -175,17 +409,8 @@ struct EmptyChatHero: View {
                 PromptInput().padding(.top, Theme.Space.s)
                 HStack(spacing: Theme.Space.m) {
                     ForEach(Self.starts, id: \.title) { s in
-                        Button { model.draft = L(s.prompt) } label: {
-                            VStack(alignment: .leading, spacing: Theme.Space.s) {
-                                Image(systemName: s.icon).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.accent)
-                                    .frame(width: 20, height: 20, alignment: .leading)
-                                Text(L(s.title)).font(Theme.body.weight(.medium)).foregroundStyle(.primary)
-                                    .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
-                            .padding(Theme.Space.m)
-                        }
-                        .buttonStyle(StartCardStyle())
+                        Button { model.draft = L(s.prompt) } label: { StartCardLabel(icon: s.icon, title: L(s.title)) }
+                            .buttonStyle(StartCardStyle())
                     }
                 }
                 StatsLine().opacity(model.meter.session.promptTotal > 0 ? 1 : 0)
@@ -199,7 +424,39 @@ struct EmptyChatHero: View {
     }
 }
 
-/// A starting-point card: framed, with a hard shadow that it presses into.
+/// A starting-point card's icon and title. Under the pointer the card inverts (ink fill), so both
+/// follow it to paper.
+struct StartCardLabel: View {
+    let icon: String
+    let title: String
+    @Environment(\.startCardHovered) private var hovered
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            Image(systemName: icon).font(.system(size: 15, weight: .medium))
+                .foregroundStyle(hovered ? Theme.paper : Theme.accent)
+                .frame(width: 20, height: 20, alignment: .leading)
+            Text(title).font(Theme.body.weight(.medium))
+                .foregroundStyle(hovered ? Theme.paper : Theme.ink)
+                .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
+        .padding(Theme.Space.m)
+    }
+}
+
+private struct StartCardHoveredKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    /// Set by `StartCardStyle` while the pointer is over the card.
+    var startCardHovered: Bool {
+        get { self[StartCardHoveredKey.self] }
+        set { self[StartCardHoveredKey.self] = newValue }
+    }
+}
+
+/// A starting-point card: framed, with a hard shadow that it presses into. Under the pointer it
+/// inverts to an ink card on an accent shadow. The fill is opaque: a translucent one let the ink
+/// shadow show through and blacked out the card behind dark text.
 struct StartCardStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View { Styled(configuration: configuration) }
     private struct Styled: View {
@@ -207,9 +464,10 @@ struct StartCardStyle: ButtonStyle {
         @State private var hovering = false
         var body: some View {
             configuration.label
-                .background(Rectangle().fill(hovering ? Theme.accentSoft : Theme.raised))
+                .environment(\.startCardHovered, hovering)
+                .background(Rectangle().fill(hovering ? Theme.ink : Theme.raised))
                 .overlay(Rectangle().strokeBorder(hovering ? Theme.ink : Theme.rule, lineWidth: 1))
-                .hardShadow(pressed: configuration.isPressed, offset: hovering ? 4 : 0)
+                .hardShadow(pressed: configuration.isPressed, offset: hovering ? 4 : 0, color: Theme.accent)
                 .contentShape(Rectangle())
                 .onHover { h in withAnimation(Theme.Motion.hover) { hovering = h } }
         }
@@ -523,23 +781,31 @@ struct ThinkingRow: View {
     let ended: Date?
     @State private var expanded = false
 
+    func header(_ now: Date) -> some View {
+        let secs = Int(now.timeIntervalSince(started))
+        return HStack(spacing: Theme.Space.s) {
+            Image(systemName: "brain").font(.system(size: 12)).foregroundStyle(.secondary).frame(width: Theme.gutter)
+            Text(ended == nil ? L10n.f("Thinking… %ds", secs) : L10n.f("Thought for %ds", max(1, secs)))
+                .font(Theme.body).foregroundStyle(.primary.opacity(0.75))
+            if !expanded, ended == nil {
+                Text("· " + (text.split(separator: "\n").last.map(String.init) ?? "")).font(Theme.body).lineLimit(1).foregroundStyle(.secondary)
+            }
+            Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
+                .rotationEffect(.degrees(expanded ? 90 : 0))
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 3)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs + 2) {
             Button { expanded.toggle() } label: {
-                TimelineView(.periodic(from: started, by: 1)) { ctx in
-                    let secs = Int((ended ?? ctx.date).timeIntervalSince(started))
-                    HStack(spacing: Theme.Space.s) {
-                        Image(systemName: "brain").font(.system(size: 12)).foregroundStyle(.secondary).frame(width: Theme.gutter)
-                        Text(ended == nil ? L10n.f("Thinking… %ds", secs) : L10n.f("Thought for %ds", max(1, secs)))
-                            .font(Theme.body).foregroundStyle(.primary.opacity(0.75))
-                        if !expanded, ended == nil {
-                            Text("· " + (text.split(separator: "\n").last.map(String.init) ?? "")).font(Theme.body).lineLimit(1).foregroundStyle(.secondary)
-                        }
-                        Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
-                            .rotationEffect(.degrees(expanded ? 90 : 0))
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.vertical, 3)
+                // Only live thinking ticks: a finished row's timer still redrew it, and the whole
+                // transcript's layout with it, every second.
+                if let ended {
+                    header(ended)
+                } else {
+                    TimelineView(.periodic(from: started, by: 1)) { ctx in header(ctx.date) }
                 }
             }
             .buttonStyle(.plain)
@@ -756,9 +1022,14 @@ struct AgentCardView: View {
                             Text(card.purpose).font(Theme.meta).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer(minLength: Theme.Space.s)
-                        TimelineView(.periodic(from: card.started, by: 1)) { ctx in
-                            Text(String(format: "%.0fs", (card.ended ?? ctx.date).timeIntervalSince(card.started)))
+                        if let ended = card.ended {
+                            Text(String(format: "%.0fs", ended.timeIntervalSince(card.started)))
                                 .font(Theme.caption).monospacedDigit().foregroundStyle(.tertiary)
+                        } else {
+                            TimelineView(.periodic(from: card.started, by: 1)) { ctx in
+                                Text(String(format: "%.0fs", ctx.date.timeIntervalSince(card.started)))
+                                    .font(Theme.caption).monospacedDigit().foregroundStyle(.tertiary)
+                            }
                         }
                         Text(L10n.f("%d steps", steps)).font(Theme.caption).foregroundStyle(.tertiary)
                         Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)

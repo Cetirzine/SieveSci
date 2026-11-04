@@ -173,6 +173,7 @@ enum Theme {
         "todo_write": "To-do", "goal": "Goal", "task": "Worker agent", "dispatch": "Batch agents", "skill": "Skill", "skill_env": "Skill environment",
         "receipt": "Receipt", "job_output": "Job output", "job_watch": "Watch job", "respond_review": "Reply to review",
         "verify_citation": "Verify citation", "memory": "Memory", "session_search": "Search past sessions", "skill_manage": "Manage skills",
+        "ask_user": "Question for you", "brainstorm": "Brainstorm", "idea": "Ideas", "ideation_seeds": "Idea seeds",
     ]
 
     static func toolTitle(_ n: String) -> String {
@@ -193,6 +194,8 @@ enum Theme {
         case "verify_citation": return "checkmark.seal"
         case "update_plan", "todo_write", "goal": return "list.bullet.clipboard"
         case "claim_finding": return "flag"
+        case "ask_user": return "questionmark.bubble"
+        case "brainstorm", "idea", "ideation_seeds": return "lightbulb"
         case "dispatch", "task": return "person.3"
         case "respond_review": return "arrow.left.arrow.right"
         case "job_output", "job_watch": return "waveform"

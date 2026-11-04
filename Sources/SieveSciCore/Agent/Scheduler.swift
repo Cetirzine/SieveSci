@@ -12,9 +12,11 @@ public struct ScheduledTask: Codable, Sendable, Equatable {
     /// "daily 08:30", "weekly mon 09:00", "hourly", or "every 6h".
     public var when: String
     public var created: Date
+    /// Permission mode of the run; nil = auto. Dreaming runs use plan (read-only).
+    public var mode: String?
 
-    public init(id: String, workspace: String, prompt: String, when: String, created: Date = Date()) {
-        self.id = id; self.workspace = workspace; self.prompt = prompt; self.when = when; self.created = created
+    public init(id: String, workspace: String, prompt: String, when: String, created: Date = Date(), mode: String? = nil) {
+        self.id = id; self.workspace = workspace; self.prompt = prompt; self.when = when; self.created = created; self.mode = mode
     }
 }
 
@@ -73,7 +75,7 @@ public enum Scheduler {
         } else if p.first == "every", p.count == 2, p[1].hasSuffix("h") {
             spec = "0 */\(p[1].dropLast()) * * *"
         }
-        return "\(spec) cd \(shellQuote(t.workspace)) && \(shellQuote(cli)) -p \(shellQuote(t.prompt))"
+        return "\(spec) cd \(shellQuote(t.workspace)) && \(shellQuote(cli)) --mode \(t.mode ?? "auto") -p \(shellQuote(t.prompt))"
     }
 
     static func shellQuote(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
@@ -82,7 +84,7 @@ public enum Scheduler {
         guard let timing = launchdTiming(t.when) else { return nil }
         var d: [String: Any] = [
             "Label": label + t.id,
-            "ProgramArguments": [cli, "--workspace", t.workspace, "--mode", "auto", "-p", t.prompt],
+            "ProgramArguments": [cli, "--workspace", t.workspace, "--mode", t.mode ?? "auto", "-p", t.prompt],
             "WorkingDirectory": t.workspace,
             "StandardOutPath": logsDir.appendingPathComponent("\(t.id).log").path,
             "StandardErrorPath": logsDir.appendingPathComponent("\(t.id).err").path,
@@ -104,12 +106,12 @@ public enum Scheduler {
     }
 
     /// Creates the schedule. Returns a message for the user.
-    public static func add(workspace: URL, when: String, prompt: String) async -> String {
+    public static func add(workspace: URL, when: String, prompt: String, mode: PermissionMode = .auto) async -> String {
         guard launchdTiming(when) != nil else {
             return L10n.s("Unrecognised schedule “%@”. Use: daily HH:MM · weekly mon HH:MM · hourly · every 6h · every 30m (≥15m).", when)
         }
         guard let cli = cliPath() else { return L("Cannot find the sievesci CLI to run the schedule. Install it (Settings → General → Install command-line tool).") }
-        let t = ScheduledTask(id: String(UUID().uuidString.prefix(8)).lowercased(), workspace: workspace.path, prompt: prompt, when: when)
+        let t = ScheduledTask(id: String(UUID().uuidString.prefix(8)).lowercased(), workspace: workspace.path, prompt: prompt, when: when, mode: mode == .auto ? nil : mode.rawValue)
         #if os(macOS)
         guard let p = plist(t, cli: cli),
               let data = try? PropertyListSerialization.data(fromPropertyList: p, format: .xml, options: 0) else { return L("Could not build the LaunchAgent.") }
@@ -121,7 +123,7 @@ public enum Scheduler {
         save(list() + [t])
         return L10n.s("Scheduled %@: “%@” %@ in %@", t.id, prompt.truncated(80, marker: "…"), when, workspace.lastPathComponent)
             + (r?.exitCode == 0 ? "" : " " + L10n.s("(launchctl: %@; it will load at next login)", r?.stderr.truncated(200) ?? L("failed")))
-            + "\n" + L10n.s("Logs: %@ · runs use permission mode auto inside the sandbox.", "\(logsDir.path)/\(t.id).log")
+            + "\n" + L10n.s("Logs: %@ · runs use permission mode %@ inside the sandbox.", "\(logsDir.path)/\(t.id).log", mode.rawValue)
         #else
         save(list() + [t])
         return L("LaunchAgents are macOS-only. Add this line with `crontab -e`:") + "\n" + cronLine(t, cli: cli)

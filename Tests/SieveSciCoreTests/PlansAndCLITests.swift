@@ -86,6 +86,61 @@ private struct Keys: SecretStore {
         #expect(check(.antigravity, #"{"event":"step_update","step_update":{"state":"ACTIVE","step_type":"tool","tool_name":"read_resource","tool_info":{"parameters":{"ServerName":"firebase_mcp","Uri":"x"}}}}"#) != nil)
     }
 
+    /// Claude Code: thinking streams as thinking rows, and the context ring follows each request's
+    /// prompt size rather than the turn's summed usage.
+    @Test func claudeStreamsThinkingAndPerRequestContext() {
+        var acc = CLIEventAccumulator(flavor: .claudeCode, model: "m")
+        var thinking = "", rows = 0, fills: [Int] = []
+        func feed(_ line: String) {
+            for ev in acc.consume(line) {
+                switch ev {
+                case .thinkingDelta(let t): if t.isEmpty { rows += 1 } else { thinking += t }
+                case .contextUsage(let n, _): fills.append(n)
+                default: break
+                }
+            }
+        }
+        feed(#"{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"message_start","message":{"usage":{"input_tokens":10,"cache_read_input_tokens":40000,"cache_creation_input_tokens":2000}}}}"#)
+        feed(#"{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_start","content_block":{"type":"thinking"}}}"#)
+        feed(#"{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"Check UniProt first."}}}"#)
+        feed(#"{"type":"assistant","parent_tool_use_id":null,"message":{"usage":{"input_tokens":10,"cache_read_input_tokens":40000,"cache_creation_input_tokens":2000},"content":[{"type":"thinking","thinking":"Check UniProt first."}]}}"#)
+        feed(#"{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"message_start","message":{"usage":{"input_tokens":5,"cache_read_input_tokens":45000}}}}"#)
+        feed(#"{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"P38398"}}}"#)
+        feed(#"{"type":"result","result":"P38398","usage":{"input_tokens":15,"cache_read_input_tokens":85000,"output_tokens":30},"modelUsage":{"claude-x":{"contextWindow":200000},"claude-haiku":{"contextWindow":100000}}}"#)
+        #expect(thinking == "Check UniProt first.", "streamed thinking is not repeated from the assistant message")
+        #expect(rows == 3, "a thinking row opens at each request and at the thinking block")
+        #expect(fills == [42010, 45005])
+        let r = acc.finish()
+        #expect(r.contextTokens == 45005 && r.contextWindow == 200000)
+        #expect(r.usage.cacheRead == 85000, "the turn's spend still counts every request")
+        #expect(r.message.blocks.contains { if case .thinking(let t) = $0 { return t.text.contains("UniProt") }; return false })
+    }
+
+    @Test func codexReasoningAndRolloutContext() throws {
+        var acc = CLIEventAccumulator(flavor: .codex, model: "m")
+        #expect(acc.consume(#"{"type":"item.started","item":{"type":"reasoning"}}"#).count == 1)
+        let done = acc.consume(#"{"type":"item.completed","item":{"type":"reasoning","text":"Compare isoforms."}}"#)
+        #expect(acc.reasoning.contains("Compare isoforms."))
+        if case .thinkingDelta(let t)? = done.first { #expect(t.contains("isoforms")) } else { Issue.record("no thinking") }
+        #expect(acc.consume(#"{"type":"item.completed","item":{"type":"mcp_tool_call","server":"sievesci","tool":"bash"}}"#).count == 1)
+
+        let rollout = """
+        {"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":1200},"model_context_window":258400}}}
+        {"type":"event_msg","payload":{"type":"agent_message"}}
+        {"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":900000},"last_token_usage":{"input_tokens":163710,"cached_input_tokens":163456},"model_context_window":258400}}}
+        {"type":"event_msg","payload":{"type":"token_count","info":null}}
+        """
+        #expect(CodexRollout.parse(rollout) == .init(tokens: 163710, window: 258400), "the newest request with token info, not the total")
+
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("codex-\(UUID().uuidString)")
+        let day = root.appendingPathComponent("2026/11/04")
+        try FileManager.default.createDirectory(at: day, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try rollout.write(to: day.appendingPathComponent("rollout-2026-11-04T10-00-00-thread-abc.jsonl"), atomically: true, encoding: .utf8)
+        #expect(CodexRollout.lastTokenCount(thread: "thread-abc", root: root)?.tokens == 163710)
+        #expect(CodexRollout.lastTokenCount(thread: "thread-zzz", root: root) == nil)
+    }
+
     /// Recorded from agy on 2026-10-17 (trimmed).
     @Test func streamsTextAndExplainsDeniedTools() {
         var acc = CLIEventAccumulator(flavor: .antigravity, model: "m")

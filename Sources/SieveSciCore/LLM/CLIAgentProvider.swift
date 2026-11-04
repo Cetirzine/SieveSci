@@ -166,9 +166,25 @@ public struct CLIAgentProvider: LLMProvider {
                     } else {
                         lines = ProcessRunner.lines(exe, self_.arguments(for: req, resumeId: resumeId), cwd: wd, env: env.isEmpty ? nil : env)
                     }
+                    // The CLI starts, signs in and reasons before it says anything, and some models never show
+                    // their reasoning: open a thinking row now, so the turn reads as working, not stuck.
+                    cont.yield(.thinkingDelta(""))
+                    // Codex reports how full its context is only in its rollout file: follow it during the turn.
+                    let codexThread = LockedValue<String?>(resumeId)
+                    let poller: Task<Void, Never>? = flavor != .codex ? nil : Task {
+                        var last: CodexRollout.TokenCount?
+                        while !Task.isCancelled {
+                            try? await Task.sleep(nanoseconds: 3_000_000_000)
+                            guard let thread = codexThread.value, let now = CodexRollout.lastTokenCount(thread: thread), now != last else { continue }
+                            last = now
+                            cont.yield(.contextUsage(tokens: now.tokens, window: now.window))
+                        }
+                    }
+                    defer { poller?.cancel() }
                     do {
                     for try await line in lines {
                         for ev in acc.consume(line) { cont.yield(ev) }
+                        if flavor == .codex, let sid = acc.sessionId, codexThread.value != sid { codexThread.mutate { $0 = sid } }
                         // Anything the CLI does must go through SieveSci: a built-in tool ends the turn at once.
                         if let v = acc.violation {
                             throw ProviderError.protocolError(L10n.s("Stopped: %@ tried to use its own tool (%@) instead of SieveSci's tools. Nothing it did outside SieveSci is trusted; the turn was ended.", self_.profile.displayName, v))
@@ -181,6 +197,11 @@ public struct CLIAgentProvider: LLMProvider {
                         throw error
                     }
                     for ev in acc.endOfStream() { cont.yield(ev) }
+                    poller?.cancel()
+                    if flavor == .codex, let sid = acc.sessionId, let tc = CodexRollout.lastTokenCount(thread: sid) {
+                        acc.contextTokens = tc.tokens
+                        acc.contextWindow = tc.window ?? acc.contextWindow
+                    }
                     if let sid = acc.sessionId { await sessions.set(key, sid) }
                     if let rl = acc.rateLimit { await QuotaService.shared.recordCLIEvent(providerId: self_.profile.id, event: rl) }
                     if let err = acc.error, acc.text.isEmpty { throw ProviderError.protocolError(err) }
@@ -258,7 +279,13 @@ struct CLIEventAccumulator {
     let model: String
     var text = ""
     var activity: [String] = []
+    /// The model's own reasoning, where the CLI streams it (Claude thinking, Codex reasoning summaries).
+    var reasoning = ""
+    var sawPartialThinking = false
     var usage = Usage()
+    /// Prompt tokens of the latest model request inside this turn (`usage` sums all of them).
+    var contextTokens: Int?
+    var contextWindow: Int?
     var sessionId: String?
     var error: String?
     var sawPartialText = false
@@ -392,14 +419,41 @@ struct CLIEventAccumulator {
         case "stream_event":
             let e = j["event"]
             if j["parent_tool_use_id"]?.isNull == false { return [] }  // subagent internals
-            if e?["type"]?.stringValue == "content_block_delta", let t = e?["delta"]?["text"]?.stringValue {
-                sawPartialText = true
-                text += t
-                return [.textDelta(t)]
+            switch e?["type"]?.stringValue {
+            case "message_start":
+                // A new model request (the first, or the next after a tool result): its prompt size is
+                // the context fill, and the model is reasoning until it writes something.
+                var out: [StreamEvent] = [.thinkingDelta("")]
+                if let n = Self.claudePromptTokens(e?["message"]?["usage"]) { contextTokens = n; out.append(.contextUsage(tokens: n, window: nil)) }
+                return out
+            case "content_block_start":
+                let kind = e?["content_block"]?["type"]?.stringValue
+                if kind == "thinking" || kind == "redacted_thinking" { return [.thinkingDelta("")] }
+            case "content_block_delta":
+                if let t = e?["delta"]?["text"]?.stringValue {
+                    sawPartialText = true
+                    text += t
+                    return [.textDelta(t)]
+                }
+                if e?["delta"]?["type"]?.stringValue == "thinking_delta", let t = e?["delta"]?["thinking"]?.stringValue {
+                    sawPartialThinking = true
+                    reasoning += t
+                    return [.thinkingDelta(t)]
+                }
+            default: break
             }
         case "assistant":
             var out: [StreamEvent] = []
+            if j["parent_tool_use_id"]?.isNull != false, let n = Self.claudePromptTokens(j["message"]?["usage"]), n != contextTokens {
+                contextTokens = n
+                out.append(.contextUsage(tokens: n, window: nil))
+            }
             for b in j["message"]?["content"]?.arrayValue ?? [] {
+                if b["type"]?.stringValue == "thinking", !sawPartialThinking, let t = b["thinking"]?.stringValue, !t.isEmpty {
+                    reasoning += t + "\n"
+                    out.append(.thinkingDelta(t + "\n"))
+                    continue
+                }
                 if b["type"]?.stringValue == "tool_use" {
                     let name = b["name"]?.stringValue ?? "tool"
                     if !name.hasPrefix("mcp__sievesci__") { violation = violation ?? name }
@@ -423,9 +477,19 @@ struct CLIEventAccumulator {
                 usage.cacheWrite = u["cache_creation_input_tokens"]?.intValue ?? 0
                 usage.output = u["output_tokens"]?.intValue ?? 0
             }
+            // `modelUsage` names each model used with its context window; the largest is the main model's.
+            let windows = (j["modelUsage"]?.objectValue ?? [:]).values.compactMap { $0["contextWindow"]?.intValue }
+            if let w = windows.max(), w > 0 { contextWindow = w }
         default: break
         }
         return []
+    }
+
+    /// Prompt size of one Claude request: uncached input plus cache reads and writes.
+    static func claudePromptTokens(_ u: JSON?) -> Int? {
+        guard let u, let input = u["input_tokens"]?.intValue else { return nil }
+        let n = input + (u["cache_read_input_tokens"]?.intValue ?? 0) + (u["cache_creation_input_tokens"]?.intValue ?? 0)
+        return n > 0 ? n : nil
     }
 
     mutating func codex(_ j: JSON, _ type: String) -> [StreamEvent] {
@@ -451,8 +515,15 @@ struct CLIEventAccumulator {
             case "file_change" where type == "item.completed":
                 let paths = (item?["changes"]?.arrayValue ?? []).compactMap { $0["path"]?.stringValue }.joined(separator: ", ")
                 return note("⏺ Edit(\(paths))")
+            case "reasoning" where type == "item.started":
+                return [.thinkingDelta("")]
             case "reasoning" where type == "item.completed":
-                return [.thinkingDelta((item?["text"]?.stringValue ?? "") + "\n")]
+                let t = (item?["text"]?.stringValue ?? "") + "\n"
+                reasoning += t
+                return [.thinkingDelta(t)]
+            case "mcp_tool_call" where type == "item.completed":
+                // Back from a SieveSci tool: the model reasons (often invisibly) before its next step.
+                return [.thinkingDelta("")]
             default: break
             }
         case "turn.completed":
@@ -496,10 +567,11 @@ struct CLIEventAccumulator {
 
     func finish() -> LLMResponse {
         var blocks: [ContentBlock] = []
-        if !activity.isEmpty { blocks.append(.thinking(ThinkingBlock(text: activity.joined(separator: "\n")))) }
+        let thought = ([reasoning.trimmingCharacters(in: .whitespacesAndNewlines)] + activity).filter { !$0.isEmpty }
+        if !thought.isEmpty { blocks.append(.thinking(ThinkingBlock(text: thought.joined(separator: "\n")))) }
         blocks.append(.text(text))
         return LLMResponse(message: Message(role: .assistant, blocks: blocks), stopReason: .endTurn, usage: usage,
-                           providerRequestId: sessionId, servedModel: model)
+                           providerRequestId: sessionId, servedModel: model, contextTokens: contextTokens, contextWindow: contextWindow)
     }
 }
 
@@ -513,5 +585,45 @@ actor CodexCatalog {
             cached = ModelDiscovery.parseCodexModels(r.stdout).map(\.id)
         }
         return cached?.first
+    }
+}
+
+/// Codex writes a `token_count` event after every model request to its rollout file
+/// (`~/.codex/sessions/YYYY/MM/DD/rollout-<time>-<thread id>.jsonl`): `last_token_usage` is that
+/// request (so its input is how full the context is) and `model_context_window` the window.
+/// `codex exec --json` reports only the turn's sum, so the context ring reads it from here.
+enum CodexRollout {
+    struct TokenCount: Equatable, Sendable { var tokens: Int; var window: Int? }
+
+    static var root: URL { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/sessions") }
+    private static let files = LockedValue<[String: URL]>([:])
+
+    static func file(thread: String, root: URL = root) -> URL? {
+        if let hit = files.value[thread], FileManager.default.fileExists(atPath: hit.path) { return hit }
+        guard let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { return nil }
+        for case let u as URL in en where u.pathExtension == "jsonl" && u.lastPathComponent.contains(thread) {
+            files.mutate { $0[thread] = u }
+            return u
+        }
+        return nil
+    }
+
+    static func lastTokenCount(thread: String, root: URL = root) -> TokenCount? {
+        guard let url = file(thread: thread, root: root), let fh = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? fh.close() }
+        // Rollouts grow to many MB; the newest token_count is near the end.
+        guard let end = try? fh.seekToEnd() else { return nil }
+        try? fh.seek(toOffset: end > 262_144 ? end - 262_144 : 0)
+        guard let data = try? fh.readToEnd() else { return nil }
+        return parse(String(decoding: data, as: UTF8.self))
+    }
+
+    static func parse(_ text: String) -> TokenCount? {
+        for line in text.split(separator: "\n").reversed() where line.contains("\"token_count\"") {
+            guard let j = try? JSONCodec.parse(String(line)), let info = j["payload"]?["info"] ?? j["info"], !info.isNull,
+                  let tokens = info["last_token_usage"]?["input_tokens"]?.intValue, tokens > 0 else { continue }
+            return TokenCount(tokens: tokens, window: info["model_context_window"]?.intValue)
+        }
+        return nil
     }
 }

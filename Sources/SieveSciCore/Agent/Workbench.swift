@@ -80,6 +80,29 @@ public final class Workbench: @unchecked Sendable {
             guard let self else { return }
             Task { await self.wakeIfIdle() }
         }
+        // State a front end shows: ideas, the last brainstorm, and a question left from the last run.
+        if !services.ideas.snapshot.isEmpty { services.emit(.ideasChanged(services.ideas.snapshot)) }
+        if let b = services.ideas.current { services.emit(.brainstormChanged(b)) }
+        for req in services.asks.pending { services.emit(.askRequested(req)) }
+    }
+
+    // MARK: Questions and brainstorming (front-end actions)
+
+    /// Answers a question card. A question whose waiting call is gone (the app quit while it waited)
+    /// gets its answer as the next user message instead.
+    public func answerAsk(_ id: String, _ outcome: AskOutcome) async {
+        guard let r = services.asks.resolve(id, outcome) else { return }
+        guard !r.live else { return }   // the waiting tool call logs and announces it
+        services.log("ask_answer", actor: "user", ["id": .string(id), "outcome": .string(outcome.label), "late": true])
+        services.emit(.askResolved(id: id, outcome: outcome))
+        if case .answered = outcome { await submit(AskFormat.lateAnswerMessage(r.request, outcome)) }
+    }
+
+    /// "Wrap up": the agent is told at its next step to stop generating and report what it has.
+    public func wrapUpBrainstorm() {
+        guard let s = services.ideas.requestWrapUp() else { return }
+        services.log("brainstorm", actor: "user", ["event": "wrap_up", "id": .string(s.id)])
+        services.emit(.brainstormChanged(s))
     }
 
     public var isRunning: Bool { stateLock.lock(); defer { stateLock.unlock() }; return busy }
@@ -120,6 +143,10 @@ public final class Workbench: @unchecked Sendable {
     public func interrupt() {
         main.cancel()
         stateLock.withLock { running }?.cancel()
+        if let s = services.ideas.end(summary: L("Stopped by the user."), stopped: true) {
+            services.log("brainstorm", actor: "user", ["event": "stopped", "id": .string(s.id)])
+            services.emit(.brainstormChanged(s))
+        }
     }
 
     // MARK: Input routing

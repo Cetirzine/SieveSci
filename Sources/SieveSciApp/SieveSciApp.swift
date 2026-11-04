@@ -178,14 +178,14 @@ struct SidebarView: View {
                     if let ws = model.workspace {
                         HStack(spacing: 0) {
                             row(icon: "folder.fill", title: ws.lastPathComponent, tint: Theme.accent).help(ws.path)
+                            disclosure(ws.path)
                             newTaskButton { model.showSettingsPage = false; model.mainTab = .chat; model.startSession() }
                         }
-                        if model.tasks.isEmpty {
-                            Text(L("No tasks yet")).font(Theme.meta).foregroundStyle(.tertiary)
-                                .padding(.leading, 38).padding(.vertical, Theme.Space.xs)
-                        }
-                        ForEach(model.tasks, id: \.id) { t in
-                            TaskRow(id: t.id, modified: t.modified)
+                        if model.isFolderOpen(ws.path) {
+                            if model.tasks.isEmpty { noTasks }
+                            ForEach(model.tasks, id: \.id) { t in
+                                TaskRow(id: t.id, modified: t.modified)
+                            }
                         }
                     }
                     ForEach(others, id: \.self) { path in
@@ -201,12 +201,23 @@ struct SidebarView: View {
                             }
                             .buttonStyle(HoverRowStyle(radius: Theme.Radius.s + 2))
                             .help(path)
+                            disclosure(path)
                             newTaskButton { model.showSettingsPage = false; model.mainTab = .chat; model.open(workspace: URL(fileURLWithPath: path), newTask: true) }
+                        }
+                        if model.isFolderOpen(path) {
+                            let list = model.folderTasks[path] ?? []
+                            if list.isEmpty { noTasks }
+                            ForEach(list, id: \.id) { t in
+                                TaskRow(id: t.id, modified: t.modified, folder: path)
+                            }
                         }
                     }
                 }
                 .padding(.horizontal, Theme.Space.s)
             }
+            // Folders left expanded list their conversations again after a switch or a background run.
+            .task(id: model.workspace?.path) { model.refreshOpenFolders() }
+            .onChange(of: model.backgroundTasks) { _, _ in model.refreshOpenFolders() }
 
             UpdateBanner().padding(.horizontal, Theme.Space.m).padding(.top, Theme.Space.s)
 
@@ -223,6 +234,26 @@ struct SidebarView: View {
         }
         .background(Theme.sidebar)
         .overlay(alignment: .trailing) { Rectangle().fill(Theme.separator).frame(width: 1) }
+    }
+
+    var noTasks: some View {
+        Text(L("No tasks yet")).font(Theme.meta).foregroundStyle(.tertiary)
+            .padding(.leading, 38).padding(.vertical, Theme.Space.xs)
+    }
+
+    /// "−" / "+" beside each folder row: shows or hides its conversations, without switching to it.
+    func disclosure(_ path: String) -> some View {
+        let open = model.isFolderOpen(path)
+        let label = open ? L("Collapse folder") : L("Expand folder")
+        return Button { withAnimation(Theme.Motion.hover) { model.setFolder(path, open: !open) } } label: {
+            Image(systemName: open ? "minus" : "plus")
+                .font(.system(size: 7, weight: .heavy))
+                .frame(width: 13, height: 13)
+                .overlay(Rectangle().strokeBorder(Theme.rule, lineWidth: 1))
+        }
+        .buttonStyle(QuietIconButtonStyle())
+        .help(label)
+        .accessibilityLabel(label)
     }
 
     /// "New conversation in this folder", beside each folder row.
@@ -259,37 +290,27 @@ struct TaskRow: View {
     @EnvironmentObject var model: AppModel
     let id: String
     let modified: Date
+    /// The folder of a conversation outside the open workspace; nil for the open one's.
+    var folder: String? = nil
     @State private var hovering = false
 
-    var selected: Bool { id == model.taskId }
+    var selected: Bool { folder == nil && id == model.taskId }
+
+    func openIt() {
+        model.showSettingsPage = false
+        if let folder {
+            model.mainTab = .chat
+            model.open(workspace: URL(fileURLWithPath: folder), task: id)
+        } else if !selected {
+            model.startSession(task: id)
+        }
+    }
 
     var body: some View {
-        Button { model.showSettingsPage = false; if !selected { model.startSession(task: id) } } label: {
-            HStack(spacing: Theme.Space.s) {
-                Text(model.title(of: id)).font(Theme.body).lineLimit(1).truncationMode(.tail)
-                Spacer(minLength: Theme.Space.xs)
-                if hovering {
-                    Color.clear.frame(width: Theme.Control.icon - 6, height: 1)   // room for ×
-                } else if let stage = model.attention[id]?.stage, stage.showsChip {
-                    StageChip(stage: stage)
-                } else if (selected && model.running) || model.backgroundTasks.contains(id) {
-                    RoleGhostBadge(role: .main, working: true, size: 20)
-                } else {
-                    Text(modified.formatted(.relative(presentation: .named, unitsStyle: .narrow).locale(Locale(identifier: L10n.resolved))))
-                        .font(Theme.caption).foregroundStyle(.tertiary)
-                }
-            }
-            .padding(.leading, 38).padding(.trailing, Theme.Space.s)
-            .frame(height: Theme.Control.row)
-            .background(Rectangle().fill(selected ? Theme.selection : .clear))
-            .overlay(alignment: .leading) {
-                if selected { Rectangle().fill(Theme.accent).frame(width: 2).padding(.leading, 26) }
-            }
-            .animation(Theme.Motion.hover, value: model.taskId)
-        }
+        Button(action: openIt) { label }
         .buttonStyle(HoverRowStyle(radius: 0))
         .overlay(alignment: .trailing) {
-            if hovering {
+            if hovering, folder == nil {
                 Button { model.deleteTask(id) } label: { Image(systemName: "xmark") }
                     .buttonStyle(QuietIconButtonStyle())
                     .help(L("Delete conversation…"))
@@ -301,17 +322,47 @@ struct TaskRow: View {
         .onHover { h in withAnimation(Theme.Motion.hover) { hovering = h } }
         .help(model.taskTitles[id] == nil ? id : model.title(of: id) + "\n" + id)
         .contextMenu {
-            Button(L("Rename…")) { model.renameTask(id) }
-            Button(L("Copy conversation ID")) { model.copyToPasteboard(id) }
-            Button(L("Copy as Markdown")) { model.copyToPasteboard(model.taskMarkdown(id)) }
-            Button(L("Export Markdown…")) { model.exportTaskMarkdown(id) }
-            Divider()
-            if !selected { Button(L("Reference in the open conversation")) { model.referenceTask(id) } }
-            Button(L("Fork conversation")) { model.forkTask(id) }
-            Button(L("Show in Finder")) { model.revealTask(id) }
-            Divider()
-            Button(L("Delete conversation…"), role: .destructive) { model.deleteTask(id) }
+            if let folder {
+                // Everything else acts on the open workspace: open the folder first.
+                Button(L("Copy conversation ID")) { model.copyToPasteboard(id) }
+                Button(L("Show in Finder")) { model.revealTask(id, in: folder) }
+            } else {
+                Button(L("Rename…")) { model.renameTask(id) }
+                Button(L("Copy conversation ID")) { model.copyToPasteboard(id) }
+                Button(L("Copy as Markdown")) { model.copyToPasteboard(model.taskMarkdown(id)) }
+                Button(L("Export Markdown…")) { model.exportTaskMarkdown(id) }
+                Divider()
+                if !selected { Button(L("Reference in the open conversation")) { model.referenceTask(id) } }
+                Button(L("Fork conversation")) { model.forkTask(id) }
+                Button(L("Show in Finder")) { model.revealTask(id) }
+                Divider()
+                Button(L("Delete conversation…"), role: .destructive) { model.deleteTask(id) }
+            }
         }
+    }
+
+    var label: some View {
+        HStack(spacing: Theme.Space.s) {
+            Text(model.title(of: id)).font(Theme.body).lineLimit(1).truncationMode(.tail)
+            Spacer(minLength: Theme.Space.xs)
+            if hovering, folder == nil {
+                Color.clear.frame(width: Theme.Control.icon - 6, height: 1)   // room for ×
+            } else if let stage = model.attention[id]?.stage, stage.showsChip {
+                StageChip(stage: stage)
+            } else if (selected && model.running) || model.backgroundTasks.contains(id) {
+                RoleGhostBadge(role: .main, working: true, size: 20)
+            } else {
+                Text(modified.formatted(.relative(presentation: .named, unitsStyle: .narrow).locale(Locale(identifier: L10n.resolved))))
+                    .font(Theme.caption).foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.leading, 38).padding(.trailing, Theme.Space.s)
+        .frame(height: Theme.Control.row)
+        .background(Rectangle().fill(selected ? Theme.selection : .clear))
+        .overlay(alignment: .leading) {
+            if selected { Rectangle().fill(Theme.accent).frame(width: 2).padding(.leading, 26) }
+        }
+        .animation(Theme.Motion.hover, value: model.taskId)
     }
 }
 

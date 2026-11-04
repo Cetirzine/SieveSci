@@ -1,4 +1,7 @@
 import Foundation
+#if os(Windows)
+import WinSDK
+#endif
 
 public struct ProcessResult: Sendable {
     public var exitCode: Int32
@@ -15,23 +18,51 @@ public enum ProcessRunner {
         var env = ProcessInfo.processInfo.environment
         #if os(macOS)
         let shell = env["SHELL"] ?? "/bin/zsh"
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: shell)
-        p.arguments = ["-ilc", "printf %s \"$PATH\""]
-        let out = Pipe()
-        p.standardOutput = out
-        p.standardError = FileHandle.nullDevice
-        if (try? p.run()) != nil {
-            p.waitUntilExit()
+        // Interactive first (conda and friends extend PATH in .zshrc), then a plain login shell.
+        // Started from a terminal, an interactive shell with job control tries to take over that
+        // terminal from its background process group and stops: `+m` turns job control off, stdin
+        // is closed, and each try still has a deadline.
+        for flags in [["-i", "+m", "-l", "-c"], ["-l", "-c"]] {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: shell)
+            p.arguments = flags + ["printf %s \"$PATH\""]
+            let out = Pipe()
+            p.standardInput = FileHandle.nullDevice
+            p.standardOutput = out
+            p.standardError = FileHandle.nullDevice
+            guard (try? p.run()) != nil else { continue }
+            let deadline = Date().addingTimeInterval(5)
+            while p.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.02) }
+            if p.isRunning { p.terminate(); continue }
             let path = String(decoding: out.fileHandleForReading.readRest(), as: UTF8.self)
-            if !path.isEmpty { env["PATH"] = path }
+            if !path.isEmpty { env["PATH"] = path; break }
         }
         #endif
         return env
     }()
 
     /// False once the pid is gone (reaped). A zombie still counts as alive until it is reaped.
-    static func alive(_ pid: Int32) -> Bool { pid > 0 && (kill(pid, 0) == 0 || errno != ESRCH) }
+    static func alive(_ pid: Int32) -> Bool {
+        #if os(Windows)
+        guard pid > 0, let h = OpenProcess(DWORD(PROCESS_QUERY_LIMITED_INFORMATION), false, DWORD(pid)) else { return false }
+        defer { CloseHandle(h) }
+        var code: DWORD = 0
+        return GetExitCodeProcess(h, &code) && code == 259   // STILL_ACTIVE
+        #else
+        return pid > 0 && (kill(pid, 0) == 0 || errno != ESRCH)
+        #endif
+    }
+
+    /// Ends the process at once (SIGKILL; TerminateProcess on Windows).
+    static func forceKill(_ pid: Int32) {
+        #if os(Windows)
+        guard let h = OpenProcess(DWORD(PROCESS_TERMINATE), false, DWORD(pid)) else { return }
+        defer { CloseHandle(h) }
+        _ = TerminateProcess(h, 1)
+        #else
+        kill(pid, SIGKILL)
+        #endif
+    }
 
     public static func which(_ name: String) -> String? {
         if name.hasPrefix("/") { return FileManager.default.isExecutableFile(atPath: name) ? name : nil }
@@ -105,8 +136,8 @@ public enum ProcessRunner {
             p.terminate()
             // While cancelled, waitForExit returns at once, so give the child a moment to go.
             let grace = Date().addingTimeInterval(0.5)
-            while Date() < grace && ProcessRunner.alive(pid) && !exit.done { usleep(20_000) }
-            if ProcessRunner.alive(pid) && !exit.done { kill(pid, SIGKILL) }
+            while Date() < grace && ProcessRunner.alive(pid) && !exit.done { Thread.sleep(forTimeInterval: 0.02) }
+            if ProcessRunner.alive(pid) && !exit.done { ProcessRunner.forceKill(pid) }
         }
         // The handler can trail the probe by a moment.
         for _ in 0..<20 where !exit.done { try? await Task.sleep(nanoseconds: 10_000_000) }

@@ -79,6 +79,10 @@ public final class SessionServices: @unchecked Sendable {
     public let kernel: PythonKernelPool
     public let checkpoints: CheckpointStore
     public let goal: GoalController
+    /// Structured questions to the user and the answers' waiting calls.
+    public let asks: AskCenter
+    /// Brainstorming episodes and the idea ledger (speculation, apart from hypotheses and claims).
+    public let ideas: IdeaLedger
     public let todos: TodoList
     public let governor: EvolutionGovernor
     public let git: GitHistory
@@ -124,6 +128,8 @@ public final class SessionServices: @unchecked Sendable {
         audit = try AuditLog(url: taskDir.appendingPathComponent("audit.jsonl"))
         research = ResearchProtocol(ledger: ledger, stateURL: state.appendingPathComponent("plan.json"))
         claims = ClaimLedger(stateURL: state.appendingPathComponent("claims.json"))
+        asks = AskCenter(stateURL: state.appendingPathComponent("asks.json"))
+        ideas = IdeaLedger(stateURL: state.appendingPathComponent("ideas.json"))
         // One library per workspace: a new task starts with the papers earlier tasks fetched.
         let shared = workspace.appendingPathComponent(".sievesci/library")
         LiteratureLibrary.adoptTaskLibraries(into: shared, tasks: workspace.appendingPathComponent(".sievesci/tasks"))

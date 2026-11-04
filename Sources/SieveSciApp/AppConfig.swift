@@ -13,9 +13,14 @@ struct AppConfig: Codable, Equatable {
     var retention: CacheRetention = .short
     var effort: Effort? = nil
     var contactEmail = ""
+    /// Save open-access PDFs of papers added to the library.
+    var downloadOAPDFs = true
     var groundingRequired = true
     var visionHelper: ModelRef? = nil
     var recentWorkspaces: [String] = []
+    /// Sidebar folders the user expanded or collapsed (path → open). A folder not listed is open only
+    /// while it is the open workspace.
+    var folderOpen: [String: Bool] = [:]
     var maxReviewsPerSession = 24
     var maxDeliberationExchanges = 2
     /// Run independent parts of a request or plan on workers without waiting for the model to call `task`.
@@ -29,6 +34,8 @@ struct AppConfig: Codable, Equatable {
     var notifyTurnFinished = true
     var notifyPermission = true
     var showThinking = true
+    /// Let the agent enter brainstorming mode on its own when the work needs new ideas.
+    var autoBrainstorm = true
     /// Look for a newer release on GitHub at launch and once a day.
     var autoCheckUpdates = true
     /// Download it in the background and install it on quit (or from the sidebar banner).
@@ -74,9 +81,11 @@ extension AppConfig {
         retention = v(.retention, d.retention)
         effort = try? c.decodeIfPresent(Effort.self, forKey: .effort)
         contactEmail = v(.contactEmail, d.contactEmail)
+        downloadOAPDFs = v(.downloadOAPDFs, d.downloadOAPDFs)
         groundingRequired = v(.groundingRequired, d.groundingRequired)
         visionHelper = try? c.decodeIfPresent(ModelRef.self, forKey: .visionHelper)
         recentWorkspaces = v(.recentWorkspaces, d.recentWorkspaces)
+        folderOpen = v(.folderOpen, d.folderOpen)
         maxReviewsPerSession = v(.maxReviewsPerSession, d.maxReviewsPerSession)
         maxDeliberationExchanges = v(.maxDeliberationExchanges, d.maxDeliberationExchanges)
         autoDelegate = v(.autoDelegate, d.autoDelegate)
@@ -88,6 +97,7 @@ extension AppConfig {
         notifyTurnFinished = v(.notifyTurnFinished, d.notifyTurnFinished)
         notifyPermission = v(.notifyPermission, d.notifyPermission)
         showThinking = v(.showThinking, d.showThinking)
+        autoBrainstorm = v(.autoBrainstorm, d.autoBrainstorm)
         autoCheckUpdates = v(.autoCheckUpdates, d.autoCheckUpdates)
         autoInstallUpdates = v(.autoInstallUpdates, d.autoInstallUpdates)
     }

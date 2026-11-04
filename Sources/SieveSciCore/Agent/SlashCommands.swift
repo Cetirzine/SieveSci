@@ -50,6 +50,10 @@ public enum SlashCommands {
         .init(name: "plan-show", args: "", summary: "Research plan, hypotheses and checkpoints", group: "Research"),
         .init(name: "claims", args: "", summary: "Claims and their verification status", group: "Research"),
         .init(name: "review", args: "[focus]", summary: "Ask the independent checker to review the work now", group: "Research"),
+        .init(name: "brainstorm", args: "[topic]", summary: "Brainstorm new ideas you can watch live; novelty-checked before they count", group: "Research"),
+        .init(name: "ideas", args: "[dream]", summary: "Ideas from brainstorming (or last night's dream) and their checks", group: "Research"),
+        .init(name: "clarify", args: "[request]", summary: "Search, brainstorm directions, then ask you to choose", group: "Research"),
+        .init(name: "dream", args: "[on [daily HH:MM] | off | now | status]", summary: "Background dreaming: a nightly read-only run that links open threads into ideas", group: "Research"),
         .init(name: "notebook", args: "", summary: "Open the automatically written lab notebook", group: "Research"),
         .init(name: "audit", args: "", summary: "Verify the hash-chained provenance log", group: "Research"),
         .init(name: "grounding", args: "[on|off]", summary: "Require web + literature search before claims (default on)", group: "Research"),
@@ -344,6 +348,48 @@ public enum SlashCommands {
             bench.main.truncate(to: target)
             s.log("rewind", actor: "user", ["to_message": .int(target), "files": .array(files.map { .string($0) })])
             return ok(L10n.s("Rewound %@ turn(s). Restored files: %@", String(n), files.isEmpty ? L("none") : files.joined(separator: ", ")))
+        case "brainstorm":
+            s.ideas.request(.user)
+            return .prompt("Brainstorm" + (args.isEmpty ? " on the current task" : ": \(args)")
+                + ". Use the skill “brainstorm” (load it with the skill tool first) and start with `brainstorm` start so I can watch.")
+        case "clarify":
+            return .prompt("Use the skill “clarify” (load it with the skill tool first) for this request: "
+                + (args.isEmpty ? (bench.main.transcript.last { $0.role == .user }?.plainText ?? "") : args))
+        case "ideas":
+            if args == "dream" {
+                let inbox = DreamInbox.load(s.workspace)
+                DreamInbox.markSeen(s.workspace)
+                return ok(inbox.isEmpty ? L("No ideas from dreaming yet. Turn it on with /dream on.")
+                    : inbox.suffix(30).map { "\($0.seen ? " " : "•") \($0.idea.id) [\($0.idea.novelty?.rawValue ?? L("not checked"))] \($0.idea.statement.truncated(140))  (\($0.task))" }.joined(separator: "\n"))
+            }
+            let all = s.ideas.snapshot
+            return ok(all.isEmpty ? L("No ideas yet. Try /brainstorm.") : all.map {
+                "\($0.id) [\(L($0.status.rawValue))\($0.novelty.map { ", " + L($0.rawValue) } ?? "")\($0.hypothesisId.map { " → \($0)" } ?? "")] \($0.statement.truncated(140))"
+            }.joined(separator: "\n"))
+        case "dream":
+            let mine = Scheduler.list().filter { $0.workspace == s.workspace.path && $0.prompt == DreamProtocol.schedulePrompt }
+            let parts = args.split(separator: " ").map(String.init)
+            switch parts.first ?? "status" {
+            case "now":
+                s.ideas.request(.dream)
+                return .prompt(DreamProtocol.prompt)
+            case "on":
+                guard mine.isEmpty else { return ok(L10n.s("Dreaming is already on (%@).", mine.map(\.when).joined(separator: ", "))) }
+                let when = parts.count > 1 ? parts.dropFirst().joined(separator: " ") : "daily 03:00"
+                let r = await Scheduler.add(workspace: s.workspace, when: when, prompt: DreamProtocol.schedulePrompt, mode: .plan)
+                s.log("dream", actor: "user", ["event": "on", "when": .string(when)])
+                return ok(r)
+            case "off":
+                guard !mine.isEmpty else { return ok(L("Dreaming is off.")) }
+                for t in mine { _ = await Scheduler.remove(t.id) }
+                s.log("dream", actor: "user", ["event": "off"])
+                return ok(L("Dreaming turned off."))
+            default:
+                let unseen = DreamInbox.unseen(s.workspace).count
+                return ok((mine.isEmpty ? L("Dreaming is off. /dream on schedules a nightly read-only run (default 03:00).")
+                           : L10n.s("Dreaming is on: %@.", mine.map(\.when).joined(separator: ", ")))
+                          + "\n" + L10n.s("%@ unseen idea(s) from dreaming · /ideas dream", String(unseen)))
+            }
         case "schedule":
             if args.isEmpty { return ok(Scheduler.describe()) }
             if args.hasPrefix("remove ") { return ok(await Scheduler.remove(String(args.dropFirst(7)).trimmingCharacters(in: .whitespaces))) }

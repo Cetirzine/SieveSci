@@ -46,6 +46,9 @@ public final class LiteratureLibrary: @unchecked Sendable {
     let http: HTTPStreaming
     let contactEmail: String
     public var openAlexKey: String?
+    /// Save open-access PDFs into the library (Settings → Literature). Off: no PDF is fetched, and the
+    /// text comes from Europe PMC's full-text XML where it exists, else the abstract.
+    public var downloadPDFs = true
     private let lock = NSLock()
     public private(set) var records: [PaperRecord] = []
 
@@ -266,10 +269,10 @@ public final class LiteratureLibrary: @unchecked Sendable {
         guard var r = find(key) else { throw ToolError.invalidInput("no library entry \(key)") }
         if r.pdfPath != nil { return r }
         var candidates: [String] = []
-        if let u = r.oaPdfURL { candidates.append(u) }
-        if let pmc = r.pmcid { candidates.append("https://europepmc.org/articles/\(pmc)?pdf=render") }
-        if let ax = r.arxiv { candidates.append("https://arxiv.org/pdf/\(ax)") }
-        if let doi = r.doi, !contactEmail.isEmpty,
+        if downloadPDFs, let u = r.oaPdfURL { candidates.append(u) }
+        if downloadPDFs, let pmc = r.pmcid { candidates.append("https://europepmc.org/articles/\(pmc)?pdf=render") }
+        if downloadPDFs, let ax = r.arxiv { candidates.append("https://arxiv.org/pdf/\(ax)") }
+        if downloadPDFs, let doi = r.doi, !contactEmail.isEmpty,
            let j = try? await get("https://api.unpaywall.org/v2/\(doi)?email=\(Self.q(contactEmail))"),
            let u = j["best_oa_location"]?["url_for_pdf"]?.stringValue {
             candidates.append(u)

@@ -149,6 +149,15 @@ struct GeneralSettings: View {
                 Toggle(L("Notify me when a turn finishes (while SieveSci is in the background)"), isOn: $model.config.notifyTurnFinished)
                 Toggle(L("Notify me when permission is needed"), isOn: $model.config.notifyPermission)
             }
+            Section(spec: L("Literature")) {
+                Toggle(L("Download open-access PDFs"), isOn: $model.config.downloadOAPDFs)
+                    .onChange(of: model.config.downloadOAPDFs) { _, v in
+                        model.bench?.services.library.downloadPDFs = v
+                        for b in model.background.values { b.services.library.downloadPDFs = v }
+                    }
+                Text(L("Saves the PDF of each open-access paper added to the library (OpenAlex, Europe PMC, arXiv, Unpaywall). Off: only Europe PMC's full text or the abstract is kept."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section(spec: L("Identity")) {
                 SpecField(title: L("Contact email"), text: $model.config.contactEmail, prompt: "name@university.edu")
                 Text(L("Optional. Sent with literature requests so OpenAlex, Crossref and Unpaywall serve them from their faster polite pool; never shared elsewhere."))
@@ -884,6 +893,11 @@ struct ModelsSettings: View {
                     Stepper(L10n.f("Workers at once: %d", model.config.maxParallelWorkers), value: $model.config.maxParallelWorkers, in: 1...8)
                 }
                 Text(L("When a request or plan has independent parts, SieveSci runs them on workers automatically."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section(spec: L("Brainstorming")) {
+                Toggle(L("Let the agent start brainstorming on its own when new ideas are needed"), isOn: $model.config.autoBrainstorm)
+                Text(L("You can always ask with /brainstorm. While it brainstorms you see each stage, every idea and what it is thinking, and can wrap up or stop it. Ideas count only after a novelty check and an independent review."))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section(spec: L("Vision")) {

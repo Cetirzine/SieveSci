@@ -63,4 +63,42 @@ extension AppModel {
         guard let dir = taskDir(id) else { return }
         NSWorkspace.shared.activateFileViewerSelecting([dir])
     }
+
+    // MARK: Sidebar folders
+
+    /// Whether a sidebar folder lists its conversations: the user's last choice for it, else open only
+    /// while it is the open workspace.
+    func isFolderOpen(_ path: String) -> Bool { config.folderOpen[path] ?? (path == workspace?.path) }
+
+    /// Expands or collapses a folder's list without switching workspace. Several can be open at once.
+    func setFolder(_ path: String, open: Bool) {
+        var f = config.folderOpen.filter { config.recentWorkspaces.contains($0.key) }
+        f[path] = open
+        config.folderOpen = f
+        if open, path != workspace?.path { loadFolderTasks(path) }
+    }
+
+    /// Reads a folder other than the open workspace: its conversations, newest first, and their titles.
+    func loadFolderTasks(_ path: String) {
+        if Self.isDemo, folderTasks[path] != nil { return }
+        let ws = URL(fileURLWithPath: path)
+        let list = SessionStore.tasks(in: ws)
+        var t = taskTitles
+        for task in list where t[task.id] == nil {
+            if let title = SessionStore.title(dir: SessionStore.taskDir(task.id, in: ws)) { t[task.id] = title }
+        }
+        if t != taskTitles { taskTitles = t }
+        let old = folderTasks[path]
+        if old?.map(\.id) != list.map(\.id) || old?.map(\.modified) != list.map(\.modified) { folderTasks[path] = list }
+    }
+
+    /// Re-reads every expanded folder other than the open workspace.
+    func refreshOpenFolders() {
+        for p in config.recentWorkspaces where p != workspace?.path && isFolderOpen(p) { loadFolderTasks(p) }
+    }
+
+    /// Shows a conversation of another folder in Finder.
+    func revealTask(_ id: String, in folder: String) {
+        NSWorkspace.shared.activateFileViewerSelecting([SessionStore.taskDir(id, in: URL(fileURLWithPath: folder))])
+    }
 }
