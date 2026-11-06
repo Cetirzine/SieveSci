@@ -2,7 +2,8 @@
 // it (docs/SERVE_PROTOCOL.md); in demo scenes they only change local state.
 import { inTauri, type ServeClient, type JsonObject } from "../serve";
 import { L, L10n, loadLanguage, type Language } from "../i18n";
-import { getState, setState, resetTranscriptIndex, titleOf, type AppState, type MainTab, type AskRequest, type Config, type ContextMeter, type PermissionAsk, type ProviderInfo, type ProviderProfile, type Quota, type TaskEntry } from "./model";
+import { notify } from "./notify";
+import { deliver, getState, setState, resetTranscriptIndex, titleOf, type AppState, type MainTab, type AskRequest, type Config, type ContextMeter, type PermissionAsk, type ProviderInfo, type ProviderProfile, type Quota, type TaskEntry } from "./model";
 
 let client: ServeClient | null = null;
 export function attach(c: ServeClient | null) { client = c; }
@@ -142,7 +143,16 @@ export async function chooseFolder(start?: string): Promise<string | null> {
   return typed && typed.trim() ? typed.trim() : null;
 }
 
-async function confirmDialog(title: string, message: string, ok: string, cancel: string, warning = false): Promise<boolean> {
+export async function messageDialog(title: string, message: string, warning = false): Promise<void> {
+  if (inTauri) {
+    const { message: show } = await import("@tauri-apps/plugin-dialog");
+    await show(message, { title, kind: warning ? "warning" : "info" });
+    return;
+  }
+  window.alert(`${title}\n\n${message}`);
+}
+
+export async function confirmDialog(title: string, message: string, ok: string, cancel: string, warning = false): Promise<boolean> {
   if (inTauri) {
     const { ask } = await import("@tauri-apps/plugin-dialog");
     return ask(message, { title, okLabel: ok, cancelLabel: cancel, kind: warning ? "warning" : "info" });
@@ -237,6 +247,8 @@ export function refreshOpenFolders() {
 
 /** model.startSession(task:): opens a task (a new one without an id) and shows its saved conversation.
  *  A turn still running in the task being left keeps going in the background. */
+const dreamNoticeShown = new Set<string>();
+
 /** The task being opened ("" for a new one): a second click while it opens is ignored, so a slow
  *  open never starts the same task twice or two new tasks. */
 let opening: string | null = null;
@@ -284,6 +296,16 @@ export async function startSession(task?: string) {
       meter: (r.meter as unknown as ContextMeter) ?? s.meter,
     };
   });
+  // A task still working (it ran on while another was shown) says so (AppModel.attach).
+  if (r.running === true && main.length > 0) deliver({ type: "notice", text: L("Still working on this task; new output appears below.") });
+  // Ideas a background dream left in this workspace: said once per run, when one of its tasks opens.
+  const ws = getState().workspace;
+  if (Number(r.dreams ?? 0) > 0 && ws && !dreamNoticeShown.has(ws)) {
+    dreamNoticeShown.add(ws);
+    const text = L10n.f("%d new idea(s) from dreaming. Type /ideas dream to read them.", Number(r.dreams));
+    void notify(L("SieveSci dreamed"), text, `dream-${ws}`);
+    if (task !== undefined) deliver({ type: "notice", text });
+  }
   await refreshTaskList();
 }
 
@@ -404,6 +426,13 @@ export async function send(text: string, attachments: string[] = []) {
   if (trimmed === "/config") { openSettings(); return; }
   if (trimmed === "/clear") { await startSession(); return; }
   if (trimmed === "/fork") { await forkTask(getState().taskId); return; }
+  if (trimmed === "/doctor") {
+    // Support.swift's Doctor, run by serve: tools, sandbox, providers, search key and network.
+    deliver({ type: "notice", text: L("SieveSci doctor") + " …" });
+    const r = await call<{ text: string }>("system.doctor");
+    if (r) deliver({ type: "notice", text: r.text });
+    return;
+  }
   const s = getState();
   const item = { id: `u${Date.now()}`, at: Date.now(), kind: { type: "user" as const, text, attachments: attachments.map((a) => a.split(/[\\/]/).pop() ?? a) } };
   setState({ streams: { ...s.streams, main: [...(s.streams.main ?? []), item] }, ...(s.running ? { queued: [...s.queued, text] } : { running: true, runStarted: Date.now() }) });
@@ -411,6 +440,26 @@ export async function send(text: string, attachments: string[] = []) {
 }
 
 /** Stop also answers the approval on screen (serve denies it), so the prompt goes too. */
+/** AppModel.rewind(to:edit:): back to before this message (the agent forgets what came after); with
+ *  edit, the message returns to the composer to be changed and sent again. */
+export async function rewind(itemId: string, edit: boolean) {
+  const main = getState().streams.main ?? [];
+  const users = main.filter((i) => i.kind.type === "user");
+  const at = users.findIndex((u) => u.id === itemId);
+  if (at < 0) return;
+  const item = users[at];
+  if (edit && item.kind.type === "user") setState({ draft: item.kind.text });
+  const cut = main.findIndex((x) => x.id === itemId);
+  setState((st) => ({ streams: { ...st.streams, main: (st.streams.main ?? []).slice(0, cut) } }));
+  await call("task.send", { text: `/rewind ${users.length - at}` });
+}
+
+/** AppModel.approvePlan: leave plan mode with edits accepted, and tell the agent to go ahead. */
+export async function approvePlan() {
+  await setPermissionMode("acceptEdits");
+  await send(L("The plan is approved. Proceed with it."));
+}
+
 export async function stop() { setState({ pendingPermission: null }); await call("task.stop"); }
 
 export async function answerPermission(id: string | undefined, decision: "allow" | "always" | "deny", reason?: string) {

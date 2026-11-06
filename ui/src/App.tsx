@@ -108,7 +108,11 @@ export default function App() {
         if (cancelled) { t.close(); return; }
         const c = new ServeClient(t);
         t.onClose((why) => setState({ lastError: `SieveSci stopped: ${why}`, live: false }));
-        c.onEvent((e) => { deliver(e); notifyFor(e); });
+        c.onEvent((e) => {
+          deliver(e); notifyFor(e);
+          // Plan limits and balances move with each turn (AppModel.turnMaybeEnded → refreshQuotas).
+          if (e.type === "turnFinished" && e.agentId === "main" && e.task === getState().taskId) void A.refreshQuotas();
+        });
         c.onOutput((p) => { if (p.task === undefined || p.task === getState().taskId) deliver({ type: "notice", text: String(p.text ?? "") }); });
         // Development: the connection and its notifications, for the browser console.
         if (import.meta.env.DEV) {

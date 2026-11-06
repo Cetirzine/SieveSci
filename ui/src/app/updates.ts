@@ -72,6 +72,8 @@ export async function download(byUser = true) {
 
 export async function restart() {
   if (!inTauri) return;
+  // Updater.swift: a running task stops with the app; it can be resumed after the restart.
+  if (getState().running && !(await A.confirmDialog(L("Restart to update now?"), L("A task is still running. It stops now and can be resumed after the restart."), L("Restart"), L("Cancel"), true))) return;
   const { relaunch } = await import("@tauri-apps/plugin-process");
   await relaunch();
 }
@@ -84,3 +86,13 @@ export function startAutomaticChecks() {
 }
 
 export function dismissBanner() { banner.dismissed = true; set({ ...state }); }
+
+/** "Check for Updates…" from the menu: the answer is shown whatever it is (Updater.swift's alerts);
+ *  an available update brings the banner back even if it was put away. */
+export async function checkFromMenu() {
+  banner.dismissed = false;
+  await checkForUpdates(true);
+  const s = updateState();
+  if (s.kind === "upToDate") await A.messageDialog(L("SieveSci is up to date"), L("You have the latest version") + ` (${getState().version}).`);
+  else if (s.kind === "failed") await A.messageDialog(L("Couldn't check for updates"), s.message, true);
+}

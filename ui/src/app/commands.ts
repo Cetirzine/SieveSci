@@ -4,7 +4,7 @@ import { inTauri } from "../serve";
 import { L } from "../i18n";
 import * as A from "./actions";
 import { getState, mainTabs, setState, type InspectorTab, type MainTab } from "./model";
-import { checkForUpdates } from "./updates";
+import { checkFromMenu } from "./updates";
 
 const modes = ["ask", "acceptEdits", "auto", "plan"] as const;
 const sideTabs: InspectorTab[] = ["changes", "files", "figures", "jobs", "history", "learning"];
@@ -23,7 +23,7 @@ export const commands = {
   toggleInspector: () => A.toggleInspector(),
   mainTab: (t: MainTab) => A.setMainTab(t),
   sideTab: (t: InspectorTab) => setState({ inspectorTab: t, showInspector: true, showSettingsPage: false }),
-  checkUpdates: () => void checkForUpdates(true),
+  checkUpdates: () => void checkFromMenu(),
 };
 
 const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);

@@ -102,6 +102,33 @@ Menus and shortcuts, notifications (jobs, turn finished, permission) through Tau
 → in-app preview, drag-and-drop attachments, math (`MathMarkdown.swift`, LaTeX via KaTeX),
 quota text (`QuotaText.swift`), language switching at runtime. ☐
 
+## Audit against the SwiftUI app (2026-11-06)
+
+Every interface string the SwiftUI app uses (564) was checked against the web UI, every SwiftUI
+view type and every `AppModel` action matched to its web counterpart, then each difference read by
+hand. Fixed:
+
+| SwiftUI | Was in the web UI | Now |
+|---|---|---|
+| `PlanApprovalBar` "Approve and run" (`approvePlan`) | sent `/approve`, which the core does not know | accept-edits mode and "The plan is approved. Proceed with it."; ⌘↩ / Ctrl+Enter |
+| User message "Edit and resend", "Rewind to here" (`rewind(to:edit:)`) | buttons without an action | `/rewind n`, transcript cut there; edit puts the message back in the composer |
+| Transcript row context menu | none | Copy, Rewind, Edit and resend, Quote in reply, Fork task from here, Copy input / output, Show provenance, Copy conversation ID, Export Markdown |
+| Queued message pills (`bench.queuedPrompts`) | never cleared | serve sends `queued` with the main agent's `turnStarted` / `turnFinished` |
+| Usage popover "Plans & balances" | missing | plan, meters with resets, tracked spend (`providers.quota(s)` → `spend`), Refresh; balances refreshed after each turn |
+| `/doctor` (`Doctor`) | "handled by the app window", never handled | `Doctor` moved to the core; serve `system.doctor` |
+| Dream notice when a workspace's task opens | missing | `task.open` → `dreams`; notification and notice once per workspace per run |
+| "Still working on this task" on returning to a running task | missing | notice when `task.open` reports `running` |
+| Integrity signal titles (`signalTitle`) | raw kind (`harking`) | translated titles |
+| Status line "%ds · ↑ … tokens · esc to interrupt" | a key with no translation | the app's key |
+| Ask card ⌘↩ submit, Esc "Let's just talk" | missing | added (Esc only when not typing) |
+| Check for Updates… answer, restart warning while a task runs | silent; restart without asking | up-to-date / failed dialogs; "Restart to update now?" when a task runs |
+| Several prompts at once (questions, approvals) | only the first ever shown | queued and shown in turn (see SERVE_PROTOCOL, `permissionResolved`) |
+
+Differences kept on purpose: the Tauri updater replaces `Updater.swift`'s DMG download, so its
+messages differ; Quick Look is the in-app preview (images, PDF, text); provider status and CLI
+setup texts come from serve (`providers` info, `agents.install`) and are platform-worded; the
+SwiftUI app's CLI help ("Install it in Terminal…") is the one-click installer.
+
 ## Order of work
 
 1. A4 i18n, A6 theme primitives and brand, A5 demo scenes → window frame, chat rows, composer, welcome and empty hero match.

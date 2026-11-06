@@ -393,6 +393,8 @@ public final class ServeServer: @unchecked Sendable {
             "asks": Wire.value(s.asks.pending), "stage": l.stage.map(Self.stageJSON) ?? .null,
             // The approval an agent of this task waits for; shown again, since a front end that switched away dropped it.
             "permission": lock.withLock { l.pendingRequest }.map(Wire.permission) ?? .null,
+            // Ideas a background dream left in this workspace, not yet read (the app says so once).
+            "dreams": .int(DreamInbox.unseen(ws).count),
             "contested": .array(s.deliberation.contested.map { ["thread": .string($0.thread), "kind": .string($0.kind), "issue": .string($0.issue), "reason": .string($0.reason)] }),
             "grounding": { let g = s.research.hasGrounding(); return ["web": .bool(g.web), "literature": .bool(g.literature)] }(),
         ]
@@ -411,6 +413,11 @@ public final class ServeServer: @unchecked Sendable {
         var params = Wire.event(e).objectValue ?? [:]
         params["task"] = .string(l.id)
         params["workspace"] = .string(l.workspace.path)
+        // Messages sent during a turn wait their turn; the list shrinks as each starts (the queued pills).
+        switch e {
+        case .turnStarted(_, "main"), .turnFinished("main", _): params["queued"] = .array(l.bench.queuedPrompts.map { .string($0) })
+        default: break
+        }
         notify("event", .object(params))
         switch e {
         case .textDelta, .thinkingDelta, .toolProgress, .jobOutput: return

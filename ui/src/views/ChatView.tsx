@@ -6,7 +6,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { L, L10n } from "../i18n";
 import { useApp, getState, setState, type TranscriptItem, type ToolCallView, type FileDiff, type PermissionAsk } from "../app/model";
 import * as A from "../app/actions";
-import { ActionButton, Box, BlinkingCursor, Chip, EqualWidthButtons, IconBadge, IconButton, Keycap, LabelTab } from "../theme/primitives";
+import { ActionButton, Box, BlinkingCursor, Chip, ContextMenu, EqualWidthButtons, IconBadge, IconButton, Keycap, LabelTab } from "../theme/primitives";
 import { DotActivity, DotMatrixText, SieveField } from "../theme/dots";
 import { RoleGhostBadge } from "../theme/brand";
 import { agentName, deliberationTone, literatureIcon, roleVar, Symbol, toolIcon, toolTitle, verdictTone, type Role } from "../theme/theme";
@@ -196,14 +196,44 @@ const compactKinds = new Set(["user", "assistant", "agent", "review", "error"]);
 
 export const TranscriptRow = memo(function TranscriptRow({ item, stream, showThinking }: { item: TranscriptItem; stream: string; showThinking: boolean }) {
   const [hovering, setHovering] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const user = item.kind.type === "user";
+  const items = rowActions(item, stream);
   return (
     <div className={`row ${compactKinds.has(item.kind.type) ? "roomy" : "compact"} ${user ? "row-user" : "row-agent"}`}
-         onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)}>
+         onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)}
+         onContextMenu={(e) => { if (items.length === 0 || window.getSelection()?.toString()) return; e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}>
       <RowContent item={item} stream={stream} showThinking={showThinking} hovering={hovering} />
+      {menu && <ContextMenu at={menu} items={items} close={() => setMenu(null)} />}
     </div>
   );
 });
+
+/** A transcript row's right-click menu (ChatView.swift `TranscriptRowView.actions`). */
+function rowActions(item: TranscriptItem, stream: string): ({ label: string; run: () => void } | null)[] {
+  const k = item.kind;
+  const out: ({ label: string; run: () => void } | null)[] = [];
+  if (k.type === "user") out.push({ label: L("Copy"), run: () => copy(k.text) });
+  if (k.type === "assistant") out.push({ label: L("Copy"), run: () => copy(k.text) });
+  if (k.type === "user" && stream === "main") {
+    out.push({ label: L("Rewind to here"), run: () => void A.rewind(item.id, false) }, { label: L("Edit and resend"), run: () => void A.rewind(item.id, true) });
+  }
+  if (k.type === "assistant") {
+    out.push({ label: L("Quote in reply"), run: () => setState({ draft: k.text.split("\n").map((l) => "> " + l).join("\n") + "\n\n" }) });
+    if (stream === "main") out.push({ label: L("Fork task from here"), run: () => { const id = getState().taskId; if (id) void A.forkTask(id); } });
+  }
+  if (k.type === "tool") {
+    const c = k.call, input = c.input as Record<string, unknown>;
+    out.push({ label: L("Copy input"), run: () => copy(String(input.code ?? input.command ?? JSON.stringify(input, null, 2))) });
+    if (c.output) out.push({ label: L("Copy output"), run: () => copy(c.output) });
+    if (c.receipt) out.push({ label: `${L("Show provenance of")} ${c.receipt}`, run: () => void A.send(`/trace ${c.receipt}`) });
+  }
+  const task = getState().taskId;
+  if (stream === "main" && task && out.length > 0) {
+    out.push(null, { label: L("Copy conversation ID"), run: () => void A.copyText(task) }, { label: L("Export Markdown…"), run: () => void A.exportTaskMarkdown(task) });
+  }
+  return out;
+}
 
 const copy = (s: string) => { void navigator.clipboard?.writeText(s); };
 
@@ -218,8 +248,8 @@ function RowContent({ item, stream, showThinking, hovering }: { item: Transcript
           {k.attachments.length > 0 && <div className="t-caption secondary attachments">{k.attachments.map((a, i) => <span key={i}><Symbol name="paperclip" size={11} /> {a}</span>)}</div>}
           {stream === "main" && (
             <div className="user-actions" style={{ opacity: hovering ? 1 : 0 }}>
-              <IconButton symbol="pencil" label={L("Edit and resend")} />
-              <IconButton symbol="arrow.uturn.backward" label={L("Rewind to here")} />
+              <IconButton symbol="pencil" label={L("Edit and resend")} onClick={() => void A.rewind(item.id, true)} />
+              <IconButton symbol="arrow.uturn.backward" label={L("Rewind to here")} onClick={() => void A.rewind(item.id, false)} />
               <IconButton symbol="doc.on.doc" label={L("Copy")} onClick={() => copy(k.text)} />
             </div>
           )}
@@ -479,6 +509,12 @@ function AgentCardView({ id }: { id: string }) {
 }
 
 function PlanApprovalBar() {
+  // ⌘↩ (Ctrl+Enter) approves, as in the macOS app.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void A.approvePlan(); } };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   return (
     <Box provisional className="appear-pop plan-approval">
       <div className="row-center">
@@ -487,7 +523,7 @@ function PlanApprovalBar() {
         <span style={{ flex: 1 }} />
         <EqualWidthButtons>
           <ActionButton fill onClick={() => A.setMainTab("plan")}>{L("Open plan")}</ActionButton>
-          <ActionButton kind="primary" fill onClick={() => void A.send("/approve")}>{L("Approve and run")}</ActionButton>
+          <ActionButton kind="primary" fill onClick={() => void A.approvePlan()}>{L("Approve and run")}</ActionButton>
         </EqualWidthButtons>
       </div>
     </Box>
@@ -522,7 +558,7 @@ function Spinner() {
       <DotActivity />
       <span className="t-body c-accent" style={{ fontWeight: 500 }}>{L(verb)}…</span>
       <BlinkingCursor />
-      <span className="t-mono-tiny tertiary">{L10n.s("%@s · ↑ %@ tokens · esc to interrupt", String(Math.floor((now - started) / 1000)), tokens.toLocaleString())}</span>
+      <span className="t-mono-tiny tertiary">{L10n.f("%ds · ↑ %@ tokens · esc to interrupt", Math.floor((now - started) / 1000), tokens.toLocaleString())}</span>
       {jobs > 0 && <span className="t-mono-tiny tertiary">· {L10n.f("%d jobs running", jobs)}</span>}
     </div>
   );

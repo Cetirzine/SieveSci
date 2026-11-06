@@ -9,6 +9,7 @@ import { inTauri } from "../serve";
 import { Menu, Popup, SectionLabel } from "../theme/primitives";
 import { Symbol } from "../theme/theme";
 import { EffortMiniGauge, EffortSlider, GlitchLabel, effortName } from "../theme/effort";
+import { relative } from "./Settings";
 
 export { effortStops, effortName } from "../theme/effort";
 
@@ -200,6 +201,7 @@ function ModelMenu() {
   const meter = useApp((s) => s.meter);
   const providers = useApp((s) => s.config.providers);
   const usable = useApp((s) => s.usable);
+  const quotas = useApp((s) => s.quotas);
   const [showUsage, setShowUsage] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -220,7 +222,11 @@ function ModelMenu() {
               ...(usable.length ? [{ label: "", divider: true }] : []),
               { label: L("Providers…"), onSelect: () => A.openSettings("providers") },
             ]} />
-      <button type="button" className="plain" onClick={() => setShowUsage(!showUsage)}><ContextRing fill={meter.fill} /></button>
+      <button type="button" className="plain" onClick={() => {
+        // Balances not fetched yet (they are refreshed after each turn) are asked for when the popover opens.
+        if (!showUsage && usable.some((id) => !quotas[id])) void A.refreshQuotas();
+        setShowUsage(!showUsage);
+      }}><ContextRing fill={meter.fill} /></button>
       {showUsage && (
         <Popup className="usage-popover">
           <SectionLabel>{L("Context")}</SectionLabel>
@@ -235,6 +241,28 @@ function ModelMenu() {
             <span>{L("Output")}</span><span>{meter.session.output.toLocaleString()}</span>
             <span>{L("Cache hit rate")}</span><span className={meter.cacheHitRate > 0.7 ? "c-ok" : ""}>{prompt ? (meter.cacheHitRate * 100).toFixed(1) : "0.0"}%</span>
           </div>
+          <div className="h-hairline" />
+          <SectionLabel>{L("Plans & balances")}</SectionLabel>
+          {providers.filter((p) => usable.includes(p.id)).map((p) => {
+            const q = quotas[p.id];
+            return (
+              <div key={p.id} className="usage-provider">
+                <span className="t-body-strong">{p.displayName}{q?.plan ? ` · ${q.plan}` : ""}</span>
+                {q ? <>
+                  {q.meters.map((m, i) => (
+                    <div key={i} className="usage-meter">
+                      <div className="usage-meter-line t-mono-tiny"><span className="secondary">{m.title}</span><span className={m.exhausted ? "c-bad" : ""}>{m.value}</span></div>
+                      {m.usedFraction !== null && <div className="usage-bar"><i style={{ width: `${Math.min(Math.max(m.usedFraction, 0), 1) * 100}%`, background: m.usedFraction > 0.85 ? "var(--bad)" : "var(--accent)" }} /></div>}
+                      {m.resetsAt && <span className="t-caption secondary">{L10n.f("resets %@", relative(m.resetsAt))}</span>}
+                    </div>
+                  ))}
+                  {q.note && <span className="t-caption secondary">{q.note}</span>}
+                </> : <span className="t-caption secondary">{L("loading…")}</span>}
+                {q?.spend && <span className="t-caption secondary">{L("tracked spend: $%.4f today · $%.2f this month").replace("%.4f", q.spend.today.toFixed(4)).replace("%.2f", q.spend.month.toFixed(2))}</span>}
+              </div>
+            );
+          })}
+          <div className="usage-refresh"><button type="button" className="link-button" onClick={() => void A.refreshQuotas()}>{L("Refresh")}</button></div>
         </Popup>
       )}
     </span>

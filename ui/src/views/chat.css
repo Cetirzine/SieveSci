@@ -185,6 +185,9 @@ span.sandbox-menu.t-meta { display: inline-flex; align-items: center; gap: 4px; 
 .usage-popover { position: absolute; right: 0; bottom: calc(100% + 10px); z-index: 60; width: 380px; padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: var(--s-m);
                  background: var(--raised); border: 1px solid var(--rule); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); color: var(--text); }
 .usage-bar { height: 4px; background: var(--separator); }
+.usage-provider { display: flex; flex-direction: column; gap: 4px; }
+.usage-meter-line { display: flex; justify-content: space-between; gap: 8px; }
+.usage-refresh { display: flex; justify-content: flex-end; }
 .usage-bar i { display: block; height: 100%; }
 .usage-grid { display: grid; grid-template-columns: max-content max-content; column-gap: 14px; row-gap: 3px; }
 .stats-line { display: flex; align-items: center; justify-content: center; gap: var(--s-s); }

@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { L, L10n, resolvedLanguage } from "../i18n";
 import { useApp, getState, titleOf, isFolderOpen, mainTabs, onPlatform, type MainTab, type AppState, type Attention } from "../app/model";
 import * as A from "../app/actions";
-import { ActionButton, Box, Chip, EqualWidthButtons, IconButton, Menu, Popup, SectionLabel, SpecField } from "../theme/primitives";
+import { ActionButton, Box, Chip, ContextMenu, EqualWidthButtons, IconButton, Menu, SectionLabel, SpecField } from "../theme/primitives";
 import { DotProgress } from "../theme/dots";
 import { banner, dismissBanner, download, onUpdate, restart, updateState, type UpdateState } from "../app/updates";
 import { BrandLogo, RoleGhostBadge } from "../theme/brand";
@@ -205,26 +205,6 @@ function TaskRow({ id, modified, folder }: { id: string; modified: number; folde
   );
 }
 
-/** A right-click menu at the pointer; closes on a choice, a click elsewhere or Esc. */
-function ContextMenu({ at, items, close }: { at: { x: number; y: number }; items: ({ label: string; run: () => void; destructive?: boolean } | null)[]; close: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const off = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) close(); };
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
-    document.addEventListener("mousedown", off);
-    document.addEventListener("keydown", esc);
-    return () => { document.removeEventListener("mousedown", off); document.removeEventListener("keydown", esc); };
-  }, [close]);
-  return (
-    <Popup ref={ref} className="menu-list context-menu" role="menu" style={{ left: at.x, top: at.y }}>
-      {items.map((it, i) => it === null ? <div key={i} className="menu-divider" /> : (
-        <button key={i} type="button" role="menuitem" className={`menu-item ${it.destructive ? "c-bad" : ""}`} onClick={() => { close(); it.run(); }}>
-          <span className="menu-check" />{it.label}
-        </button>
-      ))}
-    </Popup>
-  );
-}
 
 /** AppModel.renameTask: an empty name goes back to the generated title. */
 function RenameSheet({ id, title, close }: { id: string; title: string; close: () => void }) {

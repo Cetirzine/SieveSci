@@ -291,6 +291,22 @@ private final class SlowProvider: LLMProvider, @unchecked Sendable {
         try await c.call("shutdown")
     }
 
+    @Test func queuedMessagesDreamsAndDoctor() async throws {
+        let ws = try workspace()
+        let c = Client(workspace: ws) { SlowProvider() }
+        let opened = try await c.call("task.open")
+        #expect(opened["dreams"]?.intValue == 0)
+        _ = try await c.call("task.send", ["text": "first"])
+        #expect(await c.waitFor { $0.str("type") == "turnStarted" && $0.str("agentId") == "main" } != nil)
+        _ = try await c.call("task.send", ["text": "second"])
+        // The first turn ends with the second waiting; the second starts with nothing left behind it.
+        #expect(await c.waitFor(10) { $0.str("type") == "turnFinished" && $0.str("agentId") == "main" && $0["queued"]?.arrayValue?.compactMap(\.stringValue) == ["second"] } != nil, "\(c.events.filter { $0["queued"] != nil })")
+        #expect(await c.waitFor(10) { $0.str("type") == "turnStarted" && $0.str("agentId") == "main" && $0["queued"]?.arrayValue?.isEmpty == true } != nil)
+        let doctor = try await c.call("system.doctor")
+        #expect(doctor.str("text")?.hasPrefix(L("SieveSci doctor")) == true)
+        try await c.call("shutdown")
+    }
+
     @Test func openingATaskTwiceAtOnceStartsItOnce() async throws {
         let ws = try workspace()
         let c = Client(workspace: ws) { ScriptedProvider(replies: ["hi"]) }

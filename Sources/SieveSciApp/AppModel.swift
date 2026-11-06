@@ -437,7 +437,7 @@ final class AppModel: ObservableObject {
         if trimmed == "/config" { openSettings(); return }
         if trimmed == "/clear" { startSession(); return }
         if trimmed == "/fork" { fork(); return }
-        if trimmed == "/doctor" { Task { let r = await Doctor.run(model: self); append(.notice(r), to: "main") }; return }
+        if trimmed == "/doctor" { Task { let r = await Doctor.run(config: config, secrets: secrets); append(.notice(r), to: "main") }; return }
         append(.user(trimmed, attachments: attachments.map(\.lastPathComponent)), to: "main")
         if brainstorm?.endedAt != nil { brainstorm = nil }
         openText["main"] = nil

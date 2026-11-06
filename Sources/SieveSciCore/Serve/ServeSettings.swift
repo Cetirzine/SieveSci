@@ -36,13 +36,17 @@ extension ServeServer {
 
         case "providers.quota":
             let prof = try provider(p)
-            return Self.quotaJSON(await QuotaService.shared.refresh(prof, secrets: secrets))
+            return Self.quotaJSON(await QuotaService.shared.refresh(prof, secrets: secrets), id: prof.id)
         case "providers.quotas":
             var out: [String: JSON] = [:]
             for prof in ConfiguredModels.usable(lock.withLock { config }, secrets: secrets) where out[prof.id] == nil {
-                out[prof.id] = Self.quotaJSON(await QuotaService.shared.refresh(prof, secrets: secrets))
+                out[prof.id] = Self.quotaJSON(await QuotaService.shared.refresh(prof, secrets: secrets), id: prof.id)
             }
             return ["quotas": .object(out)]
+
+        case "system.doctor":
+            // `/doctor` (Support.swift): tools, sandbox, providers, search key and network, checked here.
+            return ["text": .string(await Doctor.run(config: lock.withLock { config }, secrets: secrets))]
 
         case "providers.catalog":
             let presets: [JSON] = ProviderPresets.all.map { pr in
@@ -221,9 +225,12 @@ extension ServeServer {
         }
     }
 
-    static func quotaJSON(_ q: QuotaSnapshot) -> JSON {
+    static func quotaJSON(_ q: QuotaSnapshot, id: String) -> JSON {
         let iso = ISO8601DateFormatter()
+        // What SieveSci's own calls cost on this provider (from usage × prices), as the app's usage popover shows.
+        let spend = SpendTracker.shared.spend(providerId: id)
         return ["plan": q.plan.map { .string($0) } ?? .null, "note": q.note.map { .string(L($0)) } ?? .null,
+                "spend": ["today": .double(spend.today), "month": .double(spend.month)],
                 "summary": QuotaText.summary(q).map { .string($0) } ?? .null,
                 "meters": .array(q.meters.map { m in
                     ["title": .string(QuotaText.title(m)), "value": .string(QuotaText.value(m)),

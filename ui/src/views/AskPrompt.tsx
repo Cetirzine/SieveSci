@@ -30,6 +30,16 @@ export function AskPrompt({ request }: { request: AskRequest }) {
     void A.answerAsk(request.id, { kind: "answered", answers });
   };
   const advance = () => { if (tab < questions.length - 1) setTab(tab + 1); else if (canSubmit) submit(); };
+  // AskPrompt.swift's shortcuts: ⌘↩ (Ctrl+Enter) submits; Esc ("Let's just talk") when not typing.
+  const latest = { canSubmit, submit };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && latest.canSubmit) { e.preventDefault(); latest.submit(); }
+      else if (e.key === "Escape" && !(e.target as HTMLElement)?.closest?.("input, textarea, select")) { e.preventDefault(); void A.answerAsk(request.id, { kind: "dismissed" }); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
   const toggle = (q: AskQuestion, label: string) => {
     const p = picks[q.id] ?? [];
     if (q.kind === "multi") setPicks({ ...picks, [q.id]: p.includes(label) ? p.filter((x) => x !== label) : [...p, label] });

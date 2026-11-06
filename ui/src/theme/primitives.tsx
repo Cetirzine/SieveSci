@@ -152,6 +152,27 @@ export const Popup = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   return <div {...props} ref={(el) => { ref.current = el; if (typeof outer === "function") outer(el); else if (outer) outer.current = el; }} />;
 });
 
+/** A right-click menu at the pointer; closes on a choice, a click elsewhere or Esc. */
+export function ContextMenu({ at, items, close }: { at: { x: number; y: number }; items: ({ label: string; run: () => void; destructive?: boolean } | null)[]; close: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const off = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) close(); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    document.addEventListener("mousedown", off);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", off); document.removeEventListener("keydown", esc); };
+  }, [close]);
+  return (
+    <Popup ref={ref} className="menu-list context-menu" role="menu" style={{ left: at.x, top: at.y }}>
+      {items.map((it, i) => it === null ? <div key={i} className="menu-divider" /> : (
+        <button key={i} type="button" role="menuitem" className={`menu-item ${it.destructive ? "c-bad" : ""}`} onClick={() => { close(); it.run(); }}>
+          <span className="menu-check" />{it.label}
+        </button>
+      ))}
+    </Popup>
+  );
+}
+
 export function Menu({ label, items, className = "", align = "left", title }:
   { label: ReactNode; items: { label: ReactNode; onSelect?: () => void; checked?: boolean; destructive?: boolean; divider?: boolean; section?: boolean }[]; className?: string; align?: "left" | "right"; title?: string }) {
   const [open, setOpen] = useState(false);

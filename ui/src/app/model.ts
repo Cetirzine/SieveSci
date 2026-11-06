@@ -2,6 +2,7 @@
 // state, built from `sievesci serve` events with the same rules (AppModel+Events.swift).
 import { useRef, useSyncExternalStore } from "react";
 import type { JsonObject } from "../serve";
+import { L } from "../i18n";
 
 export type Role = "main" | "checker" | "verifier" | "worker";
 
@@ -78,7 +79,7 @@ export interface ModelSpec { id?: string; contextWindow: number; maxOutput: numb
 export interface ModelInfo extends ModelSpec { custom?: boolean; detected?: ModelSpec }
 export interface ProviderInfo { ready: boolean; short: string; cliPath: string | null; hasKey: boolean; models: Record<string, ModelInfo> }
 export interface QuotaMeter { title: string; value: string; usedFraction: number | null; exhausted: boolean; resetsAt: string | null }
-export interface Quota { plan: string | null; note: string | null; summary: string | null; meters: QuotaMeter[] }
+export interface Quota { plan: string | null; note: string | null; summary: string | null; meters: QuotaMeter[]; spend?: { today: number; month: number } }
 
 /** AppConfig as `sievesci serve` sends it (config.get), shared with the macOS app. */
 export interface Config {
@@ -333,6 +334,16 @@ function apply(events: JsonObject[]) {
   listeners.forEach((l) => l());
 }
 
+/** What an integrity signal means, in the interface language (AppModel.signalTitle); the detail stays as detected. */
+function signalTitle(kind: string): string {
+  const t: Record<string, string> = {
+    codeHack: "Questionable code", falseCompletion: "Success claimed after a failure", ignoredError: "Error not mentioned",
+    scopeShrink: "Scope reduced", syntheticData: "Synthetic data", ungrounded: "Not backed by evidence",
+    harking: "Criteria changed after results", breakthrough: "Strong claim — needs verification", checkpoint: "Checkpoint", ideation: "Idea under review",
+  };
+  return t[kind] ? L(t[kind]) : kind;
+}
+
 function handle(s: AppState, e: JsonObject) {
   const str = (k: string) => String(e[k] ?? "");
   const agent = str("agentId");
@@ -345,6 +356,8 @@ function handle(s: AppState, e: JsonObject) {
   if (panelEvents.has(String(e.type))) s.panelTick++;
   switch (e.type) {
     case "turnStarted":
+      // The messages still waiting behind this turn (the queued pills shrink as each one starts).
+      if (agent === "main" && Array.isArray(e.queued)) s.queued = e.queued as string[];
       if (e.role === "main" && agent === "main" && !s.running) {
         s.running = true; s.runStarted = Date.now(); s.spinnerVerb = verbs[Math.floor(Math.random() * verbs.length)];
       }
@@ -392,7 +405,7 @@ function handle(s: AppState, e: JsonObject) {
     case "assistantMessage": openText.delete(agent); break;
     case "usage": if (agent === "main") s.meter = e.meter as unknown as ContextMeter; break;
     case "integrity":
-      for (const sig of (e.signals ?? []) as JsonObject[]) if (Number(sig.severity ?? 0) >= 2) append(s, { type: "signal", text: `${sig.kind} · ${sig.detail}` }, "main");
+      for (const sig of (e.signals ?? []) as JsonObject[]) if (Number(sig.severity ?? 0) >= 2) append(s, { type: "signal", text: `${signalTitle(String(sig.kind))} · ${sig.detail}` }, "main");
       break;
     case "supervisorReview": append(s, { type: "review", kind: str("kind"), verdict: str("verdict"), body: str("body") }, "main"); break;
     case "agentStarted": {
@@ -432,6 +445,7 @@ function handle(s: AppState, e: JsonObject) {
       closeThinking(s, agent);
       openText.delete(agent);
       if (agent === "main") s.running = false;
+      if (agent === "main" && Array.isArray(e.queued)) s.queued = e.queued as string[];
       break;
     case "permissionRequested": s.pendingPermission = s.pendingPermission ?? (e.request as unknown as PermissionAsk); break;
     case "askRequested": {

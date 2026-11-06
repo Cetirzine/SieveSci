@@ -131,7 +131,7 @@ function Disclosure({ title, open, onToggle, children }: { title: string; open: 
   );
 }
 
-function relative(iso: string | number): string {
+export function relative(iso: string | number): string {
   const ms = typeof iso === "number" ? iso : Date.parse(iso);
   const rtf = new Intl.RelativeTimeFormat(resolvedLanguage(), { numeric: "auto" });
   const s = Math.round((ms - Date.now()) / 1000), a = Math.abs(s);
