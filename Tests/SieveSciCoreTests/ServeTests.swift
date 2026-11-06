@@ -102,6 +102,7 @@ private final class SlowProvider: LLMProvider, @unchecked Sendable {
         let opened = try await c.call("task.open")
         let task = try #require(opened.str("task"))
         #expect(opened["history"]?.arrayValue?.isEmpty == true && opened["running"]?.boolValue == false)
+        #expect(opened["meter"]?["model"]?.stringValue?.isEmpty == false, "the composer shows the model before the first reply")
 
         #expect(try await c.call("task.send", ["text": "Say hello"])["accepted"]?.boolValue == true)
         let done = await c.waitFor { $0.str("type") == "turnFinished" && $0.str("agentId") == "main" }

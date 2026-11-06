@@ -352,6 +352,8 @@ public final class ServeServer: @unchecked Sendable {
             "task": .string(id), "workspace": .string(ws.path),
             "title": SessionStore.title(dir: s.taskDir).map { .string($0) } ?? .null,
             "running": .bool(l.bench.isRunning),
+            // The lead agent's model and window, shown in the composer before the first reply (AppModel.open).
+            "meter": Wire.meter(l.bench.main.meter),
             "history": .array(Self.history(SessionStore.load(dir: s.taskDir, agent: "main"))),
             "plan": Wire.value(s.research.snapshot), "claims": Wire.value(s.claims.snapshot), "ideas": Wire.value(s.ideas.snapshot), "brainstorm": s.ideas.live.map { Wire.value($0) } ?? .null,
             "asks": Wire.value(s.asks.pending), "stage": l.stage.map(Self.stageJSON) ?? .null,

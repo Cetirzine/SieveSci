@@ -2,7 +2,7 @@
 // it (docs/SERVE_PROTOCOL.md); in demo scenes they only change local state.
 import { inTauri, type ServeClient, type JsonObject } from "../serve";
 import { L, L10n, loadLanguage, type Language } from "../i18n";
-import { getState, setState, resetTranscriptIndex, titleOf, type AppState, type MainTab, type AskRequest, type Config, type ProviderInfo, type ProviderProfile, type Quota, type TaskEntry } from "./model";
+import { getState, setState, resetTranscriptIndex, titleOf, type AppState, type MainTab, type AskRequest, type Config, type ContextMeter, type ProviderInfo, type ProviderProfile, type Quota, type TaskEntry } from "./model";
 
 let client: ServeClient | null = null;
 export function attach(c: ServeClient | null) { client = c; }
@@ -253,6 +253,7 @@ export async function startSession(task?: string) {
       plan: (r.plan as never) ?? s.plan, claims: (r.claims as never) ?? [], contested: (r.contested as never) ?? [],
       ideas: (r.ideas as never) ?? [], brainstorm: (r.brainstorm as never) ?? null,
       grounding: (r.grounding as never) ?? null,
+      meter: (r.meter as unknown as ContextMeter) ?? s.meter,
     };
   });
   await refreshTaskList();
