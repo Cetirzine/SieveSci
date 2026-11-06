@@ -547,27 +547,162 @@ public final class AgentSession: @unchecked Sendable {
 
     static let prunedMarker = "[old output pruned:"
 
-    /// Summarizes the conversation with a *fork* of the same prefix (same system, tools, model),
-    /// so the summarization call itself reads the cache, then starts a new epoch.
-    /// `reason` is recorded in the audit log; `shown` is what the user sees (localized).
+    /// Compaction (after Codex's `compact.rs` and opencode's `session/compaction.ts`): the model writes a
+    /// structured checkpoint with a fork of the same prefix (so the call reads the cache); a reply that is
+    /// empty or skips the template gets one nudge without tools; failing that, a checkpoint is built from
+    /// the transcript itself — the context is never replaced by an empty summary. The new context keeps
+    /// the user's own messages and answers verbatim, the live research state from the tools, and the most
+    /// recent exchanges as they were, behind a note that this is the same task continuing.
     public func compact(focus: String?, reason: String, shown: String? = nil) async throws {
-        let instruction = """
-        Write a handoff summary of this research session so far, for yourself to continue from. Include: \
-        the goal and current plan stage; hypotheses and their status; what was done, with receipt ids, file \
-        paths and key numbers exactly as measured; library citation keys in use; open claims and \
-        verification status; unresolved supervisor issues; next steps. Do not add anything not in the \
-        conversation.\(focus.map { " Focus especially on: \($0)." } ?? "")
-        """
+        let instruction = Self.checkpointPrompt + (focus.map { "\n\nFocus especially on: \($0)." } ?? "")
         var req = LLMRequest(model: model, system: system, tools: tools.map(\.spec),
-                             messages: transcript + [Message.user(instruction)], maxTokens: 8000, effort: services.effort, cache: cache)
+                             messages: transcript + [Message.user(instruction)], maxTokens: 16000, effort: .low, cache: cache)
         req.host = CLIHost(workspace: services.workspace, readOnly: true)
-        let resp = try await provider.complete(req)
-        let summary = resp.message.plainText
+        var summary = (try? await provider.complete(req))?.message.plainText ?? ""
+        if !Self.filled(summary) {
+            var retry = req
+            retry.tools = []
+            retry.messages = transcript + [Message.user(instruction), Message.user(Self.checkpointNudge)]
+            summary = (try? await provider.complete(retry))?.message.plainText ?? ""
+        }
+        let fromModel = Self.filled(summary)
+        if !fromModel { summary = fallbackCheckpoint() }
+        // The most recent exchanges stay verbatim, from an assistant message on (so every tool result
+        // still follows its call and roles keep alternating).
+        let keep = Self.keepTokens
+        var cut = transcript.count, size = 0
+        for i in transcript.indices.reversed() {
+            size += Self.tokens(transcript[i])
+            if size > keep { break }
+            if transcript[i].role == .assistant { cut = i }
+        }
+        let tail = Array(transcript[cut...])
+        let users = Self.userMessages(Array(transcript[..<cut]))
         epoch += 1
         services.log("compaction", actor: "host", ["agent": .string(id), "reason": .string(reason), "epoch": .int(epoch),
-                                                   "messages_before": .int(transcript.count), "summary": .string(summary)])
-        transcript = [Message.user("<session_summary epoch=\"\(epoch)\">\n\(summary)\n</session_summary>")]
+                                                   "messages_before": .int(transcript.count), "kept": .int(tail.count),
+                                                   "checkpoint": .string(fromModel ? "model" : "fallback"), "summary": .string(summary)])
+        let state = role == .main ? TurnContext.render(services: services, model: model) + Self.ideasState(services) : ""
+        let text = """
+        <session_summary epoch="\(epoch)">
+        \(Self.continuationNote)
+        <user_messages>
+        \(users.joined(separator: "\n§\n"))
+        </user_messages>
+        <checkpoint>
+        \(summary)
+        </checkpoint>
+        \(state)
+        </session_summary>
+        """
+        transcript = [Message.user(text)] + tail
         services.emit(.notice(L10n.s("Context compacted (%@).", shown ?? L(reason))))
+    }
+
+    /// Recent conversation kept verbatim beside the checkpoint (opencode's `keep.tokens`), and the user's
+    /// own messages carried forward (Codex's COMPACT_USER_MESSAGE_MAX_TOKENS).
+    static let keepTokens = 15_000, userMessageTokens = 20_000
+
+    static let continuationNote = "The conversation so far was compacted to fit the context window. This is the same task, continuing: below are the user's own messages (verbatim), your checkpoint of the work, and the current state of the research tools; the most recent exchanges follow unchanged. Build on them — do not restart, do not ask the user what the task is, and do not redo steps the checkpoint or the receipts show as done."
+
+    static let checkpointPrompt = """
+    Write a checkpoint of this research session that you will continue from after the older conversation is \
+    removed. Do not continue the task or call tools. Return only these Markdown sections:
+
+    ## Objective
+    - the user's request, in their own words where possible
+    ## Requirements
+    - constraints, preferences and decisions the user gave (including answers to questions), or "(none)"
+    ## Work State
+    ### Completed
+    - finished steps, each with its receipt ids, file paths and key numbers exactly as measured
+    ### Active
+    - what was in progress when the context filled up
+    ### Blocked
+    - open problems, unresolved reviewer issues, or "(none)"
+    ## Next Move
+    1. the next concrete actions, in order
+    ## Important Context
+    - library citation keys, idea / hypothesis / claim ids and their status, findings the next step needs
+
+    Terse single-line bullets. Preserve exact ids, paths, numbers and citation keys. Add nothing that is not in the conversation.
+    """
+
+    static let checkpointNudge = "The previous response did not fill in the checkpoint. Do not call tools. Return the checkpoint as text, using the exact section headings."
+
+    static func filled(_ s: String) -> Bool {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.count >= 80 && (t.contains("## Objective") || t.contains("## Work State") || t.count >= 400)
+    }
+
+    static func tokens(_ m: Message) -> Int {
+        m.blocks.reduce(0) { n, b in
+            switch b {
+            case .text(let t): return n + t.utf8.count / 3
+            case .toolResult(let r): return n + r.content.utf8.count / 3
+            case .toolUse(let u): return n + u.input.canonical.utf8.count / 3
+            case .thinking(let t): return n + t.text.utf8.count / 3
+            default: return n + 500
+            }
+        }
+    }
+
+    /// What the user typed and answered (ask_user), oldest first, newest kept within the budget; messages
+    /// carried by an earlier checkpoint come along.
+    static func userMessages(_ msgs: [Message]) -> [String] {
+        var askIds = Set<String>()
+        for m in msgs { for u in m.toolUses where u.name == "ask_user" { askIds.insert(u.id) } }
+        var out: [String] = []
+        for m in msgs where m.role == .user {
+            for b in m.blocks {
+                switch b {
+                case .text(let t) where t.hasPrefix("<session_summary"):
+                    if let a = t.range(of: "<user_messages>\n"), let z = t.range(of: "\n</user_messages>"), a.upperBound <= z.lowerBound {
+                        out += t[a.upperBound..<z.lowerBound].components(separatedBy: "\n§\n").filter { !$0.isEmpty }
+                    }
+                case .text(let t) where !HostContext.isHostBlock(t):
+                    let own = HostContext.userText(t).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !own.isEmpty, !own.hasPrefix("[tool result") { out.append(own) }
+                case .toolResult(let r) where askIds.contains(r.toolUseId):
+                    out.append("(answer to a question) " + r.content.truncated(2000))
+                default: break
+                }
+            }
+        }
+        var kept: [String] = [], budget = userMessageTokens * 3
+        for u in out.reversed() {
+            guard budget > 0 else { break }
+            let piece = u.utf8.count > budget ? String(u.prefix(budget / 3)) + " …" : u
+            kept.append(piece)
+            budget -= piece.utf8.count
+        }
+        return kept.reversed()
+    }
+
+    /// Ideas from brainstorming, so their ids and status survive compaction.
+    static func ideasState(_ s: SessionServices) -> String {
+        let ideas = s.ideas.snapshot
+        guard !ideas.isEmpty else { return "" }
+        let lines = ideas.suffix(40).map { "\($0.id) [\($0.status.rawValue)\($0.novelty.map { ", " + $0.rawValue } ?? "")] \($0.statement.truncated(140))" }
+        return "\n<ideas>\n" + lines.joined(separator: "\n") + "\n</ideas>"
+    }
+
+    /// A checkpoint without a model: the tool calls made, with their receipts, when the model returned none.
+    func fallbackCheckpoint() -> String {
+        var names: [String: String] = [:]
+        var lines: [String] = []
+        for m in transcript {
+            for u in m.toolUses { names[u.id] = u.name }
+            for b in m.blocks {
+                if case .toolResult(let r) = b {
+                    let receipt = Grounding.matches(#"\[receipt (r\d+)\]"#, in: r.content, group: 1).last.map { " (\($0))" } ?? ""
+                    let gist = r.content.split(separator: "\n").first.map { String($0).truncated(140, marker: "…") } ?? ""
+                    lines.append("- \(names[r.toolUseId] ?? "tool")\(receipt): \(gist)")
+                }
+            }
+        }
+        return "## Work State\n### Completed\n" + lines.suffix(120).joined(separator: "\n")
+            + "\n## Next Move\n1. Continue the user's request from the last step above; check the receipts before repeating anything."
     }
 
     /// Restores a transcript (session resume). The bytes are reused as stored, so a resumed session
