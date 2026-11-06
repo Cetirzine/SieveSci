@@ -378,6 +378,7 @@ final class AppModel: ObservableObject {
             }
             let bench = Workbench(services: services)
             bench.autoWake = config.autoWake
+            bench.autoTitle = config.autoTitles && !Self.isDemo
             bench.onOutput = { [weak self] text in Task { @MainActor in self?.append(.notice(text), to: "main") } }
             self.bench = bench
             let (p, m) = services.models.main

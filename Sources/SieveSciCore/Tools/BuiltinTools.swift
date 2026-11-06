@@ -453,12 +453,16 @@ struct PaperFetchTool: Tool {
         }
         switch kind {
         case .arxiv:
-            await attempt { try await lib.searchArXiv("id:\(id)", limit: 1).first }
+            await attempt { try await lib.arxivById(id) }
+            // arXiv's own DOI namespace is not in Crossref; OpenAlex indexes it and is the cheaper retry.
+            await attempt { try await lib.recordFromOpenAlex(id) }
         case .doi:
-            // Europe PMC first (keyless), then OpenAlex (metered; needs OPENALEX_API_KEY for heavy use).
+            // Europe PMC first (keyless), then OpenAlex (metered; needs OPENALEX_API_KEY for heavy use),
+            // then Crossref — which 404s on DataCite DOIs (Zenodo, OSF), so OpenAlex's DOI endpoint goes last.
             await attempt { try await lib.searchEuropePMC("DOI:\"\(id)\"", limit: 1).first.flatMap { $0.doi?.lowercased() == id.lowercased() ? $0 : nil } }
             await attempt { try await lib.searchOpenAlex("doi:\(id)", limit: 1).first.flatMap { $0.doi?.lowercased() == id.lowercased() ? $0 : nil } }
             await attempt { try await lib.crossref(doi: id) }
+            await attempt { try await lib.recordFromOpenAlex(id) }
         case .pmid:
             await attempt { try await lib.searchEuropePMC("EXT_ID:\(id) AND SRC:MED", limit: 1).first }
         case .pmcid:
@@ -468,7 +472,7 @@ struct PaperFetchTool: Tool {
         }
         guard let found = rec else {
             ctx.services.emit(.literature(agentId: ctx.sessionId, action: .flagged, key: raw, title: raw, detail: "could not be resolved"))
-            return .error("Could not resolve \(raw) (\(kind)) via Europe PMC, OpenAlex, Crossref or arXiv." + (errors.isEmpty ? "" : " Errors: " + errors.joined(separator: " | ")))
+            return .error("Could not resolve \(raw) (as \(kind.rawValue))." + (errors.isEmpty ? "" : " Errors: " + errors.joined(separator: " | ")))
         }
         let added = lib.add(found)
         let r = try await lib.download(added.key)
@@ -563,6 +567,7 @@ struct UpdatePlanTool: Tool {
         ], required: ["action"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
 
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         guard ctx.role == .main else { return .error("Only the main agent manages the plan.") }
@@ -659,6 +664,7 @@ struct TodoWriteTool: Tool {
                                                                                required: ["content", "status"]))], required: ["todos"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         let items = (input["todos"]?.arrayValue ?? []).map { TodoList.Item(content: $0.str("content") ?? "", status: $0.str("status") ?? "pending") }
         if items.filter({ $0.status == "in_progress" }).count > 1 { return .error("Only one item may be in_progress.") }
@@ -672,6 +678,7 @@ struct GoalTool: Tool {
     let description = "Read the session goal, mark it complete (note) or blocked (reason), or wait for the user's decision (note = the one question). Only the user creates, pauses or edits goals."
     var inputSchema: JSON { Schema.object(["action": Schema.stringEnum("Action", ["get", "complete", "wait", "blocked"]), "note": Schema.string("Completion note, the question for the user, or the blocking reason")], required: ["action"]) }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         let g = ctx.services.goal
         switch input.str("action") {

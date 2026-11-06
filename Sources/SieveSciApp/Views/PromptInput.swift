@@ -10,6 +10,8 @@ struct PromptInput: View {
     @State private var selection = 0
     @State private var lastEscape = Date.distantPast
     @FocusState private var focused: Bool
+    /// The editor holds input-method text that is not committed yet (pinyin, kana …).
+    @State private var composing = false
 
     var suggestions: [SlashCommandInfo] {
         guard text.hasPrefix("/"), !text.contains(" ") else { return [] }
@@ -64,14 +66,14 @@ struct PromptInput: View {
                     if text.isEmpty {
                         // Text being composed in an input method (pinyin, kana …) is not in `text` yet, so
                         // the placeholder checks the editor for marked text while the field is focused.
-                        TimelineView(.periodic(from: .now, by: 0.1)) { _ in
-                            if !(focused && Self.composing()) {
-                                Text(model.running ? L("Queue a message, or press Esc to interrupt…") : L("Ask a research question, paste a GitHub link, or type / for commands"))
-                                    .font(Theme.prose).foregroundStyle(.tertiary)
-                                    .padding(.leading, 5)
-                            }
+                        // Marked text changes the editor's selection, so the selection notification says
+                        // when composing starts and stops (polling 10× a second re-laid-out the window).
+                        if !(focused && composing) {
+                            Text(model.running ? L("Queue a message, or press Esc to interrupt…") : L("Ask a research question, paste a GitHub link, or type / for commands"))
+                                .font(Theme.prose).foregroundStyle(.tertiary)
+                                .padding(.leading, 5)
+                                .allowsHitTesting(false)
                         }
-                        .allowsHitTesting(false)
                     }
                     TextEditor(text: $text)
                         .font(Theme.prose)
@@ -163,6 +165,14 @@ struct PromptInput: View {
             if !model.draft.isEmpty { text = model.draft; model.draft = "" }
         }
         .onDisappear { if !text.isEmpty { model.draft = text } }
+        .onReceive(NotificationCenter.default.publisher(for: NSTextView.didChangeSelectionNotification)) { _ in
+            let c = Self.composing()
+            if c != composing { composing = c }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSText.didChangeNotification)) { _ in
+            let c = Self.composing()
+            if c != composing { composing = c }
+        }
         .onChange(of: model.draft) { _, d in
             if !d.isEmpty { text = d; model.draft = ""; focused = true }
         }

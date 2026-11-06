@@ -24,9 +24,12 @@ public final class AgentSession: @unchecked Sendable {
     private var cancelled = false
     private var lastRequestAt: Date?
     var interventionsThisTurn = 0
-    /// Tool calls in the current user turn, and which delegation hints this turn already got.
-    private var turnToolCalls = 0
-    private var delegationHinted: Set<String> = []
+    /// Per-call bookkeeping, locked: read-only calls of one step run concurrently on this instance
+    /// (`runTools`), and an unlocked dictionary here crashed 0.2.1 (two `respond_review` calls resized
+    /// `repeatCounts` at once). Tool calls in the current user turn, and which delegation hints this
+    /// turn already got.
+    private let turnToolCalls = LockedValue(0)
+    private let delegationHinted = LockedValue<Set<String>>([])
     /// Plan steps the host already handed to workers (see `HostDelegation`), for the whole session.
     var delegatedSteps: Set<String> = []
     /// Successful receipts of this agent's own tool calls (also those a CLI agent makes over the bridge,
@@ -35,7 +38,7 @@ public final class AgentSession: @unchecked Sendable {
     /// This turn's request was already split and run on workers at its start.
     var turnDelegated = false
     /// Identical-call counter (DeepSeek Harness repeat-tool-reminder: advisory at 3, 5, 8 repeats).
-    private var repeatCounts: [String: Int] = [:]
+    private let repeatCounts = LockedValue<[String: Int]>([:])
     /// Epoch counter: incremented by compaction (which starts a new transcript prefix).
     public private(set) var epoch = 0
     public var maxSteps = 200
@@ -107,18 +110,21 @@ public final class AgentSession: @unchecked Sendable {
         }
         cancelled = false
         interventionsThisTurn = 0
-        turnToolCalls = 0
-        delegationHinted = []
+        turnToolCalls.mutate { $0 = 0 }
+        delegationHinted.mutate { $0 = [] }
         turnDelegated = false
-        repeatCounts = [:]
+        repeatCounts.mutate { $0 = [:] }
         var userText = text
         // Hooks may add context or block the prompt (Claude-Code UserPromptSubmit semantics).
         if role == .main {
             let hook = await services.hooks.run(.userPromptSubmit, payload: ["prompt": .string(text)])
             if hook.blocked { services.emit(.notice(L10n.s("Prompt blocked by hook: %@", hook.message))); return nil }
             if !hook.message.isEmpty { userText += "\n\n<hook_context>\n\(hook.message)\n</hook_context>" }
-            if let delegated = await delegateTurn(text) {
-                delegationHinted.insert("plan")
+            // A brainstorm (live or just asked for) is not split across workers or turned into plan steps.
+            if services.ideas.isBrainstorming {
+                // nothing: the brainstorm runs in this agent's own context, stage by stage
+            } else if let delegated = await delegateTurn(text) {
+                hint("plan")
                 userText += "\n\n" + delegated
             } else if services.research.groundingRequired, services.research.snapshot.steps.isEmpty,
                       HostDelegation.looksMultiPart(text) {
@@ -289,18 +295,18 @@ public final class AgentSession: @unchecked Sendable {
     /// Prompt to hand work to workers at the moments it pays (models rarely delegate on their own, CLI
     /// agents least of all): once a multi-step plan is set, and when a turn has run many tool calls.
     func delegationHint(after use: ToolUse, output: ToolOutput) -> String? {
-        guard role == .main, tools.contains(where: { $0.name == "task" }) else { return nil }
-        turnToolCalls += 1
+        guard role == .main, tools.contains(where: { $0.name == "task" }), services.ideas.live == nil else { return nil }
+        let calls = turnToolCalls.increment()
         let workerModel = services.models.pick(.worker).1
         let pending = services.research.snapshot.steps.filter { $0.status == "pending" }
-        if use.name == "update_plan", !output.isError, pending.count >= 3, delegationHinted.insert("plan").inserted {
+        if use.name == "update_plan", !output.isError, pending.count >= 3, hint("plan") {
             return "<delegation_hint>The plan has \(pending.count) pending steps. Mark the steps that need no other step's results "
                 + "`parallel: true` (and give the others `depends_on`) in `update_plan`: SieveSci then runs them on workers at once "
                 + "(model: \(workerModel), own context, report with receipts). Or hand one to a worker with `task` (e.g. "
                 + pending.prefix(3).map { "\($0.id) \($0.title.prefix(40))" }.joined(separator: "; ")
                 + "). Keep planning, synthesis and claims yourself.</delegation_hint>"
         }
-        for n in [30, 80, 150] where turnToolCalls == n && delegationHinted.insert("calls\(n)").inserted {
+        for n in [30, 80, 150] where calls == n && hint("calls\(n)") {
             return "<delegation_hint>This turn has run \(n) tool calls in your own context. Hand independent work to workers: `task` for one subtask "
                 + "(a literature sweep, implementing and testing one module, processing one dataset, a long analysis), `dispatch` for the same "
                 + "instructions over many items. Workers (model: \(workerModel)) run in parallel and keep your context small.</delegation_hint>"
@@ -324,7 +330,16 @@ public final class AgentSession: @unchecked Sendable {
 
     func tool(named n: String) -> Tool? { tools.first { $0.name == n } }
 
-    /// Read-only calls run concurrently; anything with side effects runs in order. All results go
+    /// Marks a delegation hint as given; true the first time in this turn.
+    @discardableResult
+    func hint(_ key: String) -> Bool {
+        var inserted = false
+        delegationHinted.mutate { inserted = $0.insert(key).inserted }
+        return inserted
+    }
+
+    /// Pure reads run concurrently; anything with side effects, or that changes session state (see
+    /// `Tool.runsConcurrently`), runs in order. All results go
     /// back in one user message (splitting them teaches models to stop calling tools in parallel).
     func runTools(_ uses: [ToolUse]) async -> [ContentBlock] {
         // `ask_user` is a decision barrier: what was written alongside it was written without the
@@ -341,8 +356,8 @@ public final class AgentSession: @unchecked Sendable {
                 (order.firstIndex(of: a.toolResult?.toolUseId ?? "") ?? 0) < (order.firstIndex(of: b.toolResult?.toolUseId ?? "") ?? 0)
             }
         }
-        let readOnly = uses.allSatisfy { u in tool(named: u.name)?.effect(for: u.input) == .readOnly }
-        if readOnly && uses.count > 1 {
+        let concurrent = uses.allSatisfy { u in tool(named: u.name)?.runsConcurrently(for: u.input) == true }
+        if concurrent && uses.count > 1 {
             return await withTaskGroup(of: (Int, ContentBlock).self) { g in
                 for (i, u) in uses.enumerated() { g.addTask { (i, await self.execute(u)) } }
                 var out: [(Int, ContentBlock)] = []
@@ -406,21 +421,27 @@ public final class AgentSession: @unchecked Sendable {
         }
         var text = (output.text.isEmpty ? "(no output)" : Self.clipForModel(output.text, receipt: receipt.id, services: services)) + "\n[receipt \(receipt.id)]"
         if role == .main, use.name == "update_plan", receipt.success, let delegated = await delegatePlanSteps(callId: use.id) {
-            delegationHinted.insert("plan")
+            hint("plan")
             text += "\n" + delegated
         }
         if let hint = delegationHint(after: use, output: output) { text += "\n" + hint }
         let callKey = use.name + use.input.canonical
-        repeatCounts[callKey, default: 0] += 1
-        if [3, 5, 8].contains(repeatCounts[callKey]!) {
-            text += "\n<repeat_notice>You have made this exact call \(repeatCounts[callKey]!) times. Read the previous result, then change approach or finish — repeating it will not give a different answer.</repeat_notice>"
-            services.log("repeat_guard", actor: "host", ["agent": .string(id), "tool": .string(use.name), "count": .int(repeatCounts[callKey]!)])
+        var repeats = 0
+        repeatCounts.mutate { $0[callKey, default: 0] += 1; repeats = $0[callKey] ?? 0 }
+        if [3, 5, 8].contains(repeats) {
+            text += "\n<repeat_notice>You have made this exact call \(repeats) times. Read the previous result, then change approach or finish — repeating it will not give a different answer.</repeat_notice>"
+            services.log("repeat_guard", actor: "host", ["agent": .string(id), "tool": .string(use.name), "count": .int(repeats)])
         }
         return .toolResult(ToolResult(toolUseId: use.id, content: text, isError: !receipt.success, images: output.images))
     }
 
     /// Returns a denial message, or nil if the call may proceed.
     func authorize(_ t: Tool, _ use: ToolUse, _ effect: ToolEffect) async -> String? {
+        // A live brainstorm is a closed phase: no plan, no workers, no analysis until it ends.
+        if role == .main, let why = services.ideas.brainstormBlocker(tool: t.name, input: use.input) {
+            services.log("brainstorm_gate", actor: "host", ["tool": .string(t.name), "agent": .string(id)])
+            return why
+        }
         if role == .main, case .refuse(let why) = services.research.requirePlan(tool: t.name, input: use.input) {
             services.log("preregistration_gate", actor: "host", ["tool": .string(t.name), "agent": .string(id)])
             return why
@@ -551,7 +572,8 @@ public final class AgentSession: @unchecked Sendable {
 
     /// Restores a transcript (session resume). The bytes are reused as stored, so a resumed session
     /// hits the same prefix cache it left.
-    public func restore(_ messages: [Message]) { transcript = messages }
+    /// Loads a saved conversation; unanswered tool calls are closed so it can be sent (`TranscriptRepair`).
+    public func restore(_ messages: [Message]) { transcript = TranscriptRepair.repair(messages).messages }
 
     /// Rewind: drops messages after `index` (user-initiated; this necessarily changes the prefix).
     public func truncate(to index: Int) { if index < transcript.count { transcript = Array(transcript.prefix(index)) } }
@@ -604,7 +626,8 @@ public enum TurnContext {
         }
         lines.append("permission mode: \(s.permissions.mode.rawValue)")
         if let b = s.ideas.live {
-            lines.append("brainstorm running: \(b.topic.truncated(80)) (stage \(b.stage); \(s.ideas.snapshot.filter(\.isLive).count) live ideas)")
+            lines.append("brainstorm running: \(b.topic.truncated(80)) (stage \(b.stage); \(s.ideas.snapshot.filter(\.isLive).count) live ideas) — "
+                + "no plan, workers, analysis or file writes until `brainstorm` end")
         } else if !s.ideas.autoAllowed {
             lines.append("autonomous brainstorming: off (brainstorm only when the user asks, e.g. /brainstorm)")
         }

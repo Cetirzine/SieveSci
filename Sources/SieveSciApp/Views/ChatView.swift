@@ -395,7 +395,7 @@ struct EmptyChatHero: View {
 
     var body: some View {
         ZStack {
-            SieveField().mask(LinearGradient(colors: [.black, .black.opacity(0.2), .clear], startPoint: .top, endPoint: .bottom))
+            SieveField(fadeMid: 0.2)
             VStack(alignment: .leading, spacing: Theme.Space.l) {
                 Spacer(minLength: Theme.Space.xl)
                 HStack(alignment: .bottom, spacing: Theme.Space.m) {

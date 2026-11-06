@@ -194,6 +194,8 @@
 "Light" = "Clair";
 "Dark" = "Sombre";
 "Show thinking" = "Afficher la réflexion";
+"Generate conversation titles automatically" = "Générer automatiquement les titres des conversations";
+"After the first reply, the worker model names the conversation after its topic. A name you give with Rename is never replaced." = "Après la première réponse, le modèle exécutant nomme la conversation d’après son sujet. Un nom donné avec Renommer n’est jamais remplacé.";
 "Live monitoring" = "Surveillance en direct";
 "Wake the agent when background jobs finish, fail, match a pattern or stall" = "Réveiller l’agent lorsque les tâches de fond se terminent, échouent, correspondent à un motif ou se bloquent";
 "Notify me about job events" = "M’avertir des événements des tâches de fond";
@@ -1035,3 +1037,4 @@
 "known" = "déjà publiée";
 "Download open-access PDFs" = "Télécharger les PDF en accès libre";
 "Saves the PDF of each open-access paper added to the library (OpenAlex, Europe PMC, arXiv, Unpaywall). Off: only Europe PMC's full text or the abstract is kept." = "Enregistre le PDF de chaque article en accès libre ajouté à la bibliothèque (OpenAlex, Europe PMC, arXiv, Unpaywall). Désactivé : seuls le texte intégral Europe PMC ou le résumé sont conservés.";
+"The last run stopped before %@ tool result(s) were saved. They are marked as not recorded, so the conversation can continue." = "La dernière exécution s’est arrêtée avant l’enregistrement de %@ résultat(s) d’outil. Ils sont marqués comme non enregistrés, la conversation peut continuer.";

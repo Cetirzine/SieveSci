@@ -158,6 +158,7 @@ struct MemoryTool: Tool {
                       required: ["action", "store"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
 
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         guard let store = MemoryStore.Store(rawValue: input.str("store") ?? "") else { return .error("store must be MEMORY, USER or LESSONS") }
@@ -271,6 +272,7 @@ struct SkillManageTool: Tool {
                       required: ["action", "learned_from", "name"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
 
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         let base = try input.required("name").lowercased().replacingOccurrences(of: "[^a-z0-9-]", with: "-", options: .regularExpression)

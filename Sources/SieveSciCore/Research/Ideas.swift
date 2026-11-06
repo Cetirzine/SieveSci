@@ -60,6 +60,12 @@ public struct BrainstormState: Codable, Sendable, Equatable, Identifiable {
     /// The user asked to wrap up with what is there.
     public var wrapUpRequested: Bool
     public var stopped: Bool
+    /// Times the brainstorm went from `evolve` back to `dedupe`/`rank` (a second round). Optional so state saved
+    /// by earlier versions still decodes.
+    public var evolveRounds: Int?
+
+    /// Ideas recorded during this episode carry this origin.
+    public var origin: String { (trigger == .dream ? "dream:" : "brainstorm:") + id }
 }
 
 public final class IdeaLedger: @unchecked Sendable {
@@ -92,6 +98,8 @@ public final class IdeaLedger: @unchecked Sendable {
     public var live: BrainstormState? { lock.withLock { current?.endedAt == nil ? current : nil } }
 
     public func request(_ t: BrainstormState.Trigger) { lock.withLock { requested = t } }
+    /// A brainstorm is running or was just asked for (`/brainstorm`, `/dream now`).
+    public var isBrainstorming: Bool { lock.withLock { requested != nil || current?.endedAt == nil && current != nil } }
 
     // MARK: Episodes
 
@@ -117,6 +125,7 @@ public final class IdeaLedger: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         guard var c = current, c.endedAt == nil else { return nil }
         if c.stage != name, !c.stagesDone.contains(c.stage) { c.stagesDone.append(c.stage) }
+        if c.stage == "evolve", name == "dedupe" || name == "rank" { c.evolveRounds = (c.evolveRounds ?? 0) + 1 }
         c.stage = name
         c.stageNote = note
         current = c
@@ -156,6 +165,96 @@ public final class IdeaLedger: @unchecked Sendable {
         return "<brainstorm_wrap_up>The user asked you to wrap up the brainstorm now: generate no more ideas and start no new batches. "
             + "Finish only the checks already running, then report the best ideas so far (marked as speculation, with what was and was not checked) "
             + "and call `brainstorm` end.</brainstorm_wrap_up>"
+    }
+
+
+    // MARK: The brainstorming procedure (enforced, not advisory)
+
+    /// Live ideas a brainstorm needs before it may converge (the skill asks for 12–24; this is the floor).
+    public static let minIdeasToConverge = 6
+    /// Evolve → rank rounds allowed after the first pass.
+    public static let maxEvolveRounds = 2
+    /// Stages that may be passed over on the way to `report`.
+    static let optionalStages: Set<String> = ["review", "evolve"]
+
+    /// Tools the main agent may not call while a brainstorm is live. Brainstorming is a closed phase that
+    /// comes before the plan: it searches, reads, writes ideas down and checks them. Planning, workers,
+    /// analysis, files and findings come after `brainstorm` end, built on the ideas the user chose.
+    public static let closedDuringBrainstorm: Set<String> =
+        Set(["update_plan", "task", "dispatch", "claim_finding"]).union(ResearchProtocol.gatedBeforePlan)
+
+    /// Why `tool` may not run now, or nil. Read-only shell stays open, as it does before a plan.
+    public func brainstormBlocker(tool: String, input: JSON) -> String? {
+        guard let b = live, Self.closedDuringBrainstorm.contains(tool) else { return nil }
+        if tool == "bash", let cmd = input.str("command") ?? input.str("cmd"), ResearchProtocol.isReadOnlyShell(cmd) { return nil }
+        let what: String
+        switch tool {
+        case "update_plan": what = "Planning"
+        case "task", "dispatch": what = "Handing work to workers"
+        case "claim_finding": what = "Claiming a finding"
+        default: what = "Running analyses and writing files"
+        }
+        return "\(what) is not part of brainstorming (\(b.id), stage \(b.stage)). The order is fixed: brainstorm (ground → diverge → "
+            + "dedupe → rank → novelty → [review → evolve] → report) → the user chooses → `brainstorm` end → `idea` promote the chosen "
+            + "ideas → `update_plan` → work, with workers if useful. Write what this would have checked into the idea's `test` instead, "
+            + "and continue with stage \(b.stage)."
+    }
+
+    /// What the agent must do before entering `next`, or nil when the move is allowed.
+    /// `grounded`: the grounding searches the session requires have succeeded.
+    public func stageBlocker(_ next: String, grounded: Bool) -> String? {
+        let order = BrainstormState.stages
+        lock.lock(); defer { lock.unlock() }
+        guard let c = current, c.endedAt == nil, let to = order.firstIndex(of: next), let from = order.firstIndex(of: c.stage) else { return nil }
+        if to == from { return nil }
+        let mine = ideas.filter { $0.origin == c.origin }
+        let live = mine.filter(\.isLive)
+        let checked = mine.filter { $0.novelty != nil }
+        let needChecked = min(3, max(1, mine.filter { $0.status != .merged && $0.status != .discarded || $0.novelty != nil }.count))
+        if c.wrapUpRequested && next == "report" { return nil }
+        if to < from {
+            guard c.stage == "evolve", ["dedupe", "rank"].contains(next) else {
+                return "Stages run forward (\(order.joined(separator: " → "))). The only way back is evolve → dedupe or rank for another round."
+            }
+            if (c.evolveRounds ?? 0) >= Self.maxEvolveRounds { return "\(Self.maxEvolveRounds) evolve rounds are done; go to report." }
+            return nil
+        }
+        // Forward: one stage at a time; only review and evolve may be passed over.
+        let skipped = order[(from + 1)..<to].filter { !Self.optionalStages.contains($0) }
+        if let first = skipped.first { return "Stage \(first) comes before \(next). Enter \(first) first and do it." }
+        // Leaving a stage requires its work.
+        for st in order[from..<to] {
+            switch st {
+            case "ground" where !grounded:
+                return "Grounding is not done: run `web_search` and `literature_search`, fetch the papers that matter and write the evidence brief before generating ideas."
+            case "diverge" where live.count < Self.minIdeasToConverge:
+                return "Only \(live.count) live ideas recorded in this brainstorm; diverge needs at least \(Self.minIdeasToConverge) (aim for 12–24) "
+                    + "from several operators, recorded with `idea` add."
+            case "rank" where !live.contains(where: { $0.rank != nil }):
+                return "Rank the live ideas yourself (compare them pairwise on grounding, mechanistic specificity and testability) and record the order with `idea` rank."
+            case "novelty" where checked.count < needChecked:
+                return "Novelty-check the top \(needChecked) ranked ideas (≥\(Self.minNoveltySearches) searches each, then `idea` novelty); \(checked.count) done."
+            default: continue
+            }
+        }
+        return nil
+    }
+
+    /// Whether an `idea` action fits the current stage of a live brainstorm (always, outside one).
+    public func ideaActionBlocker(_ action: String) -> String? {
+        guard let c = live else { return nil }
+        switch action {
+        case "add" where !["diverge", "evolve"].contains(c.stage):
+            return "Ideas are recorded in the diverge stage (or as evolved versions in evolve); the brainstorm is in \(c.stage)."
+        case "rank" where c.stage != "rank":
+            return "Ranking happens in the rank stage; the brainstorm is in \(c.stage). Enter it with `brainstorm` stage first."
+        case "novelty" where !["novelty", "review", "evolve"].contains(c.stage) && !c.wrapUpRequested:
+            return "Novelty verdicts are recorded from the novelty stage on; the brainstorm is in \(c.stage)."
+        case "promote":
+            return "An idea is promoted after the brainstorm: report, let the user choose with `ask_user`, call `brainstorm` end, then promote what they chose."
+        default:
+            return nil
+        }
     }
 
     // MARK: Ideas

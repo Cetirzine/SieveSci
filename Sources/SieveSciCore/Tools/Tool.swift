@@ -41,10 +41,16 @@ public protocol Tool: Sendable {
     var description: String { get }
     var inputSchema: JSON { get }
     func effect(for input: JSON) -> ToolEffect
+    /// Whether this call may run at the same time as the other calls of the same step. Only pure
+    /// reads may: a tool that is read-only for permissions but changes session state (plan, todos,
+    /// goal, ideas, deliberation, memory) runs in order, so its bookkeeping stays serial and the
+    /// outcome does not depend on thread timing.
+    func runsConcurrently(for input: JSON) -> Bool
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput
 }
 
 extension Tool {
+    public func runsConcurrently(for input: JSON) -> Bool { effect(for: input) == .readOnly }
     public var spec: ToolSpec { ToolSpec(name: name, description: description, inputSchema: inputSchema) }
 }
 

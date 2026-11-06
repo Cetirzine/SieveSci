@@ -73,6 +73,7 @@ extension AppModel {
         switch ev {
         case .turnStarted(_, "main"): turnFailures[task] = nil
         case .error(let e): turnFailures[task] = e
+        case .titleChanged(let id, let title): applyGeneratedTitle(title, task: id, workspace: backgroundWorkspaces[task])
         default: break
         }
         deliver(ev, task: task)
@@ -130,9 +131,9 @@ extension AppModel {
     }
 
     func mutate(_ stream: String, _ i: Int, _ f: (inout TranscriptItem.Kind) -> Void) {
-        guard var s = streams[stream], s.indices.contains(i) else { return }
-        f(&s[i].kind)
-        streams[stream] = s
+        // In place: copying the stream out and back duplicated the whole transcript on every streamed chunk.
+        guard streams[stream]?.indices.contains(i) == true else { return }
+        f(&streams[stream]![i].kind)
     }
 
     static func summary(_ name: String, _ input: JSON) -> String {
@@ -270,6 +271,7 @@ extension AppModel {
             if pendingAsk?.id == id { pendingAsk = bench?.services.asks.first }
         case .brainstormChanged(let b): brainstorm = b
         case .ideasChanged(let i): ideas = i
+        case .titleChanged: break   // applied in `route` for every task, open or in the background
         }
     }
 }

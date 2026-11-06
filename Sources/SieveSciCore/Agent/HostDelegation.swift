@@ -146,6 +146,11 @@ final class LockedValue<T>: @unchecked Sendable {
     func mutate(_ f: (inout T) -> Void) { lock.withLock { f(&v) } }
 }
 
+extension LockedValue where T == Int {
+    /// Adds one and returns the new value, atomically.
+    func increment() -> Int { var n = 0; mutate { $0 += 1; n = $0 }; return n }
+}
+
 /// Live subagents of a session, so Stop ends them too.
 final class SubagentRegistry: @unchecked Sendable {
     private final class Weak { weak var s: AgentSession?; init(_ s: AgentSession) { self.s = s } }

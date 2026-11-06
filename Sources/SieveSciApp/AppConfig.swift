@@ -34,6 +34,8 @@ struct AppConfig: Codable, Equatable {
     var notifyTurnFinished = true
     var notifyPermission = true
     var showThinking = true
+    /// Name each conversation from its first exchange with the worker model (names given by hand stay).
+    var autoTitles = true
     /// Let the agent enter brainstorming mode on its own when the work needs new ideas.
     var autoBrainstorm = true
     /// Look for a newer release on GitHub at launch and once a day.
@@ -97,6 +99,7 @@ extension AppConfig {
         notifyTurnFinished = v(.notifyTurnFinished, d.notifyTurnFinished)
         notifyPermission = v(.notifyPermission, d.notifyPermission)
         showThinking = v(.showThinking, d.showThinking)
+        autoTitles = v(.autoTitles, d.autoTitles)
         autoBrainstorm = v(.autoBrainstorm, d.autoBrainstorm)
         autoCheckUpdates = v(.autoCheckUpdates, d.autoCheckUpdates)
         autoInstallUpdates = v(.autoInstallUpdates, d.autoInstallUpdates)

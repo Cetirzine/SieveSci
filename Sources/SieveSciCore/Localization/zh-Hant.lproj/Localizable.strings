@@ -194,6 +194,8 @@
 "Light" = "淺色";
 "Dark" = "深色";
 "Show thinking" = "顯示思考過程";
+"Generate conversation titles automatically" = "自動產生對話標題";
+"After the first reply, the worker model names the conversation after its topic. A name you give with Rename is never replaced." = "第一次回覆後，由 執行者模型依話題為對話命名。你用「重新命名」取的名稱不會被取代。";
 "Live monitoring" = "即時監控";
 "Wake the agent when background jobs finish, fail, match a pattern or stall" = "背景工作完成、失敗、符合模式或停滯時喚醒代理";
 "Notify me about job events" = "通知我工作事件";
@@ -1035,3 +1037,4 @@
 "known" = "已有發表";
 "Download open-access PDFs" = "下載開放取用論文的 PDF";
 "Saves the PDF of each open-access paper added to the library (OpenAlex, Europe PMC, arXiv, Unpaywall). Off: only Europe PMC's full text or the abstract is kept." = "把加入文獻庫的開放取用論文的 PDF 儲存下來（OpenAlex、Europe PMC、arXiv、Unpaywall）。關閉後只保留 Europe PMC 全文或摘要。";
+"The last run stopped before %@ tool result(s) were saved. They are marked as not recorded, so the conversation can continue." = "上次執行在儲存 %@ 個工具結果之前中斷。這些呼叫已標記為「未記錄」，對話可以繼續。";

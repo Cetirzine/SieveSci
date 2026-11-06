@@ -38,7 +38,9 @@ public final class LabNotebook: @unchecked Sendable {
         let day = ISO8601DateFormatter.string(from: e.time, timeZone: .current, formatOptions: [.withFullDate])
         let time = ISO8601DateFormatter.string(from: e.time, timeZone: .current, formatOptions: [.withTime, .withColonSeparatorInTime])
         var out = ""
-        if day != lastDay { out += "\n## \(day)\n"; lastDay = day }
+        // Audit listeners run on the logging thread, and tool calls of one step log concurrently.
+        let newDay: Bool = lock.withLock { guard day != lastDay else { return false }; lastDay = day; return true }
+        if newDay { out += "\n## \(day)\n" }
         let d = e.data
         let ref = "§\(e.seq)"
         switch e.kind {

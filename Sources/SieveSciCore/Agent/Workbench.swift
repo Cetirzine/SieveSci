@@ -39,6 +39,12 @@ public final class Workbench: @unchecked Sendable {
     public var autoWake = true
     /// The job count the goal driver last announced it is waiting for (so the notice is not repeated).
     private var goalJobsNoticed: Int?
+    /// Name the conversation with the worker model after its first exchange (`TitleSummarizer`).
+    public var autoTitle = true
+    /// Naming state: a call in flight, and how many were tried (a failed one is retried once, after the next turn).
+    private var titling = false
+    private var titleAttempts = 0
+    static let maxTitleAttempts = 2
 
     public init(services: SessionServices) {
         self.services = services
@@ -71,6 +77,17 @@ public final class Workbench: @unchecked Sendable {
         if restored.last?.role == .user, let m = Self.recoveredReply(audit: services.audit.url) {
             SessionStore.shared.append(m, task: services.taskId, agent: "main", dir: services.taskDir)
             restored.append(m)
+        }
+        // Calls left without results (the app stopped mid-step) would make every later request fail.
+        let fixed = TranscriptRepair.repair(restored)
+        if fixed.changed {
+            if let patch = fixed.appended { SessionStore.shared.append(patch, task: services.taskId, agent: "main", dir: services.taskDir) }
+            restored = fixed.messages
+            services.log("transcript_repair", actor: "host", ["closed": .array(fixed.closed.map { .string($0) }),
+                                                               "dropped": .array(fixed.dropped.map { .string($0) })])
+            if !fixed.closed.isEmpty {
+                services.emit(.notice(L10n.s("The last run stopped before %@ tool result(s) were saved. They are marked as not recorded, so the conversation can continue.", String(fixed.closed.count))))
+            }
         }
         if !restored.isEmpty { main.restore(restored); introduced = true }
         services.log("session_start", actor: "host", ["provider": .string(p.profile.id), "model": .string(m), "tools": .array(services.toolset.map { .string($0.name) }),
@@ -106,6 +123,8 @@ public final class Workbench: @unchecked Sendable {
     }
 
     public var isRunning: Bool { stateLock.lock(); defer { stateLock.unlock() }; return busy }
+    /// A title call is in flight (a headless run waits for it before exiting).
+    public var isNamingConversation: Bool { stateLock.withLock { titling } }
     public var queuedPrompts: [String] { stateLock.lock(); defer { stateLock.unlock() }; return queued.map(\.0) }
 
     /// Starts a turn for pending job notifications if the agent is idle.
@@ -222,6 +241,7 @@ public final class Workbench: @unchecked Sendable {
         while true {
             if let (p, a) = next {
                 await turn(p, attachments: a)
+                nameConversation()
             }
             enum Step { case queued((String, [Attachment])), wake([JobNotification]), idle }
             let step: Step = stateLock.withLock {
@@ -238,6 +258,29 @@ public final class Workbench: @unchecked Sendable {
             }
             services.log("job_wake", actor: "host", ["jobs": .array(notes.map { .string($0.job + ":" + $0.kind.rawValue) })])
             next = (Self.wakePrompt(notes), [])
+        }
+    }
+
+    /// Starts naming the conversation in the background, once it has a first exchange. Never blocks
+    /// the next turn; the result arrives as `.titleChanged`.
+    func nameConversation() {
+        guard autoTitle else { return }
+        let go: Bool = stateLock.withLock {
+            guard !titling, titleAttempts < Self.maxTitleAttempts else { return false }
+            titling = true
+            titleAttempts += 1
+            return true
+        }
+        guard go else { return }
+        let transcript = main.transcript
+        let services = self.services
+        Task.detached(priority: .utility) { [weak self] in
+            let outcome = await TitleSummarizer.autoTitle(services: services, transcript: transcript)
+            guard let self else { return }
+            self.stateLock.withLock {
+                self.titling = false
+                if outcome != .failed { self.titleAttempts = Self.maxTitleAttempts }
+            }
         }
     }
 

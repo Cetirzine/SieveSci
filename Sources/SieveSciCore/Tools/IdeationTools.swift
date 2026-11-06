@@ -34,6 +34,7 @@ struct AskUserTool: Tool {
         return Schema.object(["questions": Schema.array("1–4 questions asked together", items: question)], required: ["questions"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
 
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         guard ctx.role == .main else { return .error("Only the main agent asks the user; report the open question in your result instead.") }
@@ -43,7 +44,8 @@ struct AskUserTool: Tool {
            case .refuse(let m) = s.research.requireGrounding("asking the user to choose a research direction") {
             return .error(m + " Options for a direction must rest on what the searches found.")
         }
-        if s.research.snapshot.steps.isEmpty {
+        // The choice at the end of a brainstorm is the step that leads to the plan; it is not a pre-plan detour.
+        if s.research.snapshot.steps.isEmpty, s.ideas.live == nil {
             if s.asks.askedBeforePlan >= AskCenter.maxBeforePlan {
                 return .error("You have asked \(AskCenter.maxBeforePlan) times before planning. Proceed with what you have: state your assumptions and plan.")
             }
@@ -74,7 +76,10 @@ struct BrainstormTool: Tool {
     needs new ideas (the request asks for them, a direction is unclear, an approach keeps failing, a claim was \
     refuted) — unless the user turned that off, in which case `start` is refused. Actions: start (topic, reason) · \
     stage (stage: ground | diverge | dedupe | rank | novelty | review | evolve | report; note: one line on what you \
-    are doing) · end (summary). Record ideas with `idea`; follow the `brainstorm` skill for the procedure.
+    are doing) · end (summary). Stages run in this order and the host refuses a skipped stage or one whose work is \
+    not done (review and evolve are optional). While a brainstorm is live there is no planning, no workers \
+    (`task`, `dispatch`), no analysis and no file writing: those come after `end`, built on the ideas the user \
+    chose. Record ideas with `idea`; follow the `brainstorm` skill for the procedure.
     """
     var inputSchema: JSON {
         Schema.object(["action": Schema.stringEnum("start | stage | end", ["start", "stage", "end"]),
@@ -85,6 +90,26 @@ struct BrainstormTool: Tool {
                        "summary": Schema.string("end: what came out, in two lines")], required: ["action"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
+
+    /// Grounding counts as done when the searches the session requires have succeeded (one kind when the gate is off).
+    static func grounded(_ ctx: ToolContext) -> Bool {
+        let g = ctx.services.research.hasGrounding()
+        return ctx.services.research.groundingRequired ? (g.web && g.literature) : (g.web || g.literature)
+    }
+
+    /// One line per stage, returned when it is entered, so the procedure is in front of the model at every step.
+    static let stageGuide: [String: String] = [
+        "ground": "Search (`web_search`, `literature_search`), fetch the 5–10 papers that matter, write the evidence brief.",
+        "diverge": "Generate 12–24 ideas yourself with several operators (facet, analogy, invert, seed, verbalized); record each batch with `idea` add.",
+        "dedupe": "Merge ideas that say the same thing (`idea` discard with \"duplicate of In\").",
+        "rank": "Compare the live ideas pairwise yourself and record the order with `idea` rank.",
+        "novelty": "For the top third: ≥3 searches each, read the closest papers, record `idea` novelty.",
+        "review": "Name the recurring weaknesses of the survivors.",
+        "evolve": "Add improved versions as new ideas (operator evolve:<id>); go back to rank for one more round, or on to report.",
+        "report": "Present the top ideas as speculation (what each builds on, how it was checked, what is unchecked), then `ask_user` "
+            + "(kind multi, reason direction, one option per idea). After the answer, call `brainstorm` end; planning starts after that.",
+    ]
 
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         guard ctx.role == .main else { return .error("Only the main agent runs a brainstorm; return your ideas in your report.") }
@@ -100,21 +125,35 @@ struct BrainstormTool: Tool {
                                  ["event": "start", "id": .string(st.id), "topic": .string(topic), "trigger": .string(st.trigger.rawValue)])
                 ctx.services.emit(.brainstormChanged(st))
                 let g = ctx.services.research.hasGrounding()
-                return ToolOutput("Brainstorm \(st.id) started (\(st.trigger.rawValue)). The user sees each stage and every idea as you record it, "
-                    + "and may ask you to wrap up. Ideas are speculation until checked."
-                    + (g.web && g.literature ? "" : " First stage: ground — search the background before generating anything."))
+                return ToolOutput("Brainstorm \(st.id) started (\(st.trigger.rawValue)); stage: ground. The user sees each stage and every idea as you record it, "
+                    + "and may ask you to wrap up. Ideas are speculation until checked. Until `brainstorm` end: no `update_plan`, no workers, "
+                    + "no analysis or file writing — do every stage yourself, in order."
+                    + (g.web && g.literature ? "" : " Ground first: search the background before generating anything."))
             }
         case "stage":
             let stage = input.str("stage") ?? ""
             guard BrainstormState.stages.contains(stage) else { return .error("Unknown stage \(stage).") }
+            guard led.live != nil else { return .error("No brainstorm is running; start one first.") }
+            if let why = led.stageBlocker(stage, grounded: Self.grounded(ctx)) {
+                ctx.services.log("brainstorm_gate", actor: "host", ["stage": .string(stage), "reason": .string(why)])
+                return .error("Not moved to \(stage): " + why)
+            }
             guard let st = led.stage(stage, note: input.str("note") ?? "") else { return .error("No brainstorm is running; start one first.") }
             ctx.services.emit(.brainstormChanged(st))
-            return ToolOutput("Stage: \(stage).")
+            return ToolOutput("Stage: \(stage). " + (Self.stageGuide[stage] ?? ""))
         case "end":
+            if let c = led.live, c.stage != "report", !c.wrapUpRequested {
+                return .error("The brainstorm is in \(c.stage); it ends from the report stage. Finish the remaining stages "
+                    + "(\(BrainstormState.stages.joined(separator: " → "))), then report and let the user choose before ending. "
+                    + "If the user wants to cut it short, they press Wrap up (straight to report) or Stop in the brainstorm panel; tell them so.")
+            }
             guard let st = led.end(summary: input.str("summary") ?? "") else { return .error("No brainstorm is running.") }
             ctx.services.log("brainstorm", actor: "agent", ["event": "end", "id": .string(st.id), "summary": .string(st.summary ?? "")])
             ctx.services.emit(.brainstormChanged(st))
-            var text = "Brainstorm ended. Present the ideas as speculation; an idea becomes a hypothesis only through `idea` promote."
+            var text = "Brainstorm ended. Next, in this order: (1) if the user chose ideas, `idea` promote each one (independent review); "
+                + "(2) set or revise the plan with `update_plan` around the promoted hypotheses — steps that test them, `parallel: true` "
+                + "where a step needs no other step's results; (3) do the work, with workers where the plan allows. "
+                + "If nobody chose, present the ideas as speculation and wait."
             if st.trigger == .dream {
                 let ws = ctx.services.workspace
                 let mine = led.snapshot.filter { $0.origin == "dream:\(st.id)" && $0.isLive }
@@ -162,11 +201,13 @@ struct IdeaTool: Tool {
                              required: ["action"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
 
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         let s = ctx.services
         let led = s.ideas
         func changed() { s.emit(.ideasChanged(led.snapshot)) }
+        if let why = led.ideaActionBlocker(input.str("action") ?? "") { return .error(why) }
         switch input.str("action") {
         case "add":
             guard ctx.role == .main else { return .error("Workers return ideas in their report; the main agent records them.") }
@@ -292,6 +333,7 @@ struct IdeationSeedsTool: Tool {
                        "seed": Schema.integer("RNG seed (default: drawn and reported)")], required: ["topic"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
+    func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
 
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         let topic = try input.required("topic")

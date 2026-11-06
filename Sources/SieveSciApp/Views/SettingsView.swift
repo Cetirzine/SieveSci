@@ -141,6 +141,13 @@ struct GeneralSettings: View {
                     }
                 }
                 Toggle(L("Show thinking"), isOn: $model.config.showThinking)
+                Toggle(L("Generate conversation titles automatically"), isOn: $model.config.autoTitles)
+                    .onChange(of: model.config.autoTitles) { _, v in
+                        model.bench?.autoTitle = v
+                        for b in model.background.values { b.autoTitle = v }
+                    }
+                Text(L("After the first reply, the worker model names the conversation after its topic. A name you give with Rename is never replaced."))
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section(spec: L("Live monitoring")) {
                 Toggle(L("Wake the agent when background jobs finish, fail, match a pattern or stall"), isOn: $model.config.autoWake)

@@ -46,6 +46,9 @@ public enum AgentEvent: Sendable {
     case brainstormChanged(BrainstormState)
     /// The idea ledger changed (ideas added, merged, checked, ranked, discarded or promoted).
     case ideasChanged([Idea])
+    /// The conversation got a generated title (`TitleSummarizer`); front ends show it in place of the
+    /// first question. Never sent for a conversation the user named.
+    case titleChanged(task: String, title: String)
 }
 
 public enum LiteratureAction: String, Sendable {

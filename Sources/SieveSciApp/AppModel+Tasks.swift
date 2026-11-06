@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftUI
 import SieveSciCore
 import UniformTypeIdentifiers
 
@@ -21,6 +22,18 @@ extension AppModel {
         guard a.runModal() == .alertFirstButtonReturn else { return }
         SessionStore.setTitle(field.stringValue, task: id, in: ws)
         taskTitles[id] = SessionStore.title(dir: SessionStore.taskDir(id, in: ws))
+    }
+
+    /// Shows a title the worker model generated (`TitleSummarizer`) in the sidebar and the chat header.
+    /// The core already skipped conversations named by hand; a rename that raced the call wins here.
+    func applyGeneratedTitle(_ title: String, task id: String, workspace path: String?) {
+        let ws = path.map { URL(fileURLWithPath: $0) } ?? workspace
+        if let ws, SessionStore.hasManualTitle(dir: SessionStore.taskDir(id, in: ws)) { return }
+        guard taskTitles[id] != title else { return }
+        // Replaced in place, without animation: the row keeps its height and position.
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) { taskTitles[id] = title }
     }
 
     func copyToPasteboard(_ s: String) {

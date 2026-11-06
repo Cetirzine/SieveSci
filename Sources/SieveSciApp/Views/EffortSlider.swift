@@ -222,23 +222,45 @@ struct GlitchFrame: View {
 /// splits into accent and red, like the dots above it.
 struct GlitchLabel: View {
     let text: String
+    /// Slack around the text for the colour fringe, the jitter and wider look-alike glyphs.
+    static let margin: CGFloat = 6
+    /// The burst pattern is re-rolled every 1/30 s; four seconds of it loop without a visible seam.
+    static let loop = 4.0, fps = 30.0
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: !Theme.Motion.allowed)) { tl in
-            let g = Theme.Motion.allowed ? EffortSlider.glitch(tl.date.timeIntervalSinceReferenceDate) : nil
-            let shown = g.map { $0.intensity > 0.6 ? Self.corrupt(text, $0.frame) : text } ?? text
-            let d = g.map { $0.split * $0.intensity * 0.6 } ?? 0
-            Text(shown)
-                .font(Theme.label)
-                .foregroundStyle(Theme.bad)
-                .background {
-                    if d > 0.4 {
-                        Text(shown).font(Theme.label).foregroundStyle(Theme.accent.opacity(0.7)).offset(x: -d)
-                        Text(shown).font(Theme.label).foregroundStyle(Theme.bad.opacity(0.5)).offset(x: d, y: 0.5)
+        // The static text sizes the control; the glitching copy is a flip book played by Core Animation
+        // (a 30 fps TimelineView here re-laid-out the whole window, see `LayerAnimations.swift`).
+        Self.face(text, t: nil)
+            .opacity(Theme.Motion.allowed ? 0 : 1)
+            .overlay {
+                if Theme.Motion.allowed {
+                    LayerAnimation(key: "glitch|" + text) { root, size, scale in
+                        let n = Int(Self.loop * Self.fps)
+                        let frames = SpriteFrames.render("glitch|" + text, count: n, size: size, scale: scale, dark: LayerAnimation.dark) { i in
+                            Self.face(text, t: Double(i) / Self.fps).fixedSize().padding(.leading, Self.margin)
+                        }
+                        SpriteFrames.play(frames, duration: Self.loop, in: root, size: size, scale: scale)
                     }
+                    .padding(.horizontal, -Self.margin)
                 }
-                .offset(x: g.map { $0.intensity > 0.85 ? $0.thumbJitter * 0.5 : 0 } ?? 0)
-        }
+            }
+    }
+
+    /// One frame of the label at time `t` (nil: the calm, static label).
+    static func face(_ text: String, t: Double?) -> some View {
+        let g = t.map { EffortSlider.glitch($0) }
+        let shown = g.map { $0.intensity > 0.6 ? Self.corrupt(text, $0.frame) : text } ?? text
+        let d = g.map { $0.split * $0.intensity * 0.6 } ?? 0
+        return Text(shown)
+            .font(Theme.label)
+            .foregroundStyle(Theme.bad)
+            .background {
+                if d > 0.4 {
+                    Text(shown).font(Theme.label).foregroundStyle(Theme.accent.opacity(0.7)).offset(x: -d)
+                    Text(shown).font(Theme.label).foregroundStyle(Theme.bad.opacity(0.5)).offset(x: d, y: 0.5)
+                }
+            }
+            .offset(x: g.map { $0.intensity > 0.85 ? $0.thumbJitter * 0.5 : 0 } ?? 0)
     }
 
     /// Swaps a character or two for look-alikes and block glyphs; the length stays, so nothing reflows.
@@ -261,20 +283,42 @@ struct EffortMiniGauge: View {
     var level: Int { EffortSlider.stops.firstIndex(of: effort) ?? 0 }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: !Theme.Motion.allowed)) { tl in
-            let t = Theme.Motion.allowed ? tl.date.timeIntervalSinceReferenceDate : 0
-            let hot = level == EffortSlider.maxLevel
-            Canvas { ctx, size in
-                // The default level still lights one column, so the gauge never reads as off.
-                let edge = 2 + (size.width - 4) * CGFloat(max(level, 0)) / CGFloat(EffortSlider.maxLevel)
-                EffortSlider.drawGauge(ctx, size: size, litEdge: max(edge, 3), level: level, t: t,
-                                       glitch: hot && Theme.Motion.allowed ? EffortSlider.glitch(t) : nil,
-                                       dot: 2, gap: 1, inset: 2, rows: 3)
+        let hot = level == EffortSlider.maxLevel
+        Group {
+            if Theme.Motion.allowed {
+                // Always on screen, so it must cost nothing per frame: a flip book of one seamless loop of
+                // the flow, played by Core Animation (see `LayerAnimations.swift`).
+                LayerAnimation(key: "gauge|\(level)") { root, size, scale in
+                    let (count, duration) = Self.loop(level: level)
+                    let frames = SpriteFrames.render("gauge|\(level)", count: count, size: size, scale: scale, dark: LayerAnimation.dark) { i in
+                        Self.canvas(level: level, t: duration * Double(i) / Double(count), glitch: hot)
+                    }
+                    SpriteFrames.play(frames, duration: duration, in: root, size: size, scale: scale)
+                }
+            } else {
+                Self.canvas(level: level, t: 0, glitch: false)
             }
-            .frame(width: 44, height: 13)
-            .overlay(Rectangle().strokeBorder(hot ? Theme.bad.opacity(0.6) : Theme.rule, lineWidth: 1))
         }
+        .frame(width: 44, height: 13)
+        .overlay(Rectangle().strokeBorder(hot ? Theme.bad.opacity(0.6) : Theme.rule, lineWidth: 1))
         .accessibilityHidden(true)
+    }
+
+    /// Frames and length of one loop: a whole number of flow periods (the band's speed grows with the
+    /// level), about three seconds, sampled at 30 fps.
+    static func loop(level: Int) -> (count: Int, duration: Double) {
+        let period = 2 * Double.pi / (3.0 + Double(level) * 3.2)
+        let duration = max(1, (3 / period).rounded()) * period
+        return (max(1, Int((duration * 30).rounded())), duration)
+    }
+
+    static func canvas(level: Int, t: Double, glitch: Bool) -> some View {
+        Canvas { ctx, size in
+            // The default level still lights one column, so the gauge never reads as off.
+            let edge = 2 + (size.width - 4) * CGFloat(max(level, 0)) / CGFloat(EffortSlider.maxLevel)
+            EffortSlider.drawGauge(ctx, size: size, litEdge: max(edge, 3), level: level, t: t,
+                                   glitch: glitch ? EffortSlider.glitch(t) : nil, dot: 2, gap: 1, inset: 2, rows: 3)
+        }
     }
 }
 
