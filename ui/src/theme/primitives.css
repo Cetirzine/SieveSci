@@ -103,3 +103,25 @@
 .sieve-field img { position: absolute; left: 0; top: 0; image-rendering: pixelated; opacity: 0; animation: sieve-phase var(--period) linear infinite; }
 @keyframes sieve-phase { 0% { opacity: 0; } 8.33% { opacity: 1; } 16.67% { opacity: 1; } 25% { opacity: 0; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .sieve-field img { opacity: 1; } .dot-activity i { opacity: 0.4; } }
+
+/* Segmented: square track, accent selection, hairline dividers (hidden next to the selection). */
+.seg { display: inline-flex; align-items: stretch; max-width: 100%; padding: 2px; box-sizing: border-box;
+       background: color-mix(in srgb, var(--ink) 5%, var(--canvas)); border: 1px solid var(--separator); }
+.seg { align-self: flex-start; }
+.seg.fill { display: flex; width: 100%; align-self: stretch; }
+.seg button { position: relative; flex: 1 1 auto; min-width: 0; height: 26px; padding: 0 18px; border: 0; border-radius: 0; background: transparent;
+              color: color-mix(in srgb, var(--text) 80%, transparent); font: 13px var(--sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+              transition: background var(--hover), color var(--hover); }
+.seg.fill button { flex: 1 1 0; padding: 0 10px; }
+.seg button + button::before { content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 1px; background: var(--separator); }
+.seg button.on::before, .seg button.on + button::before { display: none; }
+.seg button:hover:not(.on) { color: var(--text); background: color-mix(in srgb, var(--ink) 5%, transparent); }
+/* The selection takes the accent theme (Settings → General → Accent color). */
+.seg button.on { background: var(--accent); color: #fff; font-weight: 600; }
+.seg button:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: -2px; }
+.seg-row { display: flex; align-items: center; gap: var(--s-m); min-width: 0; align-self: flex-start; max-width: 100%; }
+.seg-label { flex: none; color: var(--secondary); font: 13px var(--sans); }
+/* Several rows: one column of labels, one of tracks, each track starting at the same edge. */
+.seg-group { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: var(--s-s) var(--s-m); }
+.seg-group > .seg-row { display: contents; }
+.seg-group .seg { justify-self: start; }

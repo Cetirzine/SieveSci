@@ -136,3 +136,23 @@ export function Menu({ label, items, className = "", align = "left", title }:
     </span>
   );
 }
+
+/** Segmented choice, square: a framed light track, the chosen segment in the accent colour, hairlines between the
+ *  others. With `label`, the label sits to its left; several `SegmentedRow`s inside a `SegmentedGroup`
+ *  line their labels and tracks up in two columns. */
+export function Segmented<T extends string>({ value, options, onChange, label, fill }:
+  { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; label?: string; fill?: boolean }) {
+  const track = (
+    <div className={`seg ${fill ? "fill" : ""}`} role="tablist" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.value} type="button" role="tab" aria-selected={o.value === value} className={o.value === value ? "on" : ""} onClick={() => onChange(o.value)}>{o.label}</button>
+      ))}
+    </div>
+  );
+  return label ? <div className="seg-row"><span className="seg-label">{label}</span>{track}</div> : track;
+}
+
+/** Aligns the labels and tracks of the Segmented rows inside it. */
+export function SegmentedGroup({ children }: { children: ReactNode }) {
+  return <div className="seg-group">{children}</div>;
+}

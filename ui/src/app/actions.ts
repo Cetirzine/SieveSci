@@ -83,7 +83,7 @@ export async function refreshQuotas() {
 }
 
 /** Opens a folder or web page with the system (Finder / Explorer, the browser). */
-export function systemOpen(target: { path?: string; url?: string }) { void call("system.open", target as JsonObject); }
+export function systemOpen(target: { path?: string; url?: string; reveal?: boolean }) { void call("system.open", target as JsonObject); }
 
 export function setAccent(a: AppState["accent"]) {
   setState({ accent: a });

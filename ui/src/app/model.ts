@@ -38,7 +38,7 @@ export interface ContextMeter { model: string; contextWindow: number; lastPrompt
   session: { input: number; cacheRead: number; cacheWrite: number; output: number; reasoning: number } }
 export interface PlanStep { id: string; title: string; detail: string; status: string; checkpoint: boolean; criteria: string; evidence: string[]; note: string }
 export interface Hypothesis { id: string; statement: string; prediction: string; falsification: string; status: string }
-export interface ResearchPlan { goal: string; background?: string; stage: string; hypotheses: Hypothesis[]; steps: PlanStep[]; rationale?: string }
+export interface ResearchPlan { goal: string; background?: string; stage: string; hypotheses: Hypothesis[]; steps: PlanStep[]; rationale?: string; revisions?: { at: string; rationale: string; changedCriteria: string[]; afterResults: boolean }[] }
 export interface Claim { id: string; statement: string; successCriteria: string; evidence: string[]; dataPaths: string[]; status: string; verdict: string | null; verifierReceipts: string[] }
 export interface Contested { thread: string; kind: string; issue: string; reason: string }
 export interface JobState { id: string; label: string; lines: string[]; running: boolean; unread: number; exitCode?: number; seconds?: number }
@@ -161,6 +161,10 @@ export interface AppState {
   draft: string;
   commands: { name: string; args: string; summary: string; group?: string }[];
   ideas: Idea[];
+  /** Bumped when something the panels show may have changed (they refetch from serve). */
+  panelTick: number;
+  /** Learning proposals waiting for the user (Learning tab badge). */
+  pendingProposals: number;
   /** The open task's running brainstorm (an ended one is a transcript row). */
   brainstorm: BrainstormState | null;
   /** Which key references hold a key (values never leave serve). */
@@ -195,7 +199,7 @@ export const initialState: AppState = {
   mainTab: "chat", inspectorTab: "files", showInspector: false, showSettingsPage: false, sidebarVisible: true,
   backgroundTasks: [], backgroundWorkspaces: {}, attention: {}, grounding: null,
   modelStatus: { ready: false, text: "" }, searchStatus: { ready: false, text: "" }, lastError: null, version: "", draft: "", commands: [],
-  ideas: [], brainstorm: null,
+  ideas: [], brainstorm: null, panelTick: 0, pendingProposals: 0,
   keys: {}, usable: [], languageChoice: "system", live: false, settingsPane: "general", providerInfo: {}, quotas: {}, accent: "blue",
   platform: typeof navigator !== "undefined" && /Win/.test(navigator.platform) ? "windows" : typeof navigator !== "undefined" && /Linux/.test(navigator.platform) ? "linux" : "macos",
 };
@@ -283,6 +287,9 @@ function closeThinking(s: AppState, agent: string) {
   openThinking.delete(agent);
 }
 
+/** Events after which the panels' data (trace, files, history, jobs, library …) may have changed. */
+const panelEvents = new Set(["toolFinished", "turnFinished", "supervisorReview", "deliberation", "fileChanged", "committed", "jobFinished",
+  "literature", "agentFinished", "integrity", "error"]);
 const isDelta = (t: string) => t === "textDelta" || t === "thinkingDelta" || t === "toolProgress" || t === "jobOutput";
 let pending: JsonObject[] = [];
 let flushScheduled = false;
@@ -327,6 +334,7 @@ function handle(s: AppState, e: JsonObject) {
     if (e.type === "titleChanged") s.taskTitles = { ...s.taskTitles, [str("task")]: str("title") };
     return;
   }
+  if (panelEvents.has(String(e.type))) s.panelTick++;
   switch (e.type) {
     case "turnStarted":
       if (e.role === "main" && agent === "main" && !s.running) {

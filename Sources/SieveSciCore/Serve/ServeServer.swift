@@ -229,6 +229,7 @@ public final class ServeServer: @unchecked Sendable {
             return .object([:])
         default:
             if let r = try await settingsDispatch(method, p) { return r }
+            if let r = try await panelsDispatch(method, p) { return r }
             throw RPCError(code: -32601, message: "unknown method \(method)")
         }
     }

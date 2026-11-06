@@ -62,7 +62,7 @@ button { font: inherit; color: inherit; }
 
 .panel-scroll { flex: 1; overflow-y: auto; background: var(--canvas); }
 .panel-column { max-width: var(--reading-width); margin: 0 auto; padding: var(--s-xl); }
-.inspector-column { width: 340px; min-width: 280px; max-width: 600px; flex: none; border-left: 1px solid var(--hairline); background: var(--canvas); overflow-y: auto; }
+.inspector-column { width: 340px; min-width: 280px; max-width: 600px; flex: none; border-left: 1px solid var(--hairline); background: var(--canvas); overflow: hidden; display: flex; flex-direction: column; }
 
 /* WelcomeView */
 .welcome-view { position: relative; flex: 1; overflow-y: auto; background: var(--canvas); }

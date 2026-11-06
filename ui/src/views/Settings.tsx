@@ -7,7 +7,7 @@ import { useApp, getState, onPlatform, type Config, type ModelInfo, type ModelRe
 import * as A from "../app/actions";
 import type { SettingsPane } from "../app/actions";
 import type { JsonObject } from "../serve";
-import { ActionButton, ActionRow, Chip, IconButton, SectionLabel, SpecField } from "../theme/primitives";
+import { ActionButton, ActionRow, Chip, IconButton, SectionLabel, Segmented, SpecField } from "../theme/primitives";
 import { Symbol, roleName } from "../theme/theme";
 import { RoleGhostIcon } from "../theme/brand";
 import { EffortSlider } from "../theme/effort";
@@ -107,13 +107,6 @@ function Picker<T extends string>(props: { label: string; value: T; options: { v
   return <Row label={props.label}><PopUp {...props} /></Row>;
 }
 
-function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="segmented" role="tablist">
-      {options.map((o) => <button key={o.value} type="button" role="tab" aria-selected={o.value === value} className={o.value === value ? "on" : ""} onClick={() => onChange(o.value)}>{o.label}</button>)}
-    </div>
-  );
-}
 
 function Stepper({ label, value, min, max, step = 1, onChange }: { label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void }) {
   return (
@@ -685,7 +678,7 @@ function AddProviderSheet({ close, added }: { close: () => void; added: (id: str
     <div className="sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div className="sheet appear-pop" role="dialog" aria-label={L("Add provider")}>
         <h3>{L("Add provider")}</h3>
-        <Segmented value={tab} onChange={setTab} options={[{ value: "0", label: L("Presets") }, { value: "1", label: L("Endpoint catalog") }, { value: "2", label: "models.dev" }, { value: "3", label: L("Custom / relay") }]} />
+        <Segmented fill value={tab} onChange={setTab} options={[{ value: "0", label: L("Presets") }, { value: "1", label: L("Endpoint catalog") }, { value: "2", label: "models.dev" }, { value: "3", label: L("Custom / relay") }]} />
         {tab !== "3" && <SpecField value={query} onChange={setQuery} placeholder={L("Search")} />}
         <div className="sheet-list">
           {tab === "0" && rows(catalog?.presets, "preset")}
@@ -733,10 +726,8 @@ function ModelsSettings() {
   return (
     <Form>
       <Section>
-        <div className="segmented labelled"><span>{L("Assignment")}</span>
-          <Segmented value={c.roles.mode} onChange={(m) => setRoles({ mode: m })}
-                     options={[{ value: "auto", label: L("Automatic (benchmarks)") }, { value: "same", label: L("Same model for all roles") }, { value: "custom", label: L("Custom per role") }]} />
-        </div>
+        <Segmented label={L("Assignment")} value={c.roles.mode} onChange={(m) => setRoles({ mode: m })}
+                   options={[{ value: "auto", label: L("Automatic (benchmarks)") }, { value: "same", label: L("Same model for all roles") }, { value: "custom", label: L("Custom per role") }]} />
         <Caption>{L("Automatic picks, from your providers, the best model per role on LAB-Bench 2, RiemannBench, Terminal-Bench Science and PostTrainBench (cited snapshot, refreshable), preferring a different vendor for the checker and verifier than for the research agent.")}</Caption>
       </Section>
       {c.roles.mode === "same" && (
@@ -900,9 +891,7 @@ function MemorySettings() {
   return (
     <Form>
       <Section>
-        <div className="segmented labelled"><span>{L("Role")}</span>
-          <Segmented value={role} onChange={setRole} options={roles.map((r) => ({ value: r, label: roleName(r) }))} />
-        </div>
+        <Segmented label={L("Role")} value={role} onChange={setRole} options={roles.map((r) => ({ value: r, label: roleName(r) }))} />
         <Caption>{L("Every role keeps long-term memory and can propose skills. Proposals are screened against gaming and unscientific shortcuts, must cite the receipts they were learned from, and are reviewed independently; checker and verifier learning needs your approval.")}</Caption>
       </Section>
       {stores.map((s) => {

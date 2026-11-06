@@ -186,6 +186,28 @@ private final class SlowProvider: LLMProvider, @unchecked Sendable {
         await #expect(throws: ServeTestError.self) { try await c.call("system.open", ["url": "file:///etc/passwd"]) }
     }
 
+    @Test func panelData() async throws {
+        let ws = try workspace()
+        try "x,y\n1,2\n".write(to: ws.appendingPathComponent("data.csv"), atomically: true, encoding: .utf8)
+        let c = Client(workspace: ws) { ScriptedProvider(replies: ["Done."]) }
+        _ = try await c.call("task.open")
+        _ = try await c.call("task.send", ["text": "Summarise the data"])
+        #expect(await c.waitFor { $0.str("type") == "turnFinished" && $0.str("agentId") == "main" } != nil)
+        let trace = try await c.call("panels.trace", ["offset": 0])
+        #expect(trace["events"]?.arrayValue?.contains { $0.str("actor") == "user" } == true)
+        let again = try await c.call("panels.trace", ["offset": trace["offset"] ?? 0])
+        #expect(again["events"]?.arrayValue?.isEmpty == true)   // incremental: nothing new
+        let files = try await c.call("files.list")
+        #expect(files["entries"]?.arrayValue?.contains { $0.str("name") == "data.csv" } == true)
+        #expect(files["entries"]?.arrayValue?.contains { $0.str("name") == ".sievesci" } == false)
+        #expect(try await c.call("files.read", ["path": "data.csv"]).str("text") == "x,y\n1,2\n")
+        await #expect(throws: ServeTestError.self) { try await c.call("files.read", ["path": "/etc/hosts"]) }
+        await #expect(throws: ServeTestError.self) { try await c.call("files.list", ["path": "../"]) }
+        #expect(try await c.call("panels.changes")["files"]?.arrayValue != nil)
+        #expect(try await c.call("panels.notebook").str("path")?.hasSuffix("notebook.md") == true)
+        try await c.call("shutdown")
+    }
+
     @Test func renameForkAndMarkdown() async throws {
         let ws = try workspace()
         let c = Client(workspace: ws) { ScriptedProvider(replies: ["Reply one."]) }

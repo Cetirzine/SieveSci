@@ -2,7 +2,7 @@
 // `sievesci serve` through Tauri (desktop) or the dev bridge (browser).
 import { useEffect } from "react";
 import { inTauri, ServeClient, socketTransport, tauriTransport, type Transport } from "./serve";
-import { L, setLanguage, type Language } from "./i18n";
+import { setLanguage, type Language } from "./i18n";
 import { deliver, getState, setState, taskStatus, useApp } from "./app/model";
 import * as A from "./app/actions";
 import { demoScene, loadDemo } from "./app/demo";
@@ -10,6 +10,8 @@ import { RootView } from "./views/Frame";
 import { WelcomeView } from "./views/Welcome";
 import { ChatView } from "./views/ChatView";
 import { SettingsPage } from "./views/Settings";
+import { InspectorView, MainPanel } from "./views/Panels";
+import type { InspectorTab } from "./app/model";
 import { applyAppearance } from "./theme/theme";
 
 const stored = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -83,9 +85,9 @@ export default function App() {
     <RootView
       welcome={<WelcomeView onOpenWorkspace={() => void A.chooseWorkspace()} />}
       chat={<ChatView />}
-      panel={(t) => <div className="secondary">{t}</div>}
+      panel={(t) => <MainPanel tab={t as InspectorTab} />}
       settings={<SettingsPage />}
-      inspector={<div className="panel-column secondary">{L("Research panel")}</div>}
+      inspector={<InspectorView />}
     />
   );
 }

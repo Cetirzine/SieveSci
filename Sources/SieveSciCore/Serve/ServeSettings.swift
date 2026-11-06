@@ -124,15 +124,17 @@ extension ServeServer {
             guard let target = p.str("url") ?? p.str("path"), !target.isEmpty else { throw RPCError(code: -32602, message: "path or url is required") }
             if p.str("url") != nil {
                 guard let u = URL(string: target), u.scheme == "https" || u.scheme == "http" else { throw RPCError(code: -32602, message: "only web links can be opened") }
-            } else if p.str("path") != nil {
+            } else if p.str("path") != nil, p["reveal"]?.boolValue != true, (target as NSString).pathExtension.isEmpty {
                 try? FileManager.default.createDirectory(atPath: target, withIntermediateDirectories: true)
             }
+            // `reveal`: show the file selected in Finder / Explorer instead of opening it.
+            let reveal = p["reveal"]?.boolValue == true && p.str("path") != nil
             #if os(macOS)
-            _ = try await ProcessRunner.run("/usr/bin/open", [target], timeout: 10)
+            _ = try await ProcessRunner.run("/usr/bin/open", reveal ? ["-R", target] : [target], timeout: 10)
             #elseif os(Windows)
-            _ = try await ProcessRunner.run("explorer.exe", [target], timeout: 10)
+            _ = try await ProcessRunner.run("explorer.exe", reveal ? ["/select,", target] : [target], timeout: 10)
             #else
-            _ = try await ProcessRunner.run("xdg-open", [target], timeout: 10)
+            _ = try await ProcessRunner.run("xdg-open", [reveal ? URL(fileURLWithPath: target).deletingLastPathComponent().path : target], timeout: 10)
             #endif
             return .object([:])
 
