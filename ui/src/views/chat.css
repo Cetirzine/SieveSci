@@ -170,6 +170,8 @@
 .attach-button { display: inline-flex; align-items: center; justify-content: center; width: var(--c-icon); height: var(--c-icon); border: 1px solid var(--rule); color: var(--secondary); }
 .sandbox-menu .menu-label { font: 12px/1 var(--sans); color: var(--secondary); gap: 4px; }
 .sandbox-menu.c-warn .menu-label { color: var(--warn); }
+/* No sandbox on this system (Windows, Linux): a label, not a menu. */
+span.sandbox-menu.t-meta { display: inline-flex; align-items: center; gap: 4px; font: 12px/1 var(--sans); color: var(--warn); }
 .effort-label { display: inline-flex; align-items: center; gap: 5px; height: var(--c-icon); padding: 0 6px; }
 .effort-gauge { display: inline-grid; grid-template-columns: repeat(13, 2px); grid-auto-rows: 2px; gap: 1px; padding: 2px; width: 44px; height: 13px; box-sizing: border-box; border: 1px solid var(--rule); align-content: center; }
 .effort-gauge i { background: var(--rule); }

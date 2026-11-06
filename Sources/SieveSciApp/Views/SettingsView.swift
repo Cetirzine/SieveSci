@@ -1052,7 +1052,7 @@ struct ResearchSettings: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section(spec: L("Sandbox")) {
-                Picker(L("Commands the agents run"), selection: $model.config.sandboxMode) {
+                Picker(L("Commands the agents run"), selection: model.sandboxSelection) {
                     Text(L("Write workspace only, network on")).tag(SandboxMode.workspaceWrite)
                     Text(L("Write workspace only, offline")).tag(SandboxMode.workspaceWriteOffline)
                     Text(L("No sandbox")).tag(SandboxMode.off)

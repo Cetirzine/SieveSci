@@ -72,18 +72,22 @@ public struct AppConfig: Codable, Equatable, Sendable {
     public static func load() -> AppConfig {
         guard let d = try? Data(contentsOf: url) else { return AppConfig() }
         // Decode leniently so new fields never wipe an existing configuration.
-        if var c = try? JSONDecoder().decode(AppConfig.self, from: d) {
-            // Before 0.2.5, auto mode with the sandbox off was how one ran without a sandbox or approvals;
-            // auto mode now always sandboxes, so that combination is YOLO mode.
-            if c.permissionMode == .auto && c.sandboxMode == .off { c.permissionMode = .yolo }
-            return c
-        }
+        if let c = try? JSONDecoder().decode(AppConfig.self, from: d) { return c.migrated() }
         var c = AppConfig()
         if let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
            let p = j["providers"], let pd = try? JSONSerialization.data(withJSONObject: p),
            let providers = try? JSONDecoder().decode([ProviderProfile].self, from: pd) {
             c.providers = providers
         }
+        return c
+    }
+
+    /// A configuration saved by an earlier version, read with today's meaning. Before 0.2.5, auto mode
+    /// with the sandbox off was how one ran without a sandbox or approvals; auto mode now always
+    /// sandboxes, so that combination is YOLO mode.
+    func migrated() -> AppConfig {
+        var c = self
+        if c.permissionMode == .auto && c.sandboxMode == .off { c.permissionMode = .yolo }
         return c
     }
 

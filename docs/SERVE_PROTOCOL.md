@@ -41,7 +41,7 @@ Requests about tasks take optional `workspace` (a path; default: the open worksp
 
 | method | params | result |
 |---|---|---|
-| `initialize` | `{client?}` | `{name, version, protocol: 2, platform, workspace, language, languageChoice, provider?, model?, mode?}` (`platform`: `macos`, `windows` or `linux`, for wording such as where keys are kept) (`provider`/`model`/`mode` only with `--provider`; `language` is the language in effect, e.g. `zh-Hans`, `languageChoice` the user's pick or `system`) |
+| `initialize` | `{client?}` | `{name, version, protocol: 2, platform, sandbox, workspace, language, languageChoice, provider?, model?, mode?}` (`platform`: `macos`, `windows` or `linux`, for wording such as where keys are kept; `sandbox`: whether commands can run sandboxed here, Seatbelt on macOS only) (`provider`/`model`/`mode` only with `--provider`; `language` is the language in effect, e.g. `zh-Hans`, `languageChoice` the user's pick or `system`) |
 | `language.set` | `{language: "system" \| "en" \| "zh-Hans" \| "zh-Hant" \| "ru" \| "es" \| "fr"}` | `{language, languageChoice}` The interface language, shared with the macOS app and the CLI; texts serve sends follow it. |
 | `config.get` | `{}` | `{config, keys, usable, status}` — see below |
 | `config.set` | `{patch: {field: value, …}}` | Same as `config.get`. Top-level fields of `config` are replaced, the result is saved and applied to live tasks (permission mode, effort, sandbox, auto titles, …). A value the configuration does not accept is refused with `invalid value for <field>`. |
@@ -51,7 +51,9 @@ Requests about tasks take optional `workspace` (a path; default: the open worksp
 
 `config` is the app's whole configuration, with the built-in provider presets merged in as the app does (`providers`, `roles`, `webSearch`, `permissionMode`,
 `effort`, `sandboxMode`, `appearance`, `autoTitles`, `autoBrainstorm`, `downloadOAPDFs`,
-`recentWorkspaces`, …) as the app stores it. `keys` maps each key reference in it to whether a key
+`recentWorkspaces`, …) as the app stores it. `permissionMode` is `ask`, `acceptEdits`, `auto` (no
+approvals; commands always run sandboxed, even with `sandboxMode` off), `yolo` (no approvals and no
+sandbox) or `plan`; the safety deny list applies in every mode. `keys` maps each key reference in it to whether a key
 is present (`true`/`false`; key values never leave serve). `usable` lists the ids of providers that
 can run now (enabled and with a key, or a CLI agent found on PATH). `status` is the welcome
 checklist: `{models: {ready, text}, search: {ready, text}}`.
@@ -62,9 +64,9 @@ checklist: `{models: {ready, text}, search: {ready, text}}`.
 |---|---|---|
 | `workspace.open` | `{path}` | `{workspace, tasks}` Makes it the open workspace and adds it to `recentWorkspaces`. |
 | `tasks.list` | `{workspace?}` | `{tasks: [{id, title, modified, running, stage}]}` newest first; `title` is null until the task has one; `stage` is null unless the task is live. |
-| `task.open` | `{workspace?, id?, restart?}` | Opens the task (a new one without `id`) and makes it the open task; the previous one is closed unless it is still working or needs the user. `restart: true` stops a live task first and starts it again on the current configuration (after a model switch). Returns `{task, workspace, title, running, history, plan, claims, ideas, brainstorm, asks, stage, contested, grounding}` (`brainstorm`: the task's current or last brainstorm, or null). |
+| `task.open` | `{workspace?, id?, restart?}` | Opens the task (a new one without `id`) and makes it the open task; the previous one is closed unless it is still working or needs the user. `restart: true` stops a live task first and starts it again on the current configuration (after a model switch). Returns `{task, workspace, title, running, meter, history, plan, claims, ideas, brainstorm, asks, permission, stage, contested, grounding}` (`brainstorm`: the task's current or last brainstorm, or null; `meter`: the lead agent's model and context window; `permission`: the approval one of its agents waits for, or null, so a front end that switched away shows it again). Opening a task that is still being opened waits for that open instead of starting it twice. |
 | `task.send` | `{text, attachments?, task?}` | `{accepted: true}` at once (`attachments`: absolute file paths, sent with the message); the turn streams as `event` notifications and ends with `turnFinished` for agent `main`. Slash commands (`/goal`, `/trace r3`, …) work as in the CLI; their direct output arrives as an `output` notification. Text sent while a turn runs is queued. |
-| `task.stop` | `{task?}` | `{}` Stops the running turn (and its tools and workers). |
+| `task.stop` | `{task?}` | `{}` Stops the running turn (and its tools and workers), and denies the approval its agents wait for, so the turn ends. |
 | `permission.respond` | `{id, decision: "allow" \| "always" \| "deny", reason?}` | `{}` Answers a `permissionRequested` event (of any live task). |
 | `ask.respond` | `{id, outcome, task?}` | `{}` Answers an `askRequested` event (outcome format below). |
 | `brainstorm.wrapUp` | `{task?}` | `{}` Asks a running brainstorm to stop generating and report. |
@@ -146,7 +148,8 @@ routes them to the open task or marks a background one in its sidebar.
   `toolStarted {agentId, id, name, input}`, `toolProgress {agentId, id, lines}`,
   `toolFinished {agentId, id, name, output, isError, receipt}`, `assistantMessage {agentId, message}`,
   `usage {agentId, meter: {model, contextWindow, lastPromptTokens, lastOutputTokens, fill, cacheHitRate, session}}`,
-  `permissionRequested {request: {id, tool, summary, input, effect, rememberPattern}}`,
+  `permissionRequested {request: {id, tool, summary, input, effect, rememberPattern}}` (sent when the request is put to
+  the user: agents asking at once are asked one after another, each announced when its turn comes),
   `integrity {signals}`, `supervisorStarted {kind, reason}`, `supervisorReview {kind, verdict, body}`,
   `planChanged {plan}`, `claimsChanged {claims}`, `notice {text}`, `error {text}`,
   `turnFinished {agentId, stop}`, `agentStarted {id, role, parent, purpose}`, `agentFinished {id, role, result}`,

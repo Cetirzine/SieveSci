@@ -1075,3 +1075,10 @@
 "Sign in…" = "Sign in…";
 "Installs the official build from %@ — no npm or Node.js needed." = "Installs the official build from %@ — no npm or Node.js needed.";
 "Or in a terminal:" = "Or in a terminal:";
+"auto mode on · sandboxed" = "auto mode on · sandboxed";
+"YOLO mode on · no sandbox" = "YOLO mode on · no sandbox";
+"yolo" = "YOLO";
+"Turn on YOLO mode?" = "Turn on YOLO mode?";
+"Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …)." = "Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …).";
+"Turn On" = "Turn On";
+"No sandbox on this system" = "No sandbox on this system";

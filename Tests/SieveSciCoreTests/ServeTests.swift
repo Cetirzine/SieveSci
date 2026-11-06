@@ -98,6 +98,7 @@ private final class SlowProvider: LLMProvider, @unchecked Sendable {
         let c = Client(workspace: ws) { ScriptedProvider(replies: ["Hello from the model.", "again"]) }
         let info = try await c.call("initialize", ["client": "test"])
         #expect(info["protocol"]?.intValue == 2 && info.str("name") == "sievesci" && info.str("workspace") == ws.path)
+        #expect(info["sandbox"]?.boolValue == Seatbelt.available)
 
         let opened = try await c.call("task.open")
         let task = try #require(opened.str("task"))

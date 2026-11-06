@@ -258,7 +258,7 @@ enum PermissionModeChip {
         switch mode {
         case .ask: return ("hand.raised", L("ask before edits & code"), .secondary)
         case .acceptEdits: return ("pencil", L("accept edits on"), Theme.accent)
-        case .auto: return ("bolt", L("auto mode on"), Theme.warn)
+        case .auto: return ("bolt", Seatbelt.available ? L("auto mode on · sandboxed") : L("auto mode on"), Theme.warn)
         case .plan: return ("pause.circle", L("plan mode on"), Theme.info)
         case .yolo: return ("exclamationmark.triangle", L("YOLO mode on · no sandbox"), Theme.bad)
         }
@@ -279,19 +279,19 @@ struct SandboxMenu: View {
 
     var body: some View {
         Menu {
-            Picker(L("Commands the agents run"), selection: $model.config.sandboxMode) {
+            Picker(L("Commands the agents run"), selection: model.sandboxSelection) {
                 Text(L("Write workspace only, network on")).tag(SandboxMode.workspaceWrite)
                 Text(L("Write workspace only, offline")).tag(SandboxMode.workspaceWriteOffline)
                 Text(L("No sandbox")).tag(SandboxMode.off)
             }
             .pickerStyle(.inline)
         } label: {
-            Label(Self.label(model.config.sandboxMode), systemImage: model.config.sandboxMode == .off ? "exclamationmark.shield" : "checkmark.shield")
+            Label(Self.label(model.effectiveSandbox), systemImage: model.effectiveSandbox == .off ? "exclamationmark.shield" : "checkmark.shield")
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
         .font(Theme.meta)
-        .tint(model.config.sandboxMode == .off ? Theme.warn : .secondary)
+        .tint(model.effectiveSandbox == .off ? Theme.warn : .secondary)
         .help(L("Commands the agents run"))
     }
 }

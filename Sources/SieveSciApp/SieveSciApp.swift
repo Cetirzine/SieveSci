@@ -561,8 +561,8 @@ struct ModeMenu: View {
     var body: some View {
         let m = PermissionModeChip.style(model.config.permissionMode)
         Menu {
-            ForEach([PermissionMode.ask, .acceptEdits, .auto, .plan], id: \.self) { mode in
-                Button { model.config.permissionMode = mode } label: {
+            ForEach(PermissionMode.menu, id: \.self) { mode in
+                Button { model.setPermissionMode(mode) } label: {
                     Label(PermissionModeChip.style(mode).text, systemImage: PermissionModeChip.style(mode).icon)
                 }
             }

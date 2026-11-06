@@ -549,15 +549,43 @@ final class AppModel: ObservableObject {
         refreshStage(taskId)
     }
 
+    /// Shift+Tab: YOLO is chosen on purpose, never stepped into; from YOLO the cycle starts over.
     func cyclePermissionMode() {
-        let all = PermissionMode.allCases
-        let next = all[(all.firstIndex(of: config.permissionMode)! + 1) % all.count]
-        setPermissionMode(next)
+        let c = PermissionMode.cycle
+        let i = c.firstIndex(of: config.permissionMode).map { $0 + 1 } ?? 0
+        setPermissionMode(c[i % c.count])
     }
 
+    /// YOLO mode is asked about first: nothing is sandboxed and nothing is asked.
     func setPermissionMode(_ m: PermissionMode) {
+        if m == .yolo, config.permissionMode != .yolo, !Self.confirmYolo() { return }
         config.permissionMode = m
         bench?.services.permissions.mode = m
+    }
+
+    static func confirmYolo() -> Bool {
+        let a = NSAlert()
+        a.alertStyle = .warning
+        a.messageText = L("Turn on YOLO mode?")
+        a.informativeText = L("Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …).")
+        a.addButton(withTitle: L("Turn On"))
+        a.addButton(withTitle: L("Cancel"))
+        return a.runModal() == .alertFirstButtonReturn
+    }
+
+    /// What commands actually run under: auto mode always sandboxes, YOLO never does.
+    var effectiveSandbox: SandboxMode { config.sandboxMode.effective(for: config.permissionMode) }
+
+    /// The sandbox choice, kept consistent with the mode: no sandbox in auto mode is YOLO, a sandbox in YOLO is auto.
+    func setSandbox(_ m: SandboxMode) {
+        if m == .off, config.permissionMode == .auto { setPermissionMode(.yolo); return }
+        config.sandboxMode = m
+        bench?.services.sandboxMode = m
+        if config.permissionMode == .yolo, m != .off { setPermissionMode(.auto) }
+    }
+
+    var sandboxSelection: Binding<SandboxMode> {
+        Binding(get: { [unowned self] in effectiveSandbox }, set: { [unowned self] in setSandbox($0) })
     }
 
     /// Plan mode → approve the plan and let the agent execute with edits auto-accepted.

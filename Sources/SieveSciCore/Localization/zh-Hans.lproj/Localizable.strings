@@ -1075,3 +1075,10 @@
 "Sign in…" = "登录…";
 "Installs the official build from %@ — no npm or Node.js needed." = "从 %@ 安装官方版本——无需 npm 或 Node.js。";
 "Or in a terminal:" = "或在终端中运行：";
+"auto mode on · sandboxed" = "已开启自动模式 · 沙盒内";
+"YOLO mode on · no sandbox" = "已开启 YOLO 模式 · 无沙盒";
+"yolo" = "YOLO";
+"Turn on YOLO mode?" = "开启 YOLO 模式？";
+"Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …)." = "智能体将不经询问直接运行命令、修改文件，且所有命令都不在沙盒中运行：命令能改动你的用户账户能改动的一切。只有安全拒绝清单仍然生效（sudo、rm -rf /、强制推送……）。";
+"Turn On" = "开启";
+"No sandbox on this system" = "此系统无沙盒";

@@ -49,6 +49,7 @@ button { font: inherit; color: inherit; }
 .top-title { font: 700 17px/1.2 var(--sans); letter-spacing: -0.4px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
 .mode-menu .menu-label, .jobs-menu .menu-label { font: 11px/1 var(--mono); color: var(--secondary); }
 .mode-menu .menu-label { font: 13px/1 var(--sans); color: var(--text); }
+.mode-menu.c-bad .menu-label { color: var(--bad); }
 .jobs-menu .menu-label { font: 13px/1 var(--sans); color: var(--accent); }
 .top-icons { display: inline-flex; gap: var(--s-xs); flex: none; }
 .research-status { display: inline-flex; align-items: center; gap: var(--s-m); height: 26px; padding: 0 10px; border: 1px solid var(--rule); font: 11px/1 var(--mono); color: var(--secondary); white-space: nowrap; flex: none; }

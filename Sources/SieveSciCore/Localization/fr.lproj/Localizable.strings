@@ -1075,3 +1075,10 @@
 "Sign in…" = "Se connecter…";
 "Installs the official build from %@ — no npm or Node.js needed." = "Installe la version officielle depuis %@ — ni npm ni Node.js requis.";
 "Or in a terminal:" = "Ou dans un terminal :";
+"auto mode on · sandboxed" = "mode auto activé · en bac à sable";
+"YOLO mode on · no sandbox" = "mode YOLO activé · sans bac à sable";
+"yolo" = "YOLO";
+"Turn on YOLO mode?" = "Activer le mode YOLO ?";
+"Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …)." = "Les agents exécutent des commandes et modifient des fichiers sans demander, et rien ne tourne dans le bac à sable : une commande peut modifier tout ce que votre compte utilisateur peut modifier. Seule la liste de refus de sécurité s’applique encore (sudo, rm -rf /, push forcés…).";
+"Turn On" = "Activer";
+"No sandbox on this system" = "Pas de bac à sable sur ce système";
