@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "SieveSci",
   "version": "0.2.5",
-  "identifier": "app.sievesci.desktop",
+  "identifier": "app.sievesci.SieveSci",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://127.0.0.1:1420",
@@ -48,7 +48,8 @@
     "shortDescription": "A research agent for biology and chemistry",
     "copyright": "© 2026 王鹤年",
     "macOS": {
-      "minimumSystemVersion": "14.0"
+      "minimumSystemVersion": "14.0",
+      "signingIdentity": "-"
     },
     "windows": {
       "nsis": {

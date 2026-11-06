@@ -36,9 +36,25 @@ public enum L10n {
 
     /// The user's choice (persisted in UserDefaults; shared by the app and the CLI).
     public static var language: Language {
-        get { Language(rawValue: UserDefaults.standard.string(forKey: defaultsKey) ?? "") ?? .system }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: defaultsKey) }
+        get { Language(rawValue: defaults.string(forKey: defaultsKey) ?? "") ?? .system }
+        set { defaults.set(newValue.rawValue, forKey: defaultsKey) }
     }
+
+    /// The app's own defaults domain, whichever process asks: the SwiftUI app (its standard domain),
+    /// the engine inside the desktop app, or the CLI in a terminal (which would otherwise each get one
+    /// named after their executable). A suite named after the running app itself is not allowed, hence
+    /// the check.
+    /// A separate profile (`SIEVESCI_CONFIG_DIR`) and test runs keep their own domain, so they never
+    /// change the app's.
+    static var defaults: UserDefaults {
+        #if os(macOS)
+        let p = ProcessInfo.processInfo
+        let isolated = p.environment["SIEVESCI_CONFIG_DIR"] != nil || p.arguments.contains { $0.contains(".xctest") }
+        if !isolated, Bundle.main.bundleIdentifier != suite, let d = UserDefaults(suiteName: suite) { return d }
+        #endif
+        return .standard
+    }
+    static let suite = "app.sievesci.SieveSci"
 
     /// The concrete language in effect, e.g. "zh-Hans".
     public static var resolved: String {
