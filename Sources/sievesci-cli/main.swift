@@ -137,8 +137,10 @@ func serve(_ args: [String]) async {
         }
     }
     let out = NSLock()
+    var config = AppConfig.load()
+    config.addPresets()
     let server = ServeServer(
-        workspace: o.workspaceGiven ? URL(fileURLWithPath: o.workspace) : nil, info: info,
+        workspace: o.workspaceGiven ? URL(fileURLWithPath: o.workspace) : nil, info: info, config: config,
         secrets: flags ? cliSecrets : PlatformSecretStore.shared,
         makeServices: { id, ws, config in
             if flags { var f = o; f.workspace = ws.path; return try buildServices(f, task: id).0 }

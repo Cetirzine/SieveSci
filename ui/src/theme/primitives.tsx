@@ -109,7 +109,7 @@ export function ActionRow({ title, detail, children }: { title: string; detail?:
 
 /** A borderless dropdown (SwiftUI Menu with .borderlessButton): label button, item list below. */
 export function Menu({ label, items, className = "", align = "left", title }:
-  { label: ReactNode; items: { label: ReactNode; onSelect: () => void; checked?: boolean; destructive?: boolean; divider?: boolean }[]; className?: string; align?: "left" | "right"; title?: string }) {
+  { label: ReactNode; items: { label: ReactNode; onSelect?: () => void; checked?: boolean; destructive?: boolean; divider?: boolean; section?: boolean }[]; className?: string; align?: "left" | "right"; title?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -125,8 +125,9 @@ export function Menu({ label, items, className = "", align = "left", title }:
       <button type="button" className="menu-label" onClick={() => setOpen(!open)} title={title} aria-haspopup="menu" aria-expanded={open}>{label}</button>
       {open && (
         <div className={`menu-list ${align}`} role="menu">
-          {items.map((it, i) => it.divider ? <div key={i} className="menu-divider" /> : (
-            <button key={i} type="button" role="menuitem" className={`menu-item ${it.destructive ? "c-bad" : ""}`} onClick={() => { setOpen(false); it.onSelect(); }}>
+          {items.map((it, i) => it.divider ? <div key={i} className="menu-divider" />
+            : it.section ? <div key={i} className="menu-section">{it.label}</div> : (
+            <button key={i} type="button" role="menuitem" className={`menu-item ${it.destructive ? "c-bad" : ""}`} onClick={() => { setOpen(false); it.onSelect?.(); }}>
               <span className="menu-check">{it.checked ? "✓" : ""}</span>{it.label}
             </button>
           ))}

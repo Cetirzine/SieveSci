@@ -1,5 +1,5 @@
 // SieveSci desktop shell. The agent runs in `sievesci serve` (docs/SERVE_PROTOCOL.md); this process
-// only starts it for the chosen workspace and relays its JSON lines to and from the web UI.
+// only starts it and relays its JSON lines to and from the web UI.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::io::{BufRead, BufReader, Write};
@@ -64,13 +64,16 @@ fn stop_locked(s: &mut Serve) {
 }
 
 #[tauri::command]
-fn serve_start(app: AppHandle, state: State<ServeState>, workspace: String) -> Result<u64, String> {
+fn serve_start(app: AppHandle, state: State<ServeState>, workspace: Option<String>) -> Result<u64, String> {
     let mut s = state.0.lock().map_err(|e| e.to_string())?;
     stop_locked(&mut s);
     s.gen += 1;
     let gen = s.gen;
     let mut cmd = Command::new(sievesci_binary());
-    cmd.arg("serve").arg("--workspace").arg(&workspace).args(extra_args())
+    cmd.arg("serve");
+    // Without a workspace serve starts on the saved configuration; the UI opens folders itself.
+    if let Some(ws) = workspace.filter(|w| !w.is_empty()) { cmd.arg("--workspace").arg(ws); }
+    cmd.args(extra_args())
         .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit());
     #[cfg(windows)]
     {

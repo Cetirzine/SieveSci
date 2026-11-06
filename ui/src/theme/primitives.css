@@ -78,6 +78,8 @@
 .menu-item:hover { background: var(--accent); color: #fff; }
 .menu-check { width: 12px; flex: none; }
 .menu-divider { height: 1px; background: var(--hairline); margin: 4px 0; }
+.menu-section { padding: 4px 8px 2px; font-size: 11px; font-weight: 600; color: var(--text-tertiary); white-space: nowrap; }
+.menu-divider + .menu-section, .menu-item + .menu-section { margin-top: 4px; }
 
 /* DotActivity: per-dot ripple, sampled like the Swift keyframes (opacity 0.15 + 0.85·w²). */
 .dot-activity { display: inline-grid; flex: none; }

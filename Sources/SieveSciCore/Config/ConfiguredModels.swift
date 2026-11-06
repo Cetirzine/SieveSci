@@ -85,3 +85,21 @@ public enum ConfiguredModels {
         }
     }
 }
+
+extension AppConfig {
+    /// Every built-in provider preset: all of them on first launch (enabled only once a key is
+    /// present), and presets added in later versions joining an existing configuration. Renamed
+    /// presets keep the user's edits but take the current name and notes.
+    public mutating func addPresets() {
+        if providers.isEmpty { providers = ProviderPresets.all; return }
+        let known = Set(providers.map(\.id))
+        let added = ProviderPresets.all.filter { !known.contains($0.id) }
+        if !added.isEmpty { providers += added }
+        for (i, p) in providers.enumerated() {
+            if let preset = ProviderPresets.profile(id: p.id), preset.notes != p.notes, p.family == preset.family {
+                providers[i].notes = preset.notes
+                if p.displayName.hasPrefix("Gemini CLI") { providers[i].displayName = preset.displayName }
+            }
+        }
+    }
+}

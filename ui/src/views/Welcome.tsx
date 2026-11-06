@@ -1,7 +1,7 @@
 // Welcome page, ported from WelcomeView / LanguageMenu / SetupStep in SieveSciApp.swift.
 import type { ReactNode } from "react";
-import { L, language, languageNames, setLanguage, type Language } from "../i18n";
-import { useApp, setState } from "../app/model";
+import { L, language, languageNames, type Language } from "../i18n";
+import { useApp } from "../app/model";
 import { ActionButton, CropMarks, LabelTab, Menu, SectionLabel, IconButton } from "../theme/primitives";
 import { DotMatrixText, SieveField } from "../theme/dots";
 import { Symbol } from "../theme/theme";
@@ -29,10 +29,10 @@ export function WelcomeView({ onOpenWorkspace }: { onOpenWorkspace: () => void }
         <div className="welcome-steps">
           <SectionLabel>{L("Get started")}</SectionLabel>
           <SetupStep n={1} done={models.ready} title={L("Connect a model")} detail={models.text}>
-            <ActionButton kind={models.ready ? "secondary" : "primary"} width="column" onClick={A.openSettings}>{models.ready ? L("Change…") : L("Set up…")}</ActionButton>
+            <ActionButton kind={models.ready ? "secondary" : "primary"} width="column" onClick={() => A.openSettings("providers")}>{models.ready ? L("Change…") : L("Set up…")}</ActionButton>
           </SetupStep>
           <SetupStep n={2} done={search.ready} title={L("Web search")} detail={search.text} optional>
-            <ActionButton width="column" onClick={A.openSettings}>{L("Change…")}</ActionButton>
+            <ActionButton width="column" onClick={() => A.openSettings("search")}>{L("Change…")}</ActionButton>
           </SetupStep>
           <SetupStep n={3} done={false} title={L("Open a project folder")} detail={L("Your data, code and notes. SieveSci keeps its records in a hidden .sievesci folder inside it.")} />
         </div>
@@ -54,7 +54,7 @@ export function LanguageMenu() {
           label={<><Symbol name="globe" size={14} /> <span>{languageNames[current]}</span> <Symbol name="chevron.down" size={11} strokeWidth={2.5} /></>}
           items={(Object.keys(languageNames) as Language[]).map((l) => ({
             label: languageNames[l], checked: l === current,
-            onSelect: () => { setLanguage(l); try { localStorage.setItem("language", l); } catch { /* unavailable */ } setState({}); },
+            onSelect: () => { void A.setLanguage(l); },
           }))} />
   );
 }

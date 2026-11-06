@@ -159,6 +159,9 @@ private final class SlowProvider: LLMProvider, @unchecked Sendable {
         let set = try await c.call("config.set", ["patch": ["permissionMode": "plan", "showThinking": false]])
         #expect(set["config"]?.str("permissionMode") == "plan" && set["config"]?["showThinking"]?.boolValue == false)
         await #expect(throws: ServeTestError.self) { try await c.call("config.set", ["patch": ["permissionMode": "sideways"]]) }
+        #expect(try await c.call("config.set", ["patch": ["effort": "high"]])["config"]?.str("effort") == "high")
+        #expect(try await c.call("config.set", ["patch": ["effort": .null]])["config"]?["effort"] == nil)   // back to the default
+        await #expect(throws: ServeTestError.self) { try await c.call("language.set", ["language": "klingon"]) }
         let opened = try await c.call("workspace.open", ["path": .string(other.path)])
         #expect(opened.str("workspace") == other.standardizedFileURL.path && opened["tasks"]?.arrayValue?.isEmpty == true)
         #expect(try await c.call("config.get")["config"]?["recentWorkspaces"]?.arrayValue?.first?.stringValue == other.standardizedFileURL.path)

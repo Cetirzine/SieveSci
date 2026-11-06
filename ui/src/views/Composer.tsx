@@ -120,7 +120,7 @@ function sandboxLabel(m: string) {
 
 function SandboxMenu() {
   const mode = useApp((s) => s.config.sandboxMode);
-  const set = (m: "workspaceWrite" | "workspaceWriteOffline" | "off") => setState((s) => ({ config: { ...s.config, sandboxMode: m } }));
+  const set = (m: "workspaceWrite" | "workspaceWriteOffline" | "off") => void A.updateConfig({ sandboxMode: m });
   return (
     <Menu className={`sandbox-menu ${mode === "off" ? "c-warn" : ""}`} title={L("Commands the agents run")}
           label={<><Symbol name={mode === "off" ? "exclamationmark.triangle" : "checkmark.shield"} size={13} /> {sandboxLabel(mode)} <Symbol name="chevron.down" size={10} strokeWidth={2.5} /></>}
@@ -135,12 +135,12 @@ function SandboxMenu() {
 /** The composer's effort control: a 3-row dot gauge and the level name. */
 function EffortMenu() {
   const effort = useApp((s) => s.config.effort);
-  const level = Math.max(0, effortStops.indexOf(effort as never));
+  const level = Math.max(0, effortStops.indexOf((effort ?? null) as never));
   const max = effortStops.length - 1;
   return (
     <Menu className="effort-menu" align="right" title={L("Reasoning effort")}
-          label={<span className="effort-label"><EffortMiniGauge level={level} max={max} /><span className="t-mono-tiny secondary">{effortName(effort)}</span></span>}
-          items={effortStops.map((e) => ({ label: effortName(e), checked: e === effort, onSelect: () => setState((s) => ({ config: { ...s.config, effort: e } })) }))} />
+          label={<span className="effort-label"><EffortMiniGauge level={level} max={max} /><span className="t-mono-tiny secondary">{effortName(effort ?? null)}</span></span>}
+          items={effortStops.map((e) => ({ label: effortName(e), checked: e === effort, onSelect: () => void A.updateConfig({ effort: e }) }))} />
   );
 }
 
@@ -167,6 +167,8 @@ function ContextRing({ fill }: { fill: number }) {
 
 function ModelMenu() {
   const meter = useApp((s) => s.meter);
+  const providers = useApp((s) => s.config.providers);
+  const usable = useApp((s) => s.usable);
   const [showUsage, setShowUsage] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -179,7 +181,14 @@ function ModelMenu() {
   return (
     <span className="model-menu" ref={ref}>
       <Menu align="right" label={<span className="t-meta">{meter.model || L("no model")} <Symbol name="chevron.down" size={10} strokeWidth={2.5} /></span>}
-            items={[{ label: L("Providers…"), onSelect: A.openSettings }]} />
+            items={[
+              ...providers.filter((p) => usable.includes(p.id)).flatMap((p) => [
+                { label: p.displayName, section: true },
+                ...p.models.map((m) => ({ label: m, onSelect: () => void A.switchMainModel(p.id, m) })),
+              ]),
+              ...(usable.length ? [{ label: "", divider: true }] : []),
+              { label: L("Providers…"), onSelect: () => A.openSettings("providers") },
+            ]} />
       <button type="button" className="plain" onClick={() => setShowUsage(!showUsage)}><ContextRing fill={meter.fill} /></button>
       {showUsage && (
         <div className="usage-popover">

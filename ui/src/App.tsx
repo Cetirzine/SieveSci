@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { inTauri, ServeClient, socketTransport, tauriTransport, type Transport } from "./serve";
 import { L, setLanguage, type Language } from "./i18n";
-import { deliver, setState, useApp } from "./app/model";
+import { deliver, getState, setState, taskStatus, useApp } from "./app/model";
 import * as A from "./app/actions";
 import { demoScene, loadDemo } from "./app/demo";
 import { RootView } from "./views/Frame";
@@ -14,57 +14,71 @@ import { applyAppearance } from "./theme/theme";
 const stored = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 
 export default function App() {
-  const workspace = useApp((s) => s.workspace);
   const scene = demoScene();
+  const appearance = useApp((s) => s.config.appearance);
 
   useEffect(() => {
     const lang = stored("language") as Language | null;
     if (lang) setLanguage(lang);
     const params = new URLSearchParams(location.search);
-    const appearance = (params.get("appearance") ?? "system") as "system" | "light" | "dark";
-    applyAppearance(appearance, "blue");
-    if (scene) { loadDemo(scene); return; }
-    setState({ sidebarVisible: stored("sidebarVisible") !== "0", workspace: params.get("workspace") ?? stored("workspace") });
+    if (scene) { applyAppearance((params.get("appearance") ?? "system") as "system" | "light" | "dark", "blue"); loadDemo(scene); return; }
+    setState({ sidebarVisible: stored("sidebarVisible") !== "0" });
   }, [scene]);
 
-  // Live: one serve connection per workspace.
+  useEffect(() => { if (!scene) applyAppearance(appearance, "blue"); }, [scene, appearance]);
+
+  // Live: one serve connection for the window, as the app has one AppModel. It reopens the last
+  // workspace and resumes its latest task (AppModel.init → resumeIfNeeded).
   useEffect(() => {
-    if (scene || !workspace) return;
+    if (scene) return;
     let cancelled = false;
     let transport: Transport | undefined;
     (async () => {
       try {
-        const t = inTauri ? await tauriTransport(workspace) : await socketTransport(`ws://127.0.0.1:8787/?workspace=${encodeURIComponent(workspace)}`);
+        const t = inTauri ? await tauriTransport() : await socketTransport("ws://127.0.0.1:8787/");
         transport = t;
         if (cancelled) { t.close(); return; }
         const c = new ServeClient(t);
-        t.onClose((why) => setState({ lastError: `SieveSci stopped: ${why}` }));
+        t.onClose((why) => setState({ lastError: `SieveSci stopped: ${why}`, live: false }));
         c.onEvent(deliver);
-        c.onOutput((text) => deliver({ type: "notice", text }));
-        const info = await c.call<{ version: string; model: string; provider: string; mode: "ask" | "acceptEdits" | "auto" | "plan" }>("initialize", { client: inTauri ? "desktop" : "browser" });
+        c.onOutput((p) => { if (p.task === undefined || p.task === getState().taskId) deliver({ type: "notice", text: String(p.text ?? "") }); });
+        // Development: the connection and its notifications, for the browser console.
+        if (import.meta.env.DEV) {
+          const w = window as unknown as { __serve?: ServeClient; __notes?: unknown[]; __state?: typeof getState };
+          w.__serve = c; w.__notes = []; w.__state = getState;
+          c.onNotification((method, p) => { w.__notes!.push({ method, ...p }); });
+        }
+        c.onNotification((method, p) => {
+          if (method !== "taskStatus") return;
+          taskStatus(p);
+          // A background task was released: its row shows its new time (AppModel+Events).
+          if (p.stage === null) { void A.refreshTaskList(); A.refreshOpenFolders(); }
+        });
+        const info = await c.call<{ version: string; languageChoice?: string }>("initialize", { client: inTauri ? "desktop" : "browser" });
         A.attach(c);
-        setState((s) => ({ version: info.version, config: { ...s.config, permissionMode: info.mode },
-          modelStatus: { ready: true, text: `${info.provider} / ${info.model}` } }));
-        await A.refreshTaskList();
-        const list = await c.call<{ tasks: { id: string }[] }>("tasks.list");
-        await A.startSession(list.tasks[0]?.id);
+        // The language is shared with the macOS app and the CLI; a choice made here before wins only
+        // when none was made there.
+        const local = stored("language") as Language | null;
+        const choice = (info.languageChoice && info.languageChoice !== "system" ? info.languageChoice : local ?? "system") as Language;
+        setLanguage(choice);
+        setState({ version: info.version, languageChoice: choice });
+        if (local && local !== info.languageChoice) void c.call("language.set", { language: local });
+        await A.refreshConfig();
+        void A.loadCommands();
+        const params = new URLSearchParams(location.search);
+        const last = params.get("workspace") ?? getState().config.recentWorkspaces[0];
+        if (last) await A.openWorkspace(last);
+        A.refreshOpenFolders();
       } catch (err) {
         if (!cancelled) setState({ lastError: err instanceof Error ? err.message : String(err) });
       }
     })();
     return () => { cancelled = true; A.attach(null); transport?.close(); };
-  }, [scene, workspace]);
-
-  const openWorkspace = async () => {
-    if (!inTauri) return;
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const dir = await open({ directory: true, multiple: false });
-    if (typeof dir === "string") { try { localStorage.setItem("workspace", dir); } catch { /* unavailable */ } A.openWorkspace(dir); }
-  };
+  }, [scene]);
 
   return (
     <RootView
-      welcome={<WelcomeView onOpenWorkspace={openWorkspace} />}
+      welcome={<WelcomeView onOpenWorkspace={() => void A.chooseWorkspace()} />}
       chat={<ChatView />}
       panel={(t) => <div className="secondary">{t}</div>}
       settings={<div className="panel-column">{L("Settings")}</div>}

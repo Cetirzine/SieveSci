@@ -20,7 +20,7 @@ declare global {
 export const inTauri = typeof window !== "undefined" && window.__TAURI_INTERNALS__ !== undefined;
 
 /** Desktop: the Rust side owns the serve process and relays its lines. */
-export async function tauriTransport(workspace: string): Promise<Transport> {
+export async function tauriTransport(workspace?: string): Promise<Transport> {
   const { invoke } = await import("@tauri-apps/api/core");
   const { listen } = await import("@tauri-apps/api/event");
   const lineCbs: ((l: string) => void)[] = [];
@@ -29,7 +29,7 @@ export async function tauriTransport(workspace: string): Promise<Transport> {
   let gen = -1;
   const unlistenLine = await listen<{ gen: number; line: string }>("serve-line", (e) => { if (e.payload.gen === gen) lineCbs.forEach((cb) => cb(e.payload.line)); });
   const unlistenExit = await listen<{ gen: number; reason: string }>("serve-exit", (e) => { if (e.payload.gen === gen) closeCbs.forEach((cb) => cb(e.payload.reason)); });
-  gen = await invoke<number>("serve_start", { workspace });
+  gen = await invoke<number>("serve_start", { workspace: workspace ?? null });
   return {
     send: (line) => { void invoke("serve_send", { gen, line }); },
     onLine: (cb) => { lineCbs.push(cb); },
@@ -38,7 +38,7 @@ export async function tauriTransport(workspace: string): Promise<Transport> {
   };
 }
 
-/** Browser: dev-bridge.mjs starts serve for the workspace in the URL and relays over a WebSocket. */
+/** Browser: dev-bridge.mjs starts serve and relays its lines over a WebSocket. */
 export function socketTransport(url: string): Promise<Transport> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(url);
@@ -64,7 +64,8 @@ export class ServeClient {
   private nextId = 0;
   private pending = new Map<number, { resolve: (v: Json) => void; reject: (e: Error) => void }>();
   private eventCbs: ((e: JsonObject) => void)[] = [];
-  private outputCbs: ((text: string) => void)[] = [];
+  private outputCbs: ((params: JsonObject) => void)[] = [];
+  private noteCbs: ((method: string, params: JsonObject) => void)[] = [];
 
   constructor(private transport: Transport) {
     transport.onLine((line) => this.receive(line));
@@ -83,7 +84,10 @@ export class ServeClient {
   }
 
   onEvent(cb: (e: JsonObject) => void) { this.eventCbs.push(cb); }
-  onOutput(cb: (text: string) => void) { this.outputCbs.push(cb); }
+  /** `output {task, workspace, text}`: the direct result of a slash command. */
+  onOutput(cb: (params: JsonObject) => void) { this.outputCbs.push(cb); }
+  /** Every other notification (`taskStatus`, and what later versions add). */
+  onNotification(cb: (method: string, params: JsonObject) => void) { this.noteCbs.push(cb); }
 
   private receive(line: string) {
     let msg: JsonObject;
@@ -98,6 +102,7 @@ export class ServeClient {
     }
     const params = (msg.params ?? {}) as JsonObject;
     if (msg.method === "event") this.eventCbs.forEach((cb) => cb(params));
-    else if (msg.method === "output") this.outputCbs.forEach((cb) => cb(String(params.text ?? "")));
+    else if (msg.method === "output") this.outputCbs.forEach((cb) => cb(params));
+    else if (typeof msg.method === "string") this.noteCbs.forEach((cb) => cb(String(msg.method), params));
   }
 }

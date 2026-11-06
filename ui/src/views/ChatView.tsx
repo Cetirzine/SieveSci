@@ -48,6 +48,7 @@ function Conversation({ items }: { items: TranscriptItem[] }) {
   const pendingAsk = useApp((s) => s.pendingAsk);
   const permission = useApp((s) => s.pendingPermission ?? s.demoAsk);
   const lastError = useApp((s) => s.lastError);
+  const live = useApp((s) => s.live);
   const queued = useApp((s) => s.queued);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
@@ -116,7 +117,7 @@ function Conversation({ items }: { items: TranscriptItem[] }) {
         </div>
       </div>
       <div className="reading-column composer-area">
-        {lastError && !A.connected() && <SessionSetupCard detail={lastError} />}
+        {lastError && !live && <SessionSetupCard detail={lastError} />}
         {queued.length > 0 && (
           <div className="queued t-meta">
             <Symbol name="plus" size={12} className="secondary" /><span className="secondary">{L("Queued")}:</span>
@@ -135,7 +136,8 @@ function EarlierRowsLabel({ count }: { count: number }) {
 }
 
 function SessionSetupCard({ detail }: { detail: string }) {
-  const setup = useApp((s) => !s.modelStatus.ready);
+  // AppModel.needsModelSetup: a workspace, no session, and no usable provider.
+  const setup = useApp((s) => s.workspace !== null && !s.live && s.usable.length === 0);
   return (
     <div className="setup-card appear-pop">
       <span className={`setup-card-icon ${setup ? "c-accent" : "c-warn"}`}><Symbol name={setup ? "cpu" : "exclamationmark.triangle"} size={15} strokeWidth={2.2} /></span>
@@ -143,8 +145,8 @@ function SessionSetupCard({ detail }: { detail: string }) {
         <div className="t-body-strong">{setup ? L("Connect a model to start") : L("The session could not start")}</div>
         <div className="t-meta secondary">{setup ? L("SieveSci needs one model provider: an API key (DeepSeek, Anthropic, OpenAI, Gemini, GLM …), a relay, or a signed-in Claude Code, Codex or Gemini CLI. What you typed is kept.") : detail}</div>
         <EqualWidthButtons>
-          {setup && <ActionButton kind="primary" fill onClick={A.openSettings}>{L("Set up a provider…")}</ActionButton>}
-          <ActionButton fill onClick={() => setState({ lastError: null })}>{L("Try again")}</ActionButton>
+          {setup && <ActionButton kind="primary" fill onClick={() => A.openSettings("providers")}>{L("Set up a provider…")}</ActionButton>}
+          <ActionButton fill onClick={() => { setState({ lastError: null }); void A.resumeIfNeeded(); }}>{L("Try again")}</ActionButton>
         </EqualWidthButtons>
       </div>
     </div>

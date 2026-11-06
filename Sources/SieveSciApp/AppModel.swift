@@ -151,22 +151,7 @@ final class AppModel: ObservableObject {
         #if DEBUG
         if Self.isDemo { loadDemo(); return }
         #endif
-        if config.providers.isEmpty {
-            // First launch: offer every preset, enabled only once a key is present.
-            config.providers = ProviderPresets.all
-        } else {
-            // Built-in presets added in later versions (Antigravity, CloseAI …) join existing configurations.
-            let known = Set(config.providers.map(\.id))
-            let added = ProviderPresets.all.filter { !known.contains($0.id) }
-            if !added.isEmpty { config.providers += added }
-            // Renamed presets keep the user's edits but take the current name and notes.
-            for (i, p) in config.providers.enumerated() {
-                if let preset = ProviderPresets.profile(id: p.id), preset.notes != p.notes, p.family == preset.family {
-                    config.providers[i].notes = preset.notes
-                    if p.displayName.hasPrefix("Gemini CLI") { config.providers[i].displayName = preset.displayName }
-                }
-            }
-        }
+        config.addPresets()
         if let last = config.recentWorkspaces.first, FileManager.default.fileExists(atPath: last) {
             workspace = URL(fileURLWithPath: last)
             // Pick up where the user left off: the workspace's most recent task.

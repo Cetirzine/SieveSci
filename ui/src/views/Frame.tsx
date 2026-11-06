@@ -74,7 +74,7 @@ function SidebarView() {
       <NeedsYouList />
       <div className="sidebar-section">
         <SectionLabel>{L("Workspace")}</SectionLabel>
-        <IconButton symbol="folder.badge.plus" label={L("Open Workspace…")} onClick={() => { /* platform folder picker */ }} />
+        <IconButton symbol="folder.badge.plus" label={L("Open Workspace…")} onClick={() => void A.chooseWorkspace()} />
       </div>
       <div className="sidebar-scroll">
         {workspace && (
@@ -90,19 +90,19 @@ function SidebarView() {
         {others.map((path) => (
           <div key={path}>
             <div className="folder-line">
-              <button type="button" className="hover-row folder-button" title={path} onClick={() => A.openWorkspace(path)}>
+              <button type="button" className="hover-row folder-button" title={path} onClick={() => void A.openWorkspace(path)}>
                 {row("folder", basename(path), false)}
                 {Object.values(backgroundWorkspaces).includes(path) && <RoleGhostBadge role="main" working size={18} />}
               </button>
               {disclosure(path)}
-              {newTaskButton(() => A.openWorkspace(path))}
+              {newTaskButton(() => void A.openWorkspace(path, undefined, true))}
             </div>
             {isFolderOpen(state, path) && ((folderTasks[path] ?? []).length === 0 ? noTasks
               : (folderTasks[path] ?? []).map((t) => <TaskRow key={t.id} id={t.id} modified={t.modified} folder={path} />))}
           </div>
         ))}
       </div>
-      <button type="button" className="hover-row settings-row" onClick={A.openSettings}>
+      <button type="button" className="hover-row settings-row" onClick={() => A.openSettings()}>
         <Symbol name="gearshape" size={14} /> <span className="t-body">{L("Settings")}</span>
       </button>
     </nav>
@@ -129,7 +129,7 @@ function TaskRow({ id, modified, folder }: { id: string; modified: number; folde
   const running = useApp((s) => (selected && s.running) || s.backgroundTasks.includes(id));
   const attention = useApp((s) => s.attention[id]);
   const open = () => {
-    if (folder) { A.openWorkspace(folder); void A.startSession(id); }
+    if (folder) void A.openWorkspace(folder, id);
     else if (!selected) void A.startSession(id);
   };
   return (
@@ -143,14 +143,15 @@ function TaskRow({ id, modified, folder }: { id: string; modified: number; folde
             : <span className="t-caption tertiary">{relativeTime(modified)}</span>}
         </span>
       </button>
-      {hovering && !folder && <IconButton symbol="xmark" label={L("Delete conversation…")} className="task-delete" onClick={() => A.deleteTask(id)} />}
+      {hovering && !folder && <IconButton symbol="xmark" label={L("Delete conversation…")} className="task-delete" onClick={() => void A.deleteTask(id)} />}
     </div>
   );
 }
 
-const needsPerson = (a: Attention) => a.stage === "answer" || a.stage === "review" || a.stage === "blocked";
-const stageShowsChip = (a: Attention) => a.stage === "waitingForJobs" || needsPerson(a);
+const needsPerson = (a: Attention) => a.needsPerson ?? (a.stage === "answer" || a.stage === "review" || a.stage === "blocked");
+const stageShowsChip = (a: Attention) => a.showsChip ?? (a.stage === "waitingForJobs" || needsPerson(a));
 function stageLabel(a: Attention): string {
+  if (a.label) return a.label;
   return ({ answer: L("Needs your answer"), review: L("Plan to approve"), blocked: L("Blocked"), working: L("Working"), waitingForJobs: L("Waiting for jobs") } as Record<string, string>)[a.stage] ?? "";
 }
 
@@ -169,7 +170,7 @@ function NeedsYouList() {
     <div className="needs-you">
       <div className="needs-you-label"><SectionLabel>{L("Needs you")} · {items.length}</SectionLabel></div>
       {items.map(([id, a]) => (
-        <button key={id} type="button" className="hover-row needs-you-item appear-pop" onClick={() => void A.startSession(id)}>
+        <button key={id} type="button" className="hover-row needs-you-item appear-pop" onClick={() => void A.openAttention(id)}>
           <span className="needs-you-top"><span className="t-body clip">{titles[id] ?? L("New task")}</span><StageChip attention={a} /></span>
           {a.detail && <span className="t-caption secondary">{a.detail}</span>}
           {a.workspace !== workspace && <span className="t-caption tertiary">{basename(a.workspace)}</span>}

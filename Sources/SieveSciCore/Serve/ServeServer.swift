@@ -107,7 +107,16 @@ public final class ServeServer: @unchecked Sendable {
             r["protocol"] = .int(Self.protocolVersion)
             r["workspace"] = lock.withLock { workspace }.map { .string($0.path) } ?? .null
             r["language"] = .string(L10n.resolved)
+            r["languageChoice"] = .string(L10n.language.rawValue)
             return .object(r)
+        case "language.set":
+            // The interface language, shared with the macOS app and the CLI; texts serve sends
+            // (stage labels, statuses, notices) follow it.
+            guard let l = p.str("language").flatMap(L10n.Language.init(rawValue:)) else {
+                throw RPCError(code: -32602, message: "language must be one of " + L10n.Language.allCases.map(\.rawValue).joined(separator: ", "))
+            }
+            L10n.language = l
+            return ["language": .string(L10n.resolved), "languageChoice": .string(l.rawValue)]
 
         case "config.get": return configPayload()
         case "config.set":
@@ -118,6 +127,22 @@ public final class ServeServer: @unchecked Sendable {
             guard let ref = p.str("ref"), !ref.isEmpty else { throw RPCError(code: -32602, message: "ref is required") }
             guard let store = keyStore else { throw RPCError(code: -32000, message: "keys come from the environment in this run") }
             try store.set(p.str("value") ?? "", for: ref)
+            return configPayload()
+        case "models.switchMain":
+            // AppModel.switchMainModel: the lead agent's model; the open task restarts on it (task.open restart).
+            guard let pid = p.str("providerId"), let m = p.str("model") else { throw RPCError(code: -32602, message: "providerId and model are required") }
+            var c = lock.withLock { config }
+            let ref = ModelRef(providerId: pid, model: m)
+            if c.roles.mode == .same {
+                c.roles.same = ref
+            } else {
+                c.roles.mode = .custom
+                if c.roles.custom.isEmpty {
+                    for (role, r) in RoleModelAdvisor.resolve(c.roles, candidates: ConfiguredModels.candidates(c, secrets: secrets)) { c.roles.custom[role.rawValue] = r }
+                }
+                c.roles.custom[AgentRole.main.rawValue] = ref
+            }
+            try updateConfig(["roles": Wire.value(c.roles)])
             return configPayload()
         case "commands.list":
             let catalog: [SlashCommandInfo] = lock.withLock { currentKey.flatMap { live[$0] } }
@@ -222,7 +247,8 @@ public final class ServeServer: @unchecked Sendable {
         // AppConfig decodes leniently (an unknown value falls back to the default, so a newer field never
         // wipes a configuration); a front end gets told instead.
         let stored = Wire.value(next).objectValue ?? [:]
-        for (k, v) in patch where stored[k] != v {
+        // An optional field set to null is left out of the encoding.
+        for (k, v) in patch where (stored[k] ?? .null) != v {
             throw RPCError(code: -32602, message: "invalid value for \(k)")
         }
         let lives = lock.withLock { () -> [Live] in config = next; return Array(live.values) }
@@ -274,6 +300,12 @@ public final class ServeServer: @unchecked Sendable {
         // The task left open keeps running in the background when it is busy or waits for the user.
         let prev = lock.withLock { currentKey.flatMap { live[$0] } }.flatMap { Self.key($0.workspace, $0.id) != k ? $0 : nil }
         if let prev, !prev.bench.isRunning && prev.stage?.needsPerson != true { await close(prev) }
+        // A restart (a model switch) stops the task's turn and starts it again on the new configuration.
+        if p["restart"]?.boolValue == true, let old = lock.withLock({ live[k] }) {
+            old.bench.interrupt()
+            for _ in 0..<60 where old.bench.isRunning { try? await Task.sleep(nanoseconds: 50_000_000) }
+            await close(old)
+        }
         let l: Live
         if let existing = lock.withLock({ live[k] }) {
             l = existing

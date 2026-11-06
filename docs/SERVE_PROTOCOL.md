@@ -1,41 +1,84 @@
-# `sievesci serve` protocol (v1)
+# `sievesci serve` protocol (v2)
 
-`sievesci serve` runs the SieveSci agent headless for a front end (the planned cross-platform UI,
-editor plugins, scripts). The front end starts it as a child process and talks to it over
+`sievesci serve` runs the SieveSci agent headless for a front end (the cross-platform desktop UI in
+`ui/`, editor plugins, scripts). The front end starts it as a child process and talks to it over
 **stdin/stdout, one JSON-RPC 2.0 message per line** (UTF-8, `\n`-terminated). stdout carries only
 protocol messages; diagnostics go to stderr.
 
 ```bash
+sievesci serve                                   # the saved configuration, no workspace yet
+sievesci serve --workspace ~/projects/crispr     # … with a workspace open
 sievesci serve --workspace ~/projects/crispr --provider deepseek --model deepseek-flash \
                [--checker P/M] [--worker P/M] [--mode ask|acceptEdits|auto|plan] [--search backend]
 ```
 
-The options are the interactive CLI's. API keys come from environment variables (or, on macOS,
-the keys the app saved in the Keychain).
+Without `--provider`, serve does what the macOS app does: models, roles, search and every setting
+come from the saved configuration (`config.json` in the app's configuration folder: Application
+Support/SieveSci on macOS, `%APPDATA%\SieveSci` on Windows, `~/.config/sievesci` elsewhere;
+`SIEVESCI_CONFIG_DIR` overrides it), and API keys from the platform's credential store (the
+Keychain items the app writes, Windows Credential Manager, or `secrets.json` elsewhere).
+Environment variables always win. A configuration folder set with `SIEVESCI_CONFIG_DIR` is a
+profile of its own: its keys are kept in its `secrets.json`, not in the system store. With `--provider`, the command-line options pick the models, as
+in the interactive CLI, and keys come from the environment only.
 
-One serve process works in one workspace and has at most one open task at a time.
+One serve process holds the configuration, any number of workspaces, and live tasks: the **open**
+task (the one requests act on by default) plus tasks that keep running in the background after the
+front end opened another one — a task that is still working or waiting for the user stays live
+until it settles, exactly like the app's sidebar.
 
 ## Requests (front end → serve)
 
-Requests are handled concurrently, so responses can arrive in a different order than the requests; wait for a response before sending a request that depends on it (e.g. `task.send` after `task.open`). Every request gets exactly one response with the same `id`: `result` on success, `error`
-(`code`, `message`) on failure. Codes: `-32700` unreadable line, `-32600` not a request,
+Requests are handled concurrently, so responses can arrive in a different order than the requests;
+wait for a response before sending a request that depends on it (e.g. `task.send` after
+`task.open`). Every request gets exactly one response with the same `id`: `result` on success,
+`error` (`code`, `message`) on failure. Codes: `-32700` unreadable line, `-32600` not a request,
 `-32601` unknown method, `-32602` bad params, `-32000` the request cannot be done now (message says why).
+
+Requests about tasks take optional `workspace` (a path; default: the open workspace) and
+`task` / `id` (default: the open task), so a front end can act on a background task directly.
+
+### Session and configuration
 
 | method | params | result |
 |---|---|---|
-| `initialize` | `{client?: string}` | `{name, version, protocol: 1, workspace, provider, model, mode}` |
-| `tasks.list` | `{}` | `{tasks: [{id, title, modified}]}` newest first; `title` is null for an empty task |
-| `task.open` | `{id?: string}` | Opens the task (new one without `id`) and returns its state: `{task, title, running, history, plan, claims, ideas, asks}`. Refused while the open task is running. |
-| `task.send` | `{text: string}` | `{accepted: true}` at once; the turn streams as `event` notifications and ends with `turnFinished` for agent `main`. Slash commands (`/goal`, `/trace r3`, …) work as in the CLI; their direct output arrives as an `output` notification. Text sent while a turn runs is queued. |
-| `task.stop` | `{}` | `{}` Stops the running turn (and its tools and workers). |
-| `permission.respond` | `{id, decision: "allow" \| "always" \| "deny", reason?}` | `{}` Answers a `permissionRequested` event. |
-| `ask.respond` | `{id, outcome}` | `{}` Answers an `askRequested` event (outcome format below). |
-| `brainstorm.wrapUp` | `{}` | `{}` Asks a running brainstorm to stop generating and report. |
-| `shutdown` | `{}` | `{}` Stops work, closes the task, then serve exits. Closing stdin does the same. |
+| `initialize` | `{client?}` | `{name, version, protocol: 2, workspace, language, languageChoice, provider?, model?, mode?}` (`provider`/`model`/`mode` only with `--provider`; `language` is the language in effect, e.g. `zh-Hans`, `languageChoice` the user's pick or `system`) |
+| `language.set` | `{language: "system" \| "en" \| "zh-Hans" \| "zh-Hant" \| "ru" \| "es" \| "fr"}` | `{language, languageChoice}` The interface language, shared with the macOS app and the CLI; texts serve sends follow it. |
+| `config.get` | `{}` | `{config, keys, usable, status}` — see below |
+| `config.set` | `{patch: {field: value, …}}` | Same as `config.get`. Top-level fields of `config` are replaced, the result is saved and applied to live tasks (permission mode, effort, sandbox, auto titles, …). A value the configuration does not accept is refused with `invalid value for <field>`. |
+| `secrets.set` | `{ref, value}` | Same as `config.get`. Stores an API key under a provider's `apiKeyRef` (or the search key's); an empty `value` removes it. Refused with `--provider` (keys come from the environment then). |
+| `models.switchMain` | `{providerId, model}` | Same as `config.get`. Makes it the lead agent's model (as the app's model menu does: the shared model when all roles share one, else the main role's); reopen the task with `task.open {id, restart: true}` to use it. |
+| `commands.list` | `{}` | `{commands: [{name, args, summary, group}]}` — the slash commands for the composer, including the open workspace's skills and custom commands. |
+
+`config` is the app's whole configuration, with the built-in provider presets merged in as the app does (`providers`, `roles`, `webSearch`, `permissionMode`,
+`effort`, `sandboxMode`, `appearance`, `autoTitles`, `autoBrainstorm`, `downloadOAPDFs`,
+`recentWorkspaces`, …) as the app stores it. `keys` maps each key reference in it to whether a key
+is present (`true`/`false`; key values never leave serve). `usable` lists the ids of providers that
+can run now (enabled and with a key, or a CLI agent found on PATH). `status` is the welcome
+checklist: `{models: {ready, text}, search: {ready, text}}`.
+
+### Workspaces and tasks
+
+| method | params | result |
+|---|---|---|
+| `workspace.open` | `{path}` | `{workspace, tasks}` Makes it the open workspace and adds it to `recentWorkspaces`. |
+| `tasks.list` | `{workspace?}` | `{tasks: [{id, title, modified, running, stage}]}` newest first; `title` is null until the task has one; `stage` is null unless the task is live. |
+| `task.open` | `{workspace?, id?, restart?}` | Opens the task (a new one without `id`) and makes it the open task; the previous one is closed unless it is still working or needs the user. `restart: true` stops a live task first and starts it again on the current configuration (after a model switch). Returns `{task, workspace, title, running, history, plan, claims, ideas, asks, stage, contested, grounding}`. |
+| `task.send` | `{text, task?}` | `{accepted: true}` at once; the turn streams as `event` notifications and ends with `turnFinished` for agent `main`. Slash commands (`/goal`, `/trace r3`, …) work as in the CLI; their direct output arrives as an `output` notification. Text sent while a turn runs is queued. |
+| `task.stop` | `{task?}` | `{}` Stops the running turn (and its tools and workers). |
+| `permission.respond` | `{id, decision: "allow" \| "always" \| "deny", reason?}` | `{}` Answers a `permissionRequested` event (of any live task). |
+| `ask.respond` | `{id, outcome, task?}` | `{}` Answers an `askRequested` event (outcome format below). |
+| `brainstorm.wrapUp` | `{task?}` | `{}` Asks a running brainstorm to stop generating and report. |
+| `task.rename` | `{id, title, workspace?}` | `{task, title}` An empty title goes back to the generated or first-message title. |
+| `task.delete` | `{id, workspace?}` | `{}` Closes the task if it is live and moves its folder to the Trash / Recycle Bin. |
+| `task.fork` | `{id, workspace?}` | `{task}` A new task with a copy of the conversation. |
+| `task.markdown` | `{id, workspace?}` | `{markdown}` The conversation as Markdown (for export or copying). |
+| `shutdown` | `{}` | `{}` Stops all work, closes every task, then serve exits. Closing stdin does the same. |
 
 `history` is the saved conversation as a front end shows it, oldest first: `{kind: "user", text}` (what the
 user typed; context the host adds for the model is left out), `{kind: "assistant", text}`, and
 `{kind: "tool", id, name, input, output?, isError?, receipt?}` (a tool call with its result).
+`contested` lists open disagreements `{thread, kind, issue, reason}`; `grounding` is
+`{web, literature}` — whether this task has searched the web / the literature yet.
 
 Answers to an `askRequested` event: `outcome` is `{"kind": "answered", "answers": [{questionId, selected?: [label], other?: string, text?: string}]}`
 or `{"kind": "dismissed", note?: string}`. The `askRequested` event carries the questions with their `id`,
@@ -44,9 +87,10 @@ or `{"kind": "dismissed", note?: string}`. The `askRequested` event carries the 
 
 ## Notifications (serve → front end)
 
-No `id`; the front end does not answer them.
+No `id`; the front end does not answer them. Each carries `task` and `workspace`, so a front end
+routes them to the open task or marks a background one in its sidebar.
 
-- `event` — everything the agent does, in order. `params` is `{type, …fields}` with `type` one of:
+- `event` — everything the agent does, in order. `params` is `{type, task, workspace, …fields}` with `type` one of:
   `turnStarted {role, agentId}`, `textDelta {agentId, text}`, `thinkingDelta {agentId, text}`,
   `toolStarted {agentId, id, name, input}`, `toolProgress {agentId, id, lines}`,
   `toolFinished {agentId, id, name, output, isError, receipt}`, `assistantMessage {agentId, message}`,
@@ -62,23 +106,41 @@ No `id`; the front end does not answer them.
   `titleChanged {task, title}` (a generated conversation title).
   Text arrives as deltas: append `textDelta` for one `agentId` until a tool, a `thinkingDelta`
   or `turnFinished` for it. `agentId` `main` is the lead agent; others are checkers, verifiers, workers.
-- `output {text}` — the direct result of a slash command.
+- `taskStatus {task, workspace, running, stage}` — a live task's stage changed (the sidebar chip
+  and the "Needs you" list). `stage` is `{kind, label, detail, needsPerson, showsChip}` with `kind`
+  one of `answer`, `review`, `blocked`, `working`, `waitingForJobs`, `idle`, or null once the task
+  is closed.
+- `output {task, workspace, text}` — the direct result of a slash command.
 
-Unknown event types and fields may be added in later versions; front ends ignore what they do not know.
+Unknown methods' results, event types and fields may be added in later versions; front ends ignore
+what they do not know.
 
 ## A session
 
 ```
 → {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"client":"web"}}
-← {"id":1,"jsonrpc":"2.0","result":{"model":"deepseek-flash","name":"sievesci","protocol":1,…}}
-→ {"jsonrpc":"2.0","id":2,"method":"task.open","params":{}}
-← {"id":2,"jsonrpc":"2.0","result":{"history":[],"running":false,"task":"2026-11-04-1a2b3c",…}}
-→ {"jsonrpc":"2.0","id":3,"method":"task.send","params":{"text":"Sum the primes below 100 in Python"}}
-← {"id":3,"jsonrpc":"2.0","result":{"accepted":true}}
-← {"jsonrpc":"2.0","method":"event","params":{"type":"turnStarted","role":"main","agentId":"main"}}
-← {"jsonrpc":"2.0","method":"event","params":{"type":"toolStarted","agentId":"main","name":"python",…}}
-← {"jsonrpc":"2.0","method":"event","params":{"type":"permissionRequested","request":{"id":"call_1",…}}}
-→ {"jsonrpc":"2.0","id":4,"method":"permission.respond","params":{"id":"call_1","decision":"allow"}}
-← {"id":4,"jsonrpc":"2.0","result":{}}
-← … toolFinished, textDelta …, usage, turnFinished
+← {"id":1,"jsonrpc":"2.0","result":{"name":"sievesci","protocol":2,"workspace":null,…}}
+→ {"jsonrpc":"2.0","id":2,"method":"config.get","params":{}}
+← {"id":2,"jsonrpc":"2.0","result":{"config":{…},"keys":{"deepseek":true},"usable":["deepseek"],"status":{…}}}
+→ {"jsonrpc":"2.0","id":3,"method":"workspace.open","params":{"path":"/Users/me/projects/crispr"}}
+← {"id":3,"jsonrpc":"2.0","result":{"workspace":"/Users/me/projects/crispr","tasks":[…]}}
+→ {"jsonrpc":"2.0","id":4,"method":"task.open","params":{}}
+← {"id":4,"jsonrpc":"2.0","result":{"history":[],"running":false,"task":"2026-11-04-1a2b3c",…}}
+→ {"jsonrpc":"2.0","id":5,"method":"task.send","params":{"text":"Sum the primes below 100 in Python"}}
+← {"id":5,"jsonrpc":"2.0","result":{"accepted":true}}
+← {"jsonrpc":"2.0","method":"event","params":{"type":"turnStarted","role":"main","agentId":"main","task":"2026-11-04-1a2b3c",…}}
+← {"jsonrpc":"2.0","method":"taskStatus","params":{"task":"2026-11-04-1a2b3c","running":true,"stage":{"kind":"working",…},…}}
+← {"jsonrpc":"2.0","method":"event","params":{"type":"permissionRequested","request":{"id":"call_1",…},…}}
+→ {"jsonrpc":"2.0","id":6,"method":"permission.respond","params":{"id":"call_1","decision":"allow"}}
+← {"id":6,"jsonrpc":"2.0","result":{}}
+← … toolFinished, textDelta …, usage, turnFinished, taskStatus
 ```
+
+## Changes from v1
+
+- serve can start without a workspace and use the saved configuration and credential store;
+  `config.*`, `secrets.set`, `commands.list`, `workspace.open` and the `task.rename/delete/fork/markdown`
+  methods are new.
+- Notifications carry `task` and `workspace`; `taskStatus` is new.
+- Opening another task no longer requires the open one to be idle: a working task continues in the
+  background.

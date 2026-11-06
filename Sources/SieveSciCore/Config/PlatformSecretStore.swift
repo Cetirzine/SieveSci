@@ -11,7 +11,9 @@ import WinSDK
 ///   reference as account (exactly what the SwiftUI app writes, so its keys are found as they are);
 /// - Windows: Credential Manager, target `app.sievesci.SieveSci/<ref>`;
 /// - elsewhere: `secrets.json` (mode 0600) next to the configuration.
-/// Environment variables win everywhere (CI, power users).
+/// Environment variables win everywhere (CI, power users). A configuration folder set with
+/// `SIEVESCI_CONFIG_DIR` is a profile of its own (tests, a portable copy): its keys live in its
+/// `secrets.json`, never in the system store.
 public final class PlatformSecretStore: SecretStore, @unchecked Sendable {
     public static let service = "app.sievesci.SieveSci"
     public static let shared = PlatformSecretStore()
@@ -25,7 +27,7 @@ public final class PlatformSecretStore: SecretStore, @unchecked Sendable {
         guard !ref.isEmpty else { return nil }
         if let v = EnvironmentSecretStore().secret(for: ref) { return v }
         if let hit = lock.withLock({ cache[ref] }) { return hit }
-        let v = Self.read(ref).flatMap { $0.isEmpty ? nil : $0 }
+        let v = (Self.separateProfile ? Self.fileRead(ref) : Self.read(ref)).flatMap { $0.isEmpty ? nil : $0 }
         lock.withLock { cache[ref] = .some(v) }
         return v
     }
@@ -33,13 +35,40 @@ public final class PlatformSecretStore: SecretStore, @unchecked Sendable {
     /// Stores a key; an empty value removes it.
     public func set(_ value: String, for ref: String) throws {
         guard !ref.isEmpty else { return }
-        if value.isEmpty { try Self.remove(ref) } else { try Self.write(value, for: ref) }
+        if Self.separateProfile {
+            if value.isEmpty { try Self.fileRemove(ref) } else { try Self.fileWrite(value, for: ref) }
+        } else {
+            if value.isEmpty { try Self.remove(ref) } else { try Self.write(value, for: ref) }
+        }
         lock.withLock { cache[ref] = .some(value.isEmpty ? nil : value) }
     }
 
     public func has(_ ref: String) -> Bool { secret(for: ref) != nil }
 
     public struct Failure: Error, CustomStringConvertible { public var description: String }
+
+    static var separateProfile: Bool { !(ProcessInfo.processInfo.environment["SIEVESCI_CONFIG_DIR"] ?? "").isEmpty }
+
+    // MARK: secrets.json (other platforms, separate profiles)
+
+    private static var file: URL { AppConfig.directory.appendingPathComponent("secrets.json") }
+
+    private static func loadFile() -> [String: String] {
+        guard let d = try? Data(contentsOf: file), let j = try? JSONDecoder().decode([String: String].self, from: d) else { return [:] }
+        return j
+    }
+
+    private static func storeFile(_ all: [String: String]) throws {
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(all).writeReliably(to: file)
+        #if !os(Windows)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        #endif
+    }
+
+    static func fileRead(_ ref: String) -> String? { loadFile()[ref] }
+    static func fileWrite(_ value: String, for ref: String) throws { var a = loadFile(); a[ref] = value; try storeFile(a) }
+    static func fileRemove(_ ref: String) throws { var a = loadFile(); a[ref] = nil; try storeFile(a) }
 
     // MARK: macOS
 
@@ -119,22 +148,8 @@ public final class PlatformSecretStore: SecretStore, @unchecked Sendable {
     // MARK: Elsewhere
 
     #else
-    private static var file: URL { AppConfig.directory.appendingPathComponent("secrets.json") }
-
-    private static func load() -> [String: String] {
-        guard let d = try? Data(contentsOf: file), let j = try? JSONDecoder().decode([String: String].self, from: d) else { return [:] }
-        return j
-    }
-
-    private static func store(_ all: [String: String]) throws {
-        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let d = try JSONEncoder().encode(all)
-        try d.writeReliably(to: file)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
-    }
-
-    static func read(_ ref: String) -> String? { load()[ref] }
-    static func write(_ value: String, for ref: String) throws { var a = load(); a[ref] = value; try store(a) }
-    static func remove(_ ref: String) throws { var a = load(); a[ref] = nil; try store(a) }
+    static func read(_ ref: String) -> String? { fileRead(ref) }
+    static func write(_ value: String, for ref: String) throws { try fileWrite(value, for: ref) }
+    static func remove(_ ref: String) throws { try fileRemove(ref) }
     #endif
 }

@@ -45,22 +45,61 @@ export interface AskOption { label: string; description?: string; recommended: b
 export interface AskQuestion { id: string; header: string; question: string; kind: "single" | "multi" | "text"; options: AskOption[]; allow_other: boolean; placeholder?: string; optional: boolean }
 export interface AskRequest { id: string; agent_id: string; questions: AskQuestion[] }
 export interface TaskEntry { id: string; modified: number }
-export interface Attention { stage: string; detail: string; workspace: string }
+export interface Attention { stage: string; label?: string; detail: string; workspace: string; needsPerson?: boolean; showsChip?: boolean }
 
 export type InspectorTab = "activity" | "plan" | "claims" | "library" | "changes" | "files" | "figures" | "jobs" | "history" | "notebook" | "learning";
 export type MainTab = "chat" | InspectorTab;
 /** The tabs shown under the title (InspectorTab.inMain). */
 export const mainTabs: MainTab[] = ["chat", "activity", "plan", "claims", "library", "notebook"];
 
+export interface ModelRef { providerId: string; model: string }
+export interface ProviderProfile {
+  id: string; displayName: string; family: string; flavor: string; baseURL: string; apiKeyRef: string; auth: string; billing: string;
+  defaultModel: string; models: string[]; enabled: boolean; executable?: string; notes: string;
+  options: JsonObject; extraBody: JsonObject; modelSettings: JsonObject[];
+}
+export interface RoleAssignment { mode: "same" | "auto" | "custom" | string; same?: ModelRef; custom: Record<string, ModelRef> }
+export interface WebSearchConfig { backend: string; apiKeyRef: string; excludedDomains: string[]; googleCX: string; searxngURL: string }
+
+/** AppConfig as `sievesci serve` sends it (config.get), shared with the macOS app. */
 export interface Config {
+  providers: ProviderProfile[];
+  roles: RoleAssignment;
+  webSearch: WebSearchConfig;
   permissionMode: "ask" | "acceptEdits" | "auto" | "plan";
+  retention: string;
+  effort?: string | null;
+  contactEmail: string;
+  downloadOAPDFs: boolean;
+  groundingRequired: boolean;
+  visionHelper?: ModelRef | null;
   recentWorkspaces: string[];
   folderOpen: Record<string, boolean>;
-  showThinking: boolean;
-  appearance: "system" | "light" | "dark";
-  effort: string | null;
+  maxReviewsPerSession: number;
+  maxDeliberationExchanges: number;
+  autoDelegate: boolean;
+  maxParallelWorkers: number;
   sandboxMode: "workspaceWrite" | "workspaceWriteOffline" | "off";
+  appearance: "system" | "light" | "dark";
+  autoWake: boolean;
+  notifyJobs: boolean;
+  notifyTurnFinished: boolean;
+  notifyPermission: boolean;
+  showThinking: boolean;
+  autoTitles: boolean;
+  autoBrainstorm: boolean;
+  autoCheckUpdates: boolean;
+  autoInstallUpdates: boolean;
 }
+
+export const defaultConfig: Config = {
+  providers: [], roles: { mode: "auto", custom: {} },
+  webSearch: { backend: "brave", apiKeyRef: "BRAVE_API_KEY", excludedDomains: [], googleCX: "", searxngURL: "http://localhost:8888" },
+  permissionMode: "ask", retention: "short", effort: null, contactEmail: "", downloadOAPDFs: true, groundingRequired: true, visionHelper: null,
+  recentWorkspaces: [], folderOpen: {}, maxReviewsPerSession: 24, maxDeliberationExchanges: 2, autoDelegate: true, maxParallelWorkers: 3,
+  sandboxMode: "workspaceWrite", appearance: "system", autoWake: true, notifyJobs: true, notifyTurnFinished: true, notifyPermission: true,
+  showThinking: true, autoTitles: true, autoBrainstorm: true, autoCheckUpdates: true, autoInstallUpdates: true,
+};
 
 export interface AppState {
   config: Config;
@@ -101,13 +140,22 @@ export interface AppState {
   version: string;
   /** Text handed to the composer (start cards, quote in reply), taken once. */
   draft: string;
-  commands: { name: string; args: string; summary: string }[];
+  commands: { name: string; args: string; summary: string; group?: string }[];
+  /** Which key references hold a key (values never leave serve). */
+  keys: Record<string, boolean>;
+  /** Providers that can run now. */
+  usable: string[];
+  /** The interface language picked ("system" or a code); serve's texts follow it. */
+  languageChoice: string;
+  /** A task is open in serve (the app's `bench != nil`). */
+  live: boolean;
+  settingsPane: "general" | "providers" | "models" | "search" | "research" | "memory" | "schedules";
 }
 
 export const verbs = ["Sieving", "Pipetting", "Titrating", "Centrifuging", "Sequencing", "Culturing", "Incubating", "Annealing", "Distilling", "Staining"];
 
 export const initialState: AppState = {
-  config: { permissionMode: "ask", recentWorkspaces: [], folderOpen: {}, showThinking: true, appearance: "system", effort: null, sandboxMode: "workspaceWrite" },
+  config: defaultConfig,
   workspace: null, taskId: "", tasks: [], folderTasks: {}, taskTitles: {},
   streams: { main: [] }, cards: {},
   meter: { model: "", contextWindow: 0, lastPromptTokens: 0, lastOutputTokens: 0, fill: 0, cacheHitRate: 0, session: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 } },
@@ -118,6 +166,7 @@ export const initialState: AppState = {
   mainTab: "chat", inspectorTab: "files", showInspector: false, showSettingsPage: false, sidebarVisible: true,
   backgroundTasks: [], backgroundWorkspaces: {}, attention: {}, grounding: null,
   modelStatus: { ready: false, text: "" }, searchStatus: { ready: false, text: "" }, lastError: null, version: "", draft: "", commands: [],
+  keys: {}, usable: [], languageChoice: "system", live: false, settingsPane: "general",
 };
 
 // MARK: Store
@@ -241,6 +290,12 @@ function apply(events: JsonObject[]) {
 function handle(s: AppState, e: JsonObject) {
   const str = (k: string) => String(e[k] ?? "");
   const agent = str("agentId");
+  // Events of a task running in the background only move its title; its stage arrives as taskStatus
+  // and its transcript is read back when it is opened (AppModel+Events: background benches).
+  if (typeof e.task === "string" && e.task !== s.taskId) {
+    if (e.type === "titleChanged") s.taskTitles = { ...s.taskTitles, [str("task")]: str("title") };
+    return;
+  }
   switch (e.type) {
     case "turnStarted":
       if (e.role === "main" && agent === "main" && !s.running) {
@@ -337,4 +392,33 @@ function handle(s: AppState, e: JsonObject) {
     // A generated title replaces the row's text in place (names given by hand were skipped by the core).
     case "titleChanged": s.taskTitles = { ...s.taskTitles, [str("task")]: str("title") }; break;
   }
+}
+
+// MARK: Stages (taskStatus)
+
+/** `taskStatus {task, workspace, running, stage}`: a live task's stage (AppModel.refreshStage) or,
+ *  with `stage: null`, a task that was closed (a released background task, AppModel+Events). */
+export function taskStatus(p: JsonObject) {
+  const id = String(p.task ?? ""), ws = String(p.workspace ?? "");
+  const st = p.stage as JsonObject | null | undefined;
+  setState((s) => {
+    const attention = { ...s.attention };
+    let backgroundTasks = s.backgroundTasks, backgroundWorkspaces = s.backgroundWorkspaces;
+    if (st) {
+      attention[id] = { stage: String(st.kind), label: String(st.label ?? ""), detail: String(st.detail ?? ""), workspace: ws,
+        needsPerson: st.needsPerson === true, showsChip: st.showsChip === true };
+      if (id !== s.taskId && p.running === true && !backgroundTasks.includes(id)) {
+        backgroundTasks = [...backgroundTasks, id];
+        backgroundWorkspaces = { ...backgroundWorkspaces, [id]: ws };
+      } else if (p.running === false && backgroundTasks.includes(id)) {
+        // Settled: serve releases it a moment later (stage null); the row stops working now.
+        backgroundTasks = backgroundTasks.filter((t) => t !== id);
+      }
+    } else {
+      if (attention[id]?.needsPerson !== true) delete attention[id];
+      backgroundTasks = backgroundTasks.filter((t) => t !== id);
+      backgroundWorkspaces = Object.fromEntries(Object.entries(backgroundWorkspaces).filter(([t]) => t !== id));
+    }
+    return { attention, backgroundTasks, backgroundWorkspaces };
+  });
 }
