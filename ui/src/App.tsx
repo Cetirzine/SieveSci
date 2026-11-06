@@ -15,6 +15,7 @@ import type { InspectorTab } from "./app/model";
 import { applyAppearance } from "./theme/theme";
 import { notify } from "./app/notify";
 import { startAutomaticChecks } from "./app/updates";
+import { installMenuBar, installShortcuts } from "./app/commands";
 import { L } from "./i18n";
 import { titleOf, type AskRequest } from "./app/model";
 import type { JsonObject } from "./serve";
@@ -87,6 +88,12 @@ export default function App() {
   }, [scene]);
 
   useEffect(() => { if (!scene) applyAppearance(appearance, accent); }, [scene, appearance, accent]);
+
+  // Menu bar (macOS desktop) and keyboard shortcuts; the menu follows the interface language.
+  const languageChoice = useApp((s) => s.languageChoice);
+  const version = useApp((s) => s.version);
+  useEffect(() => installShortcuts(), []);
+  useEffect(() => { if (!scene && version) void installMenuBar(version); }, [scene, version, languageChoice]);
 
   // Live: one serve connection for the window, as the app has one AppModel. It reopens the last
   // workspace and resumes its latest task (AppModel.init → resumeIfNeeded).

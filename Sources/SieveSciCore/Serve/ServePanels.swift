@@ -127,6 +127,24 @@ extension ServeServer {
             guard let text = String(data: d, encoding: .utf8), !d.contains(0) else { return ["kind": "binary", "size": .int(size)] }
             return ["kind": "text", "size": .int(size), "text": .string(text), "truncated": .bool(size > d.count)]
 
+        case "workspace.addReadOnlyFolders":
+            // Folders agents may read but never change (PromptInput's "Add a read-only folder…").
+            let (ws, _) = try target(p)
+            for path in (p["paths"]?.arrayValue ?? []).compactMap(\.stringValue) { try ReadOnlyFolders.add(URL(fileURLWithPath: path), workspace: ws) }
+            let names = ReadOnlyFolders.load(workspace: ws).map(\.lastPathComponent)
+            return ["folders": .array(names.map { .string($0) }), "message": .string(L10n.f("Read-only folders: %@", names.joined(separator: ", ")))]
+        case "attachments.savePasted":
+            // A pasted screenshot is saved into the workspace's inputs/ folder, then attached by path.
+            let (ws, _) = try target(p)
+            guard let b64 = p.str("base64"), let data = Data(base64Encoded: b64), data.count < 30_000_000 else { throw RPCError(code: -32602, message: "base64 image data is required") }
+            let ext = (p.str("ext") ?? "png").filter(\.isLetter).prefix(5)
+            let dir = ws.appendingPathComponent("inputs")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let f = DateFormatter(); f.dateFormat = "yyyyMMdd-HHmmss"
+            let url = dir.appendingPathComponent("pasted-\(f.string(from: Date()))-\(String(UUID().uuidString.prefix(4)).lowercased()).\(ext)")
+            try data.writeReliably(to: url)
+            return ["path": .string(url.path)]
+
         default:
             return nil
         }

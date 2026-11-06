@@ -63,7 +63,7 @@ checklist: `{models: {ready, text}, search: {ready, text}}`.
 | `workspace.open` | `{path}` | `{workspace, tasks}` Makes it the open workspace and adds it to `recentWorkspaces`. |
 | `tasks.list` | `{workspace?}` | `{tasks: [{id, title, modified, running, stage}]}` newest first; `title` is null until the task has one; `stage` is null unless the task is live. |
 | `task.open` | `{workspace?, id?, restart?}` | Opens the task (a new one without `id`) and makes it the open task; the previous one is closed unless it is still working or needs the user. `restart: true` stops a live task first and starts it again on the current configuration (after a model switch). Returns `{task, workspace, title, running, history, plan, claims, ideas, brainstorm, asks, stage, contested, grounding}` (`brainstorm`: the task's current or last brainstorm, or null). |
-| `task.send` | `{text, task?}` | `{accepted: true}` at once; the turn streams as `event` notifications and ends with `turnFinished` for agent `main`. Slash commands (`/goal`, `/trace r3`, …) work as in the CLI; their direct output arrives as an `output` notification. Text sent while a turn runs is queued. |
+| `task.send` | `{text, attachments?, task?}` | `{accepted: true}` at once (`attachments`: absolute file paths, sent with the message); the turn streams as `event` notifications and ends with `turnFinished` for agent `main`. Slash commands (`/goal`, `/trace r3`, …) work as in the CLI; their direct output arrives as an `output` notification. Text sent while a turn runs is queued. |
 | `task.stop` | `{task?}` | `{}` Stops the running turn (and its tools and workers). |
 | `permission.respond` | `{id, decision: "allow" \| "always" \| "deny", reason?}` | `{}` Answers a `permissionRequested` event (of any live task). |
 | `ask.respond` | `{id, outcome, task?}` | `{}` Answers an `askRequested` event (outcome format below). |
@@ -71,7 +71,7 @@ checklist: `{models: {ready, text}, search: {ready, text}}`.
 | `task.rename` | `{id, title, workspace?}` | `{task, title}` An empty title goes back to the generated or first-message title. |
 | `task.delete` | `{id, workspace?}` | `{}` Closes the task if it is live and moves its folder to the Trash / Recycle Bin. |
 | `task.fork` | `{id, workspace?}` | `{task}` A new task with a copy of the conversation. |
-| `task.markdown` | `{id, workspace?}` | `{markdown}` The conversation as Markdown (for export or copying). |
+| `task.markdown` | `{id, workspace?, path?}` | `{markdown, dir}` The conversation as Markdown (for export or copying), also written to `path` when given; `dir` is the task's folder. |
 | `shutdown` | `{}` | `{}` Stops all work, closes every task, then serve exits. Closing stdin does the same. |
 
 `history` is the saved conversation as a front end shows it, oldest first: `{kind: "user", text}` (what the
@@ -108,9 +108,33 @@ What the Settings pages compute with the core. Methods that change the configura
 | `cli.install` | `{}` | `{message}` Links this `sievesci` into ~/.local/bin (on Windows: says which folder to add to PATH). |
 | `updates.check` | `{}` | `{current, latest, available, url}` The newest GitHub release. |
 
+| `agents.install` | `{id}` | `config.get` + `{ok, message}` Installs a provider's CLI agent with its vendor's own installer (claude.ai, chatgpt.com, antigravity.google; Gemini CLI through Homebrew or npm); output streams as `agentInstall {id, lines}` notifications. |
+| `agents.signIn` | `{id}` | `{message}` Opens a terminal on the agent's sign-in command. |
+
+### Panels
+
+The open task's research views (or the task named by `task`).
+
+| method | params | result |
+|---|---|---|
+| `panels.trace` | `{offset}` | `{offset, events: [{id, at, actor, kind, text, isError, category}]}` What the audit log gained since `offset` (0 for all); pass the returned offset next time. |
+| `panels.library` / `library.links` | `{}` | `{dir, papers}` / `{links: [{paperKey, file, line, locator}]}` (code citing a paper; walks the workspace) |
+| `panels.notebook` | `{}` | `{path, text}` |
+| `panels.learning` | `{}` | `{proposals}`; `learning.decide {id, approve}` and `learning.revert {id}` answer `{message, proposals}` |
+| `panels.changes` | `{}` | `{files: [{path, added, removed, isNewFile}]}`; `changes.diff {path}` → `{diff}`; `changes.revert {path}` → `{ok, diff}` |
+| `panels.history` | `{}` | `{commits: [{hash, subject, date, files}]}`; `history.diffs {hash}` → `{diffs}`; `history.restore {hash}` → `{ok}` (the current state is committed first) |
+| `panels.jobs` | `{}` | `{jobs: [{id, label, running, exitCode, seconds, logPath, lines}]}`; `jobs.stop {id}` |
+| `panels.figures` | `{}` | `{figures: [path]}` newest first |
+| `files.list` | `{path?}` | `{entries: [{name, path, isDir}]}` one folder of the workspace |
+| `files.read` | `{path}` | `{kind: "text" \| "image" \| "pdf" \| "binary", text?, dataURL?, size, truncated?}` |
+
+Files are read inside the workspace only. `system.open` also takes `reveal: true` (show the file
+in Finder / Explorer).
+
 `config.get` (and every result shaped like it) also has `providers`: per provider id
 `{ready, short, cliPath, hasKey, models: {model: {contextWindow, supportsImages, supportsReasoning}}}` —
-whether it can run and what it needs, in the interface language.
+whether it can run and what it needs, in the interface language; each model also carries `maxOutput`, `custom` (set by hand
+in the profile's `modelSettings`) and `detected` (what the catalogs and the provider's listing say).
 
 ## Notifications (serve → front end)
 

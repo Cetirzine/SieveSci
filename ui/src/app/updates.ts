@@ -14,6 +14,8 @@ export type UpdateState =
   | { kind: "ready"; version: string } | { kind: "installing" } | { kind: "failed"; message: string };
 
 let state: UpdateState = { kind: "idle" };
+/** The user asked for this download (the banner shows its progress), or put the banner away. */
+export const banner = { userWaiting: false, dismissed: false };
 const listeners = new Set<(s: UpdateState) => void>();
 // The plugin's Update object, kept between "available" and installing it.
 let pending: { version: string; downloadAndInstall?: unknown; download?: (cb: (e: DownloadEvent) => void) => Promise<void>; install?: () => Promise<void> } | null = null;
@@ -34,7 +36,7 @@ export async function checkForUpdates(manual = true) {
       pending = u as never;
       set({ kind: "available", version: u.version });
       // Automatic installs download in the background and wait for a restart (installing on quit).
-      if (!manual && getState().config.autoInstallUpdates) await download();
+      if (!manual && getState().config.autoInstallUpdates) await download(false);
     } catch (e) {
       set(manual ? { kind: "failed", message: e instanceof Error ? e.message : String(e) } : { kind: "idle" });
     }
@@ -47,8 +49,9 @@ export async function checkForUpdates(manual = true) {
 }
 
 /** Downloads the update; it is installed now (Windows installs as it goes) and applied on restart. */
-export async function download() {
+export async function download(byUser = true) {
   if (state.kind !== "available") return;
+  banner.userWaiting = byUser;
   if (!pending?.download) { if (state.url) A.systemOpen({ url: state.url }); return; }
   const version = state.version;
   let total = 0, got = 0;
@@ -79,3 +82,5 @@ export function startAutomaticChecks() {
   setTimeout(tick, 15_000);
   setInterval(tick, 6 * 3600_000);
 }
+
+export function dismissBanner() { banner.dismissed = true; set({ ...state }); }

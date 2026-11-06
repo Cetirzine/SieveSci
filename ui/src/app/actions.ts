@@ -340,7 +340,7 @@ export function setPermissionMode(mode: Config["permissionMode"]) { void updateC
 
 // MARK: Turns
 
-export async function send(text: string) {
+export async function send(text: string, attachments: string[] = []) {
   if (!getState().live) await resumeIfNeeded();
   if (!getState().live) {
     // Never drop what the user typed: put it back and let the setup card explain what is missing.
@@ -348,16 +348,16 @@ export async function send(text: string) {
     return;
   }
   const trimmed = text.trim();
-  if (!trimmed) return;
+  if (!trimmed && attachments.length === 0) return;
   // Commands that open native UI.
   if (trimmed === "/providers") { openSettings("providers"); return; }
   if (trimmed === "/config") { openSettings(); return; }
   if (trimmed === "/clear") { await startSession(); return; }
   if (trimmed === "/fork") { await forkTask(getState().taskId); return; }
   const s = getState();
-  const item = { id: `u${Date.now()}`, at: Date.now(), kind: { type: "user" as const, text, attachments: [] } };
+  const item = { id: `u${Date.now()}`, at: Date.now(), kind: { type: "user" as const, text, attachments: attachments.map((a) => a.split(/[\\/]/).pop() ?? a) } };
   setState({ streams: { ...s.streams, main: [...(s.streams.main ?? []), item] }, ...(s.running ? { queued: [...s.queued, text] } : { running: true, runStarted: Date.now() }) });
-  await call("task.send", { text });
+  await call("task.send", attachments.length ? { text, attachments } : { text });
 }
 
 export async function stop() { await call("task.stop"); }
@@ -393,3 +393,76 @@ export async function switchMainModel(providerId: string, model: string) {
 
 /** Output of a CLI agent's installer (serve's `agentInstall` notifications), by provider id. */
 export const agentInstallListeners = new Set<(id: string, lines: string[]) => void>();
+
+// MARK: Task menu (SidebarView's context menu)
+
+export async function copyText(text: string) {
+  try { await navigator.clipboard.writeText(text); } catch { /* clipboard unavailable */ }
+}
+
+export async function copyTaskMarkdown(id: string) {
+  const md = await taskMarkdown(id);
+  if (md) await copyText(md);
+}
+
+/** Save dialog, then serve writes the file (a browser downloads it instead). */
+export async function exportTaskMarkdown(id: string) {
+  const name = titleOf(getState(), id, L("New task")).replace(/[\\/:*?"<>|]/g, "-").slice(0, 60) + ".md";
+  if (inTauri) {
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const path = await save({ defaultPath: name, filters: [{ name: "Markdown", extensions: ["md"] }] });
+    if (path) await call("task.markdown", { id, path });
+    return;
+  }
+  const md = await taskMarkdown(id);
+  if (!md) return;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([md], { type: "text/markdown" }));
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/** The task's folder in Finder / Explorer (`folder`: a workspace other than the open one). */
+export async function revealTask(id: string, folder?: string) {
+  const r = await call<{ dir: string }>("task.markdown", folder ? { id, workspace: folder } : { id });
+  if (r?.dir) systemOpen({ path: r.dir, reveal: true });
+}
+
+/** Mentions another conversation in the open one's composer. */
+export function referenceTask(id: string) { setState({ showSettingsPage: false, mainTab: "chat", draft: `@task:${id} ` }); }
+
+// MARK: Attachments (PromptInput.swift)
+
+/** "Attach files…": the platform's file picker. */
+export async function pickFiles(): Promise<string[]> {
+  if (!inTauri) return [];
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const r = await open({ multiple: true, directory: false });
+  return Array.isArray(r) ? r : typeof r === "string" ? [r] : [];
+}
+
+/** "Add a read-only folder…": folders agents may read but never change. */
+export async function addReadOnlyFolders() {
+  if (!inTauri) return;
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const r = await open({ multiple: true, directory: true, title: L("Agents can read these folders but never change them.") });
+  const paths = Array.isArray(r) ? r : typeof r === "string" ? [r] : [];
+  if (paths.length === 0) return;
+  const res = await call<{ message: string }>("workspace.addReadOnlyFolders", { paths });
+  if (res) deliverNotice(res.message);
+}
+
+/** A pasted screenshot is saved into the workspace's inputs/ folder and attached. */
+export async function savePastedImage(blob: Blob): Promise<string | null> {
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  const ext = (blob.type.split("/")[1] ?? "png").replace("jpeg", "jpg");
+  const r = await call<{ path: string }>("attachments.savePasted", { base64: btoa(bin), ext });
+  return r?.path ?? null;
+}
+
+function deliverNotice(text: string) {
+  setState((s) => ({ streams: { ...s.streams, main: [...(s.streams.main ?? []), { id: `n${Date.now()}`, at: Date.now(), kind: { type: "notice" as const, text } }] } }));
+}

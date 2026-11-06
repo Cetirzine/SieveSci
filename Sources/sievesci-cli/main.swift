@@ -153,7 +153,8 @@ func serve(_ args: [String]) async {
         while let line = readLine(strippingNewline: true) {
             group.addTask {
                 await server.handle(line)
-                if server.isClosed { exit(0) }
+                // Replies to requests still in flight get a moment to go out before the process ends.
+                if server.isClosed { try? await Task.sleep(nanoseconds: 300_000_000); exit(0) }
             }
         }
     }

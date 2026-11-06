@@ -36,7 +36,7 @@ jobs:
           cp -R .build/release/*.bundle ui/src-tauri/engine/
       - name: Smoke test the staged engine
         run: |
-          out=$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' '{"jsonrpc":"2.0","id":2,"method":"shutdown","params":{}}' \
+          out=$( { echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'; sleep 3; echo '{"jsonrpc":"2.0","id":2,"method":"shutdown","params":{}}'; } \
                 | SIEVESCI_CONFIG_DIR="$RUNNER_TEMP/cfg" ui/src-tauri/engine/sievesci serve)
           echo "$out" | head -c 400
           echo "$out" | grep -q '"protocol":2'
@@ -87,9 +87,20 @@ jobs:
           swift package edit swift-sdk
           $f = "Packages/swift-sdk/Sources/MCP/Base/Transports/HTTPClientTransport.swift"
           (Get-Content $f -Raw) -replace 'os\(Linux\)', 'canImport(FoundationNetworking)' | Set-Content $f -NoNewline
+      # The Windows toolchain is an assertions build, and its optimizer can trip on a dependency
+      # (EventSource's waitForLinuxCompletion under -O, Swift 6.3.1). Fall back to -Osize, then -Onone.
       - name: Build the engine
         shell: pwsh
-        run: swift build -c release --product sievesci -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
+        run: |
+          foreach ($opt in @("", "-Osize", "-Onone")) {
+            $extra = if ($opt) { @("-Xswiftc", $opt) } else { @() }
+            Write-Host "::group::swift build -c release $opt"
+            swift build -c release --product sievesci -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH @extra
+            $code = $LASTEXITCODE
+            Write-Host "::endgroup::"
+            if ($code -eq 0) { "engine built with -c release $opt" | Out-File -Append $env:GITHUB_STEP_SUMMARY; exit 0 }
+          }
+          exit 1
       - name: Stage the engine with its runtimes
         shell: pwsh
         run: |
@@ -111,7 +122,8 @@ jobs:
         run: |
           $env:Path = "$env:SystemRoot\System32;$env:SystemRoot"
           $env:SIEVESCI_CONFIG_DIR = "$env:RUNNER_TEMP\cfg"
-          $out = @('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}', '{"jsonrpc":"2.0","id":2,"method":"shutdown","params":{}}') | & ui/src-tauri/engine/sievesci.exe serve
+          # initialize alone; closing stdin then ends serve.
+          $out = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | & ui/src-tauri/engine/sievesci.exe serve
           $out | Out-String | Write-Host
           if (-not ($out -match '"protocol":2')) { throw "the staged engine did not answer" }
       - uses: actions/setup-node@v4

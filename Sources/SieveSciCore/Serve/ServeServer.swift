@@ -171,8 +171,12 @@ public final class ServeServer: @unchecked Sendable {
         case "task.open": return try await open(p)
         case "task.send":
             let l = try current(p)
-            guard let text = p.str("text"), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw RPCError(code: -32602, message: "text is required") }
-            Task.detached { await l.bench.submit(text) }   // the turn runs on; its progress arrives as events
+            // Files to attach (absolute paths, e.g. dropped on the window); text may then be empty.
+            let files = (p["attachments"]?.arrayValue ?? []).compactMap(\.stringValue).filter { FileManager.default.fileExists(atPath: $0) }
+            let text = p.str("text") ?? ""
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !files.isEmpty else { throw RPCError(code: -32602, message: "text is required") }
+            let atts = files.map { Attachment.file(URL(fileURLWithPath: $0)) }
+            Task.detached { await l.bench.submit(text, attachments: atts) }   // the turn runs on; its progress arrives as events
             return ["accepted": true]
         case "task.stop":
             try current(p).bench.interrupt()
@@ -222,7 +226,10 @@ public final class ServeServer: @unchecked Sendable {
             let (ws, id) = try target(p, needsTask: true)
             let dir = SessionStore.taskDir(id!, in: ws)
             let title = SessionStore.title(dir: dir) ?? L("New task")
-            return ["markdown": .string("# " + title + "\n\n`" + id! + "`\n" + SessionStore.markdown(SessionStore.load(dir: dir, agent: "main")))]
+            let md = "# " + title + "\n\n`" + id! + "`\n" + SessionStore.markdown(SessionStore.load(dir: dir, agent: "main"))
+            // With `path` (from a save dialog), it is also written there.
+            if let path = p.str("path"), !path.isEmpty { try md.writeReliably(to: URL(fileURLWithPath: path)) }
+            return ["markdown": .string(md), "dir": .string(dir.path)]
 
         case "shutdown":
             await shutdown()

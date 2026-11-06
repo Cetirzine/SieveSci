@@ -84,3 +84,6 @@ button { font: inherit; color: inherit; }
                              background: var(--raised); border: 1px solid var(--rule); transition: background var(--hover), border-color var(--hover); }
 .language-menu .menu-label:hover { background: var(--hairline); border-color: color-mix(in srgb, var(--ink) 55%, transparent); }
 .credit { letter-spacing: 0.4px; }
+.context-menu { position: fixed; z-index: 200; min-width: 220px; }
+.rename-sheet { height: auto; width: 380px; }
+.update-banner { margin: var(--s-s) var(--s-m) 0; }

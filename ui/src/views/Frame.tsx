@@ -2,9 +2,11 @@
 // TaskRow, StageChip, NeedsYouList, MainArea, TopBar, ModeMenu, JobsMenu, ResearchStatus.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { L, L10n, resolvedLanguage } from "../i18n";
-import { useApp, titleOf, isFolderOpen, mainTabs, type MainTab, type AppState, type Attention } from "../app/model";
+import { useApp, titleOf, isFolderOpen, mainTabs, onPlatform, type MainTab, type AppState, type Attention } from "../app/model";
 import * as A from "../app/actions";
-import { ActionButton, Chip, IconButton, Menu, SectionLabel } from "../theme/primitives";
+import { ActionButton, Box, Chip, EqualWidthButtons, IconButton, Menu, SectionLabel, SpecField } from "../theme/primitives";
+import { DotProgress } from "../theme/dots";
+import { banner, dismissBanner, download, onUpdate, restart, updateState, type UpdateState } from "../app/updates";
 import { BrandLogo, RoleGhostBadge } from "../theme/brand";
 import { Symbol } from "../theme/theme";
 
@@ -102,10 +104,43 @@ function SidebarView() {
           </div>
         ))}
       </div>
+      <UpdateBanner />
       <button type="button" className="hover-row settings-row" onClick={() => A.openSettings()}>
         <Symbol name="gearshape" size={14} /> <span className="t-body">{L("Settings")}</span>
       </button>
     </nav>
+  );
+}
+
+/** UpdateBanner (Updater.swift): above Settings when an update waits for the user. */
+function UpdateBanner() {
+  const [st, setSt] = useState<UpdateState>(updateState());
+  useEffect(() => onUpdate(setSt), []);
+  const version = useApp((s) => s.version);
+  const autoInstall = useApp((s) => s.config.autoInstallUpdates);
+  const shown = st.kind === "ready" || (st.kind === "downloading" && banner.userWaiting) || (st.kind === "available" && !autoInstall);
+  if (!shown || banner.dismissed) return null;
+  const ready = st.kind === "ready";
+  const v = "version" in st ? st.version : "";
+  const title = L(ready ? "SieveSci %@ is ready" : st.kind === "downloading" ? "Downloading SieveSci %@" : "SieveSci %@ is available").replace("%@", v);
+  return (
+    <div className="update-banner appear-pop">
+      <Box provisional tab={L("Update")} tabTint="var(--accent)">
+        <div className="stack-s">
+          <span className="t-body" style={{ fontWeight: 600 }}>{title}</span>
+          <span className="mono-tiny secondary">{version} → {v}</span>
+          {st.kind === "downloading" ? (
+            <span className="hstack"><DotProgress value={st.progress} /><span className="mono-tiny secondary">{Math.round(st.progress * 100)}%</span></span>
+          ) : <>
+            <span className="t-caption secondary">{ready ? L("Restart to update, or it installs when you quit.") : L("Download it and restart to update.")}</span>
+            <EqualWidthButtons>
+              <ActionButton kind="primary" fill onClick={() => void (ready ? restart() : download())}>{ready ? L("Restart") : L("Install")}</ActionButton>
+              <ActionButton fill onClick={dismissBanner}>{L("Later")}</ActionButton>
+            </EqualWidthButtons>
+          </>}
+        </div>
+      </Box>
+    </div>
   );
 }
 
@@ -124,16 +159,36 @@ export function relativeTime(ms: number, now = Date.now()): string {
 
 function TaskRow({ id, modified, folder }: { id: string; modified: number; folder?: string }) {
   const [hovering, setHovering] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [renaming, setRenaming] = useState(false);
   const selected = useApp((s) => folder === undefined && id === s.taskId);
   const title = useApp((s) => titleOf(s, id, L("New task")));
   const running = useApp((s) => (selected && s.running) || s.backgroundTasks.includes(id));
   const attention = useApp((s) => s.attention[id]);
+  const platform = useApp((s) => s.platform);
   const open = () => {
     if (folder) void A.openWorkspace(folder, id);
     else if (!selected) void A.startSession(id);
   };
+  const reveal = L(onPlatform(platform, "Show in Finder", "Show in Explorer", "Show in file manager"));
+  // Everything but copying the id and revealing acts on the open workspace (SidebarView's contextMenu).
+  const items: ({ label: string; run: () => void; destructive?: boolean } | null)[] = folder
+    ? [{ label: L("Copy conversation ID"), run: () => void A.copyText(id) }, { label: reveal, run: () => void A.revealTask(id, folder) }]
+    : [
+        { label: L("Rename…"), run: () => setRenaming(true) },
+        { label: L("Copy conversation ID"), run: () => void A.copyText(id) },
+        { label: L("Copy as Markdown"), run: () => void A.copyTaskMarkdown(id) },
+        { label: L("Export Markdown…"), run: () => void A.exportTaskMarkdown(id) },
+        null,
+        ...(selected ? [] : [{ label: L("Reference in the open conversation"), run: () => A.referenceTask(id) }]),
+        { label: L("Fork conversation"), run: () => void A.forkTask(id) },
+        { label: reveal, run: () => void A.revealTask(id) },
+        null,
+        { label: L("Delete conversation…"), run: () => void A.deleteTask(id), destructive: true },
+      ];
   return (
-    <div className={`task-row ${selected ? "selected" : ""}`} onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)} title={`${title}\n${id}`}>
+    <div className={`task-row ${selected ? "selected" : ""}`} onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)} title={`${title}\n${id}`}
+         onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}>
       <button type="button" className="hover-row task-row-button" onClick={open}>
         <span className="t-body clip">{title}</span>
         <span className="task-row-trailing">
@@ -144,6 +199,49 @@ function TaskRow({ id, modified, folder }: { id: string; modified: number; folde
         </span>
       </button>
       {hovering && !folder && <IconButton symbol="xmark" label={L("Delete conversation…")} className="task-delete" onClick={() => void A.deleteTask(id)} />}
+      {menu && <ContextMenu at={menu} items={items} close={() => setMenu(null)} />}
+      {renaming && <RenameSheet id={id} title={title} close={() => setRenaming(false)} />}
+    </div>
+  );
+}
+
+/** A right-click menu at the pointer; closes on a choice, a click elsewhere or Esc. */
+function ContextMenu({ at, items, close }: { at: { x: number; y: number }; items: ({ label: string; run: () => void; destructive?: boolean } | null)[]; close: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const off = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) close(); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    document.addEventListener("mousedown", off);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", off); document.removeEventListener("keydown", esc); };
+  }, [close]);
+  // Kept inside the window.
+  const x = Math.min(at.x, window.innerWidth - 240), y = Math.min(at.y, window.innerHeight - 32 * items.length - 16);
+  return (
+    <div ref={ref} className="menu-list context-menu" role="menu" style={{ left: x, top: y }}>
+      {items.map((it, i) => it === null ? <div key={i} className="menu-divider" /> : (
+        <button key={i} type="button" role="menuitem" className={`menu-item ${it.destructive ? "c-bad" : ""}`} onClick={() => { close(); it.run(); }}>
+          <span className="menu-check" />{it.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** AppModel.renameTask: an empty name goes back to the generated title. */
+function RenameSheet({ id, title, close }: { id: string; title: string; close: () => void }) {
+  const [text, setText] = useState(title);
+  const done = () => { void A.renameTask(id, text.trim()); close(); };
+  return (
+    <div className="sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+      <div className="sheet rename-sheet appear-pop" role="dialog" aria-label={L("Rename conversation")}>
+        <h3>{L("Rename conversation")}</h3>
+        <SpecField value={text} onChange={setText} autoFocus onKeyDown={(e) => { if (e.key === "Enter") done(); if (e.key === "Escape") close(); }} />
+        <div className="sheet-foot" style={{ gap: 8 }}>
+          <ActionButton width="column" onClick={close}>{L("Cancel")}</ActionButton>
+          <ActionButton kind="primary" width="column" onClick={done}>{L("Rename")}</ActionButton>
+        </div>
+      </div>
     </div>
   );
 }

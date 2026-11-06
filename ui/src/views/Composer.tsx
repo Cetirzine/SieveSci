@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { L, L10n } from "../i18n";
 import { useApp, setState, getState } from "../app/model";
 import * as A from "../app/actions";
+import { inTauri } from "../serve";
 import { Menu, SectionLabel } from "../theme/primitives";
 import { Symbol } from "../theme/theme";
 import { EffortMiniGauge, EffortSlider, GlitchLabel, effortName } from "../theme/effort";
@@ -17,6 +18,16 @@ export function PromptInput() {
   const commands = useApp((s) => s.commands);
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<string[]>([]);
+  // Files dropped on the window attach to the message (PromptInput's onDrop); the desktop app gets their paths.
+  useEffect(() => {
+    if (!inTauri) return;
+    let off: (() => void) | undefined;
+    void import("@tauri-apps/api/webview").then(({ getCurrentWebview }) => getCurrentWebview().onDragDropEvent((e) => {
+      const d = e.payload;
+      if (d.type === "drop") setAttachments((a) => [...a, ...d.paths.filter((p: string) => !a.includes(p))]);
+    })).then((f) => { off = f; });
+    return () => off?.();
+  }, []);
   const [selection, setSelection] = useState(0);
   const [focused, setFocused] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
@@ -42,8 +53,9 @@ export function PromptInput() {
 
   const send = () => {
     const t = text;
+    const files = attachments;
     setText(""); setAttachments([]);
-    if (t.trim()) void A.send(t);
+    if (t.trim() || files.length) void A.send(t, files);
   };
   const complete = (c: { name: string; args: string }) => {
     const next = `/${c.name}${c.args ? " " : ""}`;
@@ -74,6 +86,13 @@ export function PromptInput() {
           </div>
         )}
         <textarea ref={area} className="composer-text t-prose" rows={1} value={text}
+                  onPaste={(e) => {
+                    // A pasted image (a screenshot) is saved into inputs/ and attached; text pastes as usual.
+                    const imgs = [...e.clipboardData.items].filter((it) => it.kind === "file" && it.type.startsWith("image/")).map((it) => it.getAsFile()).filter((f): f is File => !!f);
+                    if (imgs.length === 0) return;
+                    e.preventDefault();
+                    for (const f of imgs) void A.savePastedImage(f).then((p) => { if (p) setAttachments((a) => [...a, p]); });
+                  }}
                   placeholder={running ? L("Queue a message, or press Esc to interrupt…") : L("Ask a research question, paste a GitHub link, or type / for commands")}
                   onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
                   onChange={(e) => { setText(e.target.value); setSelection(0); }}
@@ -98,7 +117,8 @@ export function PromptInput() {
         <div className="composer-bar">
           <Menu className="attach-menu" title={L("Attach files, images, PDFs or data")}
                 label={<span className="attach-button"><Symbol name="plus" size={12} strokeWidth={2.5} /></span>}
-                items={[{ label: L("Attach files…"), onSelect: () => {} }, { label: L("Add a read-only folder…"), onSelect: () => {} }]} />
+                items={[{ label: L("Attach files…"), onSelect: () => void A.pickFiles().then((ps) => setAttachments((a) => [...a, ...ps.filter((p) => !a.includes(p))])) },
+                        { label: L("Add a read-only folder…"), onSelect: () => void A.addReadOnlyFolders() }]} />
           <SandboxMenu />
           <span style={{ flex: 1 }} />
           <EffortMenu />
