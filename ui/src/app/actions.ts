@@ -1,7 +1,7 @@
 // What views ask the app to do (the SwiftUI AppModel's methods). With a serve connection they call
 // it (docs/SERVE_PROTOCOL.md); in demo scenes they only change local state.
 import { inTauri, type ServeClient, type JsonObject } from "../serve";
-import { L, L10n, setLanguage as setUILanguage, type Language } from "../i18n";
+import { L, L10n, loadLanguage, type Language } from "../i18n";
 import { getState, setState, resetTranscriptIndex, titleOf, type AppState, type MainTab, type AskRequest, type Config, type ProviderInfo, type ProviderProfile, type Quota, type TaskEntry } from "./model";
 
 let client: ServeClient | null = null;
@@ -99,7 +99,7 @@ export async function refreshConfig() {
 }
 
 export async function setLanguage(l: Language) {
-  setUILanguage(l);
+  await loadLanguage(l);
   try { localStorage.setItem("language", l); } catch { /* unavailable */ }
   setState({ languageChoice: l });
   await call("language.set", { language: l });

@@ -2,7 +2,7 @@
 // search, scroll keeping), EarlierRowsLabel, SessionSetupCard, EmptyChatHero, StartCard,
 // TranscriptRow and its rows, VerdictChip, ReviewBody, ThinkingRow, ToolRow, ToolOutputView,
 // DiffSummaryRow, DiffView, AgentCardView, PlanApprovalBar, ContestedBanner, Spinner, PermissionPrompt.
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { L, L10n } from "../i18n";
 import { useApp, getState, setState, type TranscriptItem, type ToolCallView, type FileDiff, type PermissionAsk } from "../app/model";
 import * as A from "../app/actions";
@@ -228,7 +228,7 @@ function RowContent({ item, stream, showThinking, hovering }: { item: Transcript
     case "assistant":
       return (
         <div className="assistant">
-          <div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(k.text) }} />
+          <Markdown text={k.text} />
           {hovering && <span className="assistant-copy"><IconButton symbol="doc.on.doc" label={L("Copy")} onClick={() => copy(k.text)} /></span>}
         </div>
       );
@@ -300,6 +300,13 @@ function RowContent({ item, stream, showThinking, hovering }: { item: Transcript
     case "error":
       return <div className="error-row"><Symbol name="exclamationmark.circle.fill" size={15} className="c-bad" /><span className="t-body">{L("Error")}: {k.text}</span></div>;
   }
+}
+
+/** Assistant prose; drawn again once formulas can be typeset (KaTeX loads after the first paint). */
+function Markdown({ text }: { text: string }) {
+  const math = useApp((s) => s.mathVersion);
+  const html = useMemo(() => renderMarkdown(text), [text, math]);
+  return <div className="md" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 export function VerdictChip({ verdict }: { verdict: string }) {

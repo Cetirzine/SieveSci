@@ -3,7 +3,21 @@
 // code spans and fences are left alone. Model output is untrusted: raw HTML is shown as text and
 // only http(s)/mailto links survive.
 import { Marked } from "marked";
-import katex from "katex";
+import { setState } from "../app/model";
+
+type Katex = typeof import("katex").default;
+let katex: Katex | null = null;
+let loading: Promise<void> | null = null;
+
+/** Loads KaTeX (script and styles) once; the views re-render their formulas when it arrives. */
+export function loadMath(): Promise<void> {
+  loading ??= Promise.all([import("katex"), import("katex/dist/katex.min.css")]).then(([k]) => {
+    katex = k.default;
+    cache.clear();
+    setState((s) => ({ mathVersion: s.mathVersion + 1 }));
+  });
+  return loading;
+}
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
@@ -34,6 +48,7 @@ const cache = new Map<string, string>();
 export function renderMarkdown(text: string): string {
   const hit = cache.get(text);
   if (hit !== undefined) return hit;
+  let pendingMath = false;
   const formulas: { latex: string; display: boolean }[] = [];
   const replaceMath = (s: string) => s
     .replace(display, (_, a: string | undefined, b: string | undefined) => { formulas.push({ latex: (a ?? b ?? "").trim(), display: true }); return `\n\n![formula](sievemath-block:${formulas.length - 1})\n\n`; })
@@ -52,11 +67,14 @@ export function renderMarkdown(text: string): string {
   let html = md.parse(prepared) as string;
   html = html.replace(/\u0000MATH(\d+)\u0000/g, (_, n: string) => {
     const f = formulas[Number(n)];
+    if (!katex) { pendingMath = true; return `<code>${escapeHtml(f.latex)}</code>`; }
     try { return katex.renderToString(f.latex, { displayMode: f.display, throwOnError: false, output: "html" }); }
     catch { return `<code>${escapeHtml(f.latex)}</code>`; }
   });
   // A display formula alone in its paragraph becomes a block.
   html = html.replace(/<p>(<span class="katex-display">[\s\S]*?<\/span>)<\/p>/g, "$1");
+  // Formulas drawn as code until KaTeX is in: not cached, so the next draw shows them typeset.
+  if (pendingMath) { void loadMath(); return html; }
   if (cache.size > 500) cache.clear();
   cache.set(text, html);
   return html;

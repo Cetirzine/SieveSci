@@ -2,7 +2,7 @@
 // `sievesci serve` through Tauri (desktop) or the dev bridge (browser).
 import { useEffect } from "react";
 import { inTauri, ServeClient, socketTransport, tauriTransport, type Transport } from "./serve";
-import { setLanguage, type Language } from "./i18n";
+import { loadLanguage, setLanguage, type Language } from "./i18n";
 import { deliver, getState, setState, taskStatus, useApp } from "./app/model";
 import * as A from "./app/actions";
 import { demoScene, loadDemo } from "./app/demo";
@@ -123,7 +123,7 @@ export default function App() {
         // when none was made there.
         const local = stored("language") as Language | null;
         const choice = (info.languageChoice && info.languageChoice !== "system" ? info.languageChoice : local ?? "system") as Language;
-        setLanguage(choice);
+        await loadLanguage(choice);
         setState({ version: info.version, languageChoice: choice, ...(info.platform ? { platform: info.platform } : {}) });
         if (local && local !== info.languageChoice) void c.call("language.set", { language: local });
         await A.refreshConfig();

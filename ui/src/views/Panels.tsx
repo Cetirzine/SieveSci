@@ -240,7 +240,8 @@ export function LibraryPanel() {
 
 export function NotebookPanel() {
   const [data] = usePanel<{ path: string; text: string }>("panels.notebook");
-  const html = useMemo(() => renderMarkdown(data?.text ?? ""), [data?.text]);
+  const math = useApp((s) => s.mathVersion);
+  const html = useMemo(() => renderMarkdown(data?.text ?? ""), [data?.text, math]);
   return (
     <div className="panel stack-m">
       <div className="hstack">

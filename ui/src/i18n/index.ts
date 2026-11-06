@@ -1,14 +1,9 @@
 // Same keys and placeholders as the SwiftUI app (Sources/SieveSciCore/Util/L10n.swift):
 // L("English text") → translation; L10n.s / L10n.f fill %@, %d, %1$@ … placeholders.
-import en from "./en.json";
-import es from "./es.json";
-import fr from "./fr.json";
-import ru from "./ru.json";
-import zhHans from "./zh-Hans.json";
-import zhHant from "./zh-Hant.json";
-
 export type Language = "system" | "en" | "zh-Hans" | "zh-Hant" | "es" | "fr" | "ru";
-const tables: Record<string, Record<string, string>> = { en, es, fr, ru, "zh-Hans": zhHans, "zh-Hant": zhHant };
+// One chunk per language, loaded when chosen: English needs none (keys are English).
+const loaders = import.meta.glob<{ default: Record<string, string> }>(["./*.json", "!./en.json"]);
+const tables: Record<string, Record<string, string>> = {};
 
 /** Native names, shown in the picker regardless of the current language. */
 export const languageNames: Record<Language, string> = {
@@ -29,6 +24,15 @@ function resolve(l: Language): string {
 }
 
 export function setLanguage(l: Language) { choice = l; resolved = resolve(l); }
+
+/** Chooses a language and loads its table (call before the first render, and on a change). */
+export async function loadLanguage(l: Language): Promise<void> {
+  setLanguage(l);
+  const code = resolved;
+  if (code === "en" || tables[code]) return;
+  const load = loaders[`./${code}.json`];
+  if (load) tables[code] = (await load()).default;
+}
 export function language(): Language { return choice; }
 export function resolvedLanguage(): string { return resolved; }
 
