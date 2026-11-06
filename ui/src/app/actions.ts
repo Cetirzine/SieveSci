@@ -2,7 +2,7 @@
 // it (docs/SERVE_PROTOCOL.md); in demo scenes they only change local state.
 import { inTauri, type ServeClient, type JsonObject } from "../serve";
 import { L, L10n, setLanguage as setUILanguage, type Language } from "../i18n";
-import { getState, setState, resetTranscriptIndex, titleOf, type MainTab, type AskRequest, type Config, type TaskEntry } from "./model";
+import { getState, setState, resetTranscriptIndex, titleOf, type AppState, type MainTab, type AskRequest, type Config, type ProviderInfo, type ProviderProfile, type Quota, type TaskEntry } from "./model";
 
 let client: ServeClient | null = null;
 export function attach(c: ServeClient | null) { client = c; }
@@ -16,17 +16,47 @@ async function call<T = JsonObject>(method: string, params: JsonObject = {}): Pr
 
 // MARK: Configuration
 
-interface ConfigPayload { config: Config; keys: Record<string, boolean>; usable: string[]; status: { models: { ready: boolean; text: string }; search: { ready: boolean; text: string } } }
-
-export function applyConfig(r: ConfigPayload) {
-  setState({ config: r.config, keys: r.keys, usable: r.usable, modelStatus: r.status.models, searchStatus: r.status.search });
+interface ConfigPayload {
+  config: Config; keys: Record<string, boolean>; usable: string[]; providers: Record<string, ProviderInfo>;
+  status: { models: { ready: boolean; text: string }; search: { ready: boolean; text: string } };
 }
 
-/** Changes configuration fields (AppConfig's didSet saves): shown at once, saved and applied by serve. */
-export async function updateConfig(patch: Partial<Config>) {
-  setState((s) => ({ config: { ...s.config, ...patch } }));
+/** Local edits not yet answered: a reply to an older one must not undo newer typing. */
+let editSeq = 0;
+let pendingPatch: Partial<Config> = {};
+let flushTimer: ReturnType<typeof setTimeout> | undefined;
+
+export function applyConfig(r: ConfigPayload, seq = editSeq) {
+  const fresh = seq === editSeq;
+  setState((s) => ({ ...(fresh ? { config: r.config } : {}), keys: r.keys, usable: r.usable, providerInfo: r.providers ?? s.providerInfo,
+    modelStatus: r.status.models, searchStatus: r.status.search }));
+}
+
+async function flushConfig() {
+  flushTimer = undefined;
+  const patch = pendingPatch;
+  pendingPatch = {};
+  if (Object.keys(patch).length === 0) return;
+  const seq = editSeq;
   const r = await call<ConfigPayload>("config.set", { patch: patch as JsonObject });
-  if (r) applyConfig(r);
+  if (r) applyConfig(r, seq);
+}
+
+/** Changes configuration fields (AppConfig's didSet saves): shown at once, saved and applied by serve.
+ *  `typing` waits for a pause, so a text field does not save on every key. */
+export async function updateConfig(patch: Partial<Config>, typing = false) {
+  editSeq++;
+  setState((s) => ({ config: { ...s.config, ...patch } }));
+  pendingPatch = { ...pendingPatch, ...patch };
+  if (flushTimer) clearTimeout(flushTimer);
+  if (typing) { flushTimer = setTimeout(() => void flushConfig(), 400); return; }
+  await flushConfig();
+}
+
+/** Edits one provider profile (Settings → Providers). */
+export function updateProvider(id: string, change: Partial<ProviderProfile>, typing = false) {
+  const providers = getState().config.providers.map((p) => (p.id === id ? { ...p, ...change } : p));
+  return updateConfig({ providers }, typing);
 }
 
 /** Stores an API key in the platform's credential store (an empty value removes it). */
@@ -34,6 +64,34 @@ export async function setKey(ref: string, value: string) {
   const r = await call<ConfigPayload>("secrets.set", { ref, value });
   if (r) applyConfig(r);
 }
+
+/** Any settings request; failures come back as the message (shown where the button is). */
+export async function request<T = JsonObject>(method: string, params: JsonObject = {}): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
+  if (!client) return { ok: false, error: L("Open a workspace first.") };
+  try { return { ok: true, value: await client.call<T>(method, params) }; }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+export async function refreshQuota(id: string) {
+  const r = await call<Quota>("providers.quota", { id });
+  if (r) setState((s) => ({ quotas: { ...s.quotas, [id]: r } }));
+}
+
+export async function refreshQuotas() {
+  const r = await call<{ quotas: Record<string, Quota> }>("providers.quotas");
+  if (r) setState((s) => ({ quotas: { ...s.quotas, ...r.quotas } }));
+}
+
+/** Opens a folder or web page with the system (Finder / Explorer, the browser). */
+export function systemOpen(target: { path?: string; url?: string }) { void call("system.open", target as JsonObject); }
+
+export function setAccent(a: AppState["accent"]) {
+  setState({ accent: a });
+  try { localStorage.setItem("accentTheme", a); } catch { /* unavailable */ }
+}
+
+/** After a provider discovery the serve reply also carries the configuration. */
+export function applyConfigPayload(r: JsonObject) { if (r.config) applyConfig(r as unknown as ConfigPayload); }
 
 export async function refreshConfig() {
   const r = await call<ConfigPayload>("config.get");

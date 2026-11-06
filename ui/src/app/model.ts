@@ -61,6 +61,11 @@ export interface ProviderProfile {
 export interface RoleAssignment { mode: "same" | "auto" | "custom" | string; same?: ModelRef; custom: Record<string, ModelRef> }
 export interface WebSearchConfig { backend: string; apiKeyRef: string; excludedDomains: string[]; googleCX: string; searxngURL: string }
 
+export interface ModelInfo { contextWindow: number; supportsImages: boolean; supportsReasoning: boolean }
+export interface ProviderInfo { ready: boolean; short: string; cliPath: string | null; hasKey: boolean; models: Record<string, ModelInfo> }
+export interface QuotaMeter { title: string; value: string; usedFraction: number | null; exhausted: boolean; resetsAt: string | null }
+export interface Quota { plan: string | null; note: string | null; summary: string | null; meters: QuotaMeter[] }
+
 /** AppConfig as `sievesci serve` sends it (config.get), shared with the macOS app. */
 export interface Config {
   providers: ProviderProfile[];
@@ -147,6 +152,11 @@ export interface AppState {
   usable: string[];
   /** The interface language picked ("system" or a code); serve's texts follow it. */
   languageChoice: string;
+  /** Per provider: whether it can run and what it needs, in serve's words, and its models' settings. */
+  providerInfo: Record<string, ProviderInfo>;
+  /** Plan limits and balances, by provider (Settings → Providers). */
+  quotas: Record<string, Quota>;
+  accent: "blue" | "violet" | "green" | "orange" | "graphite";
   /** A task is open in serve (the app's `bench != nil`). */
   live: boolean;
   settingsPane: "general" | "providers" | "models" | "search" | "research" | "memory" | "schedules";
@@ -166,7 +176,7 @@ export const initialState: AppState = {
   mainTab: "chat", inspectorTab: "files", showInspector: false, showSettingsPage: false, sidebarVisible: true,
   backgroundTasks: [], backgroundWorkspaces: {}, attention: {}, grounding: null,
   modelStatus: { ready: false, text: "" }, searchStatus: { ready: false, text: "" }, lastError: null, version: "", draft: "", commands: [],
-  keys: {}, usable: [], languageChoice: "system", live: false, settingsPane: "general",
+  keys: {}, usable: [], languageChoice: "system", live: false, settingsPane: "general", providerInfo: {}, quotas: {}, accent: "blue",
 };
 
 // MARK: Store

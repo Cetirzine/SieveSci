@@ -1038,3 +1038,4 @@
 "Download open-access PDFs" = "Скачивать PDF статей в открытом доступе";
 "Saves the PDF of each open-access paper added to the library (OpenAlex, Europe PMC, arXiv, Unpaywall). Off: only Europe PMC's full text or the abstract is kept." = "Сохраняет PDF каждой статьи в открытом доступе, добавленной в библиотеку (OpenAlex, Europe PMC, arXiv, Unpaywall). Если выключено, сохраняется только полный текст Europe PMC или аннотация.";
 "The last run stopped before %@ tool result(s) were saved. They are marked as not recorded, so the conversation can continue." = "Предыдущий запуск остановился до сохранения результатов инструментов (%@). Они помечены как незаписанные, разговор можно продолжить.";
+"Could not reach GitHub." = "Не удалось подключиться к GitHub.";

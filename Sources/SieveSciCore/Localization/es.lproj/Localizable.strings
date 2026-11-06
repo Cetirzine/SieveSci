@@ -1038,3 +1038,4 @@
 "Download open-access PDFs" = "Descargar PDF de acceso abierto";
 "Saves the PDF of each open-access paper added to the library (OpenAlex, Europe PMC, arXiv, Unpaywall). Off: only Europe PMC's full text or the abstract is kept." = "Guarda el PDF de cada artículo de acceso abierto añadido a la biblioteca (OpenAlex, Europe PMC, arXiv, Unpaywall). Desactivado: solo se conserva el texto completo de Europe PMC o el resumen.";
 "The last run stopped before %@ tool result(s) were saved. They are marked as not recorded, so the conversation can continue." = "La última ejecución se detuvo antes de guardar %@ resultado(s) de herramientas. Se marcaron como no registrados para que la conversación pueda continuar.";
+"Could not reach GitHub." = "No se pudo conectar con GitHub.";

@@ -85,6 +85,33 @@ or `{"kind": "dismissed", note?: string}`. The `askRequested` event carries the 
 `kind` (`single`, `multi`, `text`) and option `label`s; `askResolved` reports the outcome in the same form
 (`kind` can also be `timedOut` or `unavailable`).
 
+### Settings
+
+What the Settings pages compute with the core. Methods that change the configuration answer like
+`config.get`, plus the fields named.
+
+| method | params | result |
+|---|---|---|
+| `providers.discover` | `{id}` | `config.get` + `{models: [{id, displayName, contextWindow, supportsImages, supportsReasoning}]}` The models the key (or signed-in CLI) can use; nothing is billed. A CLI agent's list replaces its models. Fails with the provider's message when the key is refused. |
+| `providers.test` | `{id}` | `{status}` Two short identical requests: latency, then whether the prefix cache answers. |
+| `providers.quota` | `{id}` | `{plan, note, summary, meters: [{title, value, usedFraction, exhausted, resetsAt}]}` Plan limits and balances, worded in the interface language. |
+| `providers.quotas` | `{}` | `{quotas: {id: quota}}` For every usable provider. |
+| `providers.catalog` | `{}` | `{presets, endpoints, modelsDev}`, each `[{id, title, detail}]` |
+| `providers.add` | `{source: "preset" \| "endpoint" \| "modelsDev" \| "custom", id?, name?, baseURL?, family?}` | `config.get` + `{id}` (made unique) |
+| `providers.detectOptions` | `{family, baseURL}` | `{options}` The cache and compatibility defaults for that endpoint. |
+| `models.overview` | `{}` | `{roles: {role: {model, reasons}}, vision: [ModelRef], benchmarks: [{title, asOf, source}]}` The model each role gets now and why, models that accept images, the benchmark snapshot. |
+| `models.refreshCatalogs` | `{}` | `{report}` Refreshes models.dev and the leaderboards. |
+| `connectors.list` / `connectors.connect` | `{}` / `{id}` | `{connectors: [{id, title, license, notes, source, connected}]}` / `{message}` |
+| `memory.list` | `{role}` | `{dir, learnedSkills, stores: {MEMORY, USER, LESSONS}: [entry], pendingProposals}` |
+| `schedules.list` / `schedules.add` / `schedules.remove` | `{}` / `{when, prompt, workspace?}` / `{id}` | `{schedules}` (+ `{message}`) |
+| `system.open` | `{path}` or `{url}` (http/https only) | `{}` Opens it with Finder / Explorer / the browser. |
+| `cli.install` | `{}` | `{message}` Links this `sievesci` into ~/.local/bin (on Windows: says which folder to add to PATH). |
+| `updates.check` | `{}` | `{current, latest, available, url}` The newest GitHub release. |
+
+`config.get` (and every result shaped like it) also has `providers`: per provider id
+`{ready, short, cliPath, hasKey, models: {model: {contextWindow, supportsImages, supportsReasoning}}}` —
+whether it can run and what it needs, in the interface language.
+
 ## Notifications (serve → front end)
 
 No `id`; the front end does not answer them. Each carries `task` and `workspace`, so a front end

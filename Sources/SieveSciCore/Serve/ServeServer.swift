@@ -28,12 +28,12 @@ public final class ServeServer: @unchecked Sendable {
         init(id: String, workspace: URL, bench: Workbench) { self.id = id; self.workspace = workspace; self.bench = bench }
     }
 
-    private let lock = NSLock()
-    private var config: AppConfig
+    let lock = NSLock()
+    var config: AppConfig
     private var saveConfig: Bool
     private var workspace: URL?
-    private var live: [String: Live] = [:]
-    private var currentKey: String?
+    var live: [String: Live] = [:]
+    var currentKey: String?
     /// Permission request id → the live task asking.
     private var askers: [String: String] = [:]
     private var waiters: [String: CheckedContinuation<PermissionDecision, Never>] = [:]
@@ -221,6 +221,7 @@ public final class ServeServer: @unchecked Sendable {
             await shutdown()
             return .object([:])
         default:
+            if let r = try await settingsDispatch(method, p) { return r }
             throw RPCError(code: -32601, message: "unknown method \(method)")
         }
     }
@@ -234,6 +235,7 @@ public final class ServeServer: @unchecked Sendable {
         for ref in c.providers.map(\.apiKeyRef) + [c.webSearch.apiKeyRef] where !ref.isEmpty { keys[ref] = .bool(secrets.secret(for: ref) != nil) }
         return ["config": Wire.value(c), "keys": .object(keys),
                 "usable": .array(ConfiguredModels.usable(c, secrets: secrets).map { .string($0.id) }),
+                "providers": providerInfo(c),
                 "status": ["models": ["ready": .bool(models.ready), "text": .string(models.text)],
                            "search": ["ready": .bool(search.ready), "text": .string(search.text)]]]
     }

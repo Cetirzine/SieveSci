@@ -1038,3 +1038,4 @@
 "Download open-access PDFs" = "下载开放获取论文的 PDF";
 "Saves the PDF of each open-access paper added to the library (OpenAlex, Europe PMC, arXiv, Unpaywall). Off: only Europe PMC's full text or the abstract is kept." = "把加入文献库的开放获取论文的 PDF 保存下来（OpenAlex、Europe PMC、arXiv、Unpaywall）。关闭后只保留 Europe PMC 全文或摘要。";
 "The last run stopped before %@ tool result(s) were saved. They are marked as not recorded, so the conversation can continue." = "上次运行在保存 %@ 个工具结果之前中断。这些调用已标记为“未记录”，对话可以继续。";
+"Could not reach GitHub." = "无法连接 GitHub。";

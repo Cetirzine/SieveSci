@@ -15,9 +15,9 @@ side-by-side screenshots of the same demo scene).
 
 | | What | Why |
 |---|---|---|
-| A1 | Move `AppConfig` (providers, roles, search, permissions, effort, sandbox, appearance, notifications, limits …) from `SieveSciApp` into `SieveSciCore`, same file format and location on macOS | both front ends read and write the same settings |
-| A2 | Cross-platform secret store in core: macOS Keychain (as today), Windows Credential Manager, env vars | API keys entered in either UI |
-| A3 | `serve` v2: workspaces and tasks as parameters (several open, background tasks keep running), settings get/set, provider test / model list / quota, panel data, task actions | everything the SwiftUI `AppModel` does through direct calls |
+| A1 ☑ | Move `AppConfig` (providers, roles, search, permissions, effort, sandbox, appearance, notifications, limits …) from `SieveSciApp` into `SieveSciCore`, same file format and location on macOS | both front ends read and write the same settings |
+| A2 ☑ | Cross-platform secret store in core: macOS Keychain (as today), Windows Credential Manager, env vars | API keys entered in either UI |
+| A3 ◐ (panel data pending) | `serve` v2: workspaces and tasks as parameters (several open, background tasks keep running), settings get/set, provider test / model list / quota, panel data, task actions | everything the SwiftUI `AppModel` does through direct calls |
 | A4 | i18n: `Localizable.strings` (en, zh-Hans, zh-Hant, es, fr, ru) → JSON at build time; `L()` / `L10n.f()` in TS with the same keys | same text in every language |
 | A5 | Web demo scenes ported from `DemoContent.swift` / `DemoBrainstorm.swift` | screenshot comparison |
 | A6 | Brand assets: dot-matrix text (sampled like `DotMatrix.swift`), role ghost SVGs (`RoleGhostSVG.swift`, `BrandSVG.swift`), SF Symbols → matching icon set | the specimen-sheet look |
@@ -80,15 +80,15 @@ side-by-side screenshots of the same demo scene).
 ### Settings — `Views/SettingsView.swift`, `Updater.swift`
 | SwiftUI | Web | serve | Status |
 |---|---|---|---|
-| `SettingsPage` (pane list, Back to app) | | `config.get/set` | ☐ |
-| `GeneralSettings` (language, appearance, accent, show thinking, live monitoring, literature, identity, updates, CLI, about) | | | ☐ |
-| `ProvidersSettings`, `ProvidersOverview`, `ProviderDetail`, `AddProviderSheet` | | providers, keys, test, models | ☐ |
-| `ModelsSettings` (role assignment, alternates, vision helper) | | | ☐ |
-| `SearchSettings` | | | ☐ |
-| `ResearchSettings` | | | ☐ |
-| `MemorySettings` | | memory stores | ☐ |
-| `ScheduleSettings` | | schedules | ☐ |
-| `UpdateSettings` | | updater | ☐ |
+| `SettingsPage` (pane list, Back to app) | `Settings.tsx` `SettingsPage` | `config.get/set` | ☑ |
+| `GeneralSettings` (language, appearance, accent, show thinking, live monitoring, literature, identity, updates, CLI, about) | `GeneralSettings` | `language.set`, `cli.install`, `system.open` | ☑ |
+| `ProvidersSettings`, `ProvidersOverview`, `ProviderDetail`, `AddProviderSheet` | same names | `secrets.set`, `providers.*` | ☑ key texts still name the macOS Keychain on Windows |
+| `ModelsSettings` (role assignment, alternates, vision helper) | `ModelsSettings` | `models.overview`, `models.refreshCatalogs` | ☑ |
+| `SearchSettings` | `SearchSettings` | `secrets.set` | ☑ |
+| `ResearchSettings` | `ResearchSettings` | `connectors.*` | ◐ effort is a pop-up until `EffortSlider` is ported |
+| `MemorySettings` | `MemorySettings` | `memory.list` | ☑ |
+| `ScheduleSettings` | `ScheduleSettings` | `schedules.*` | ☑ (Windows scheduling is the core's crontab hint) |
+| `UpdateSettings` | `UpdateRow` | `updates.check` | ◐ checks and opens the release page; in-place install comes with the Tauri updater |
 
 ### Theme and brand — `Theme.swift`, `DotMatrix.swift`, `Brand.swift`
 `BoxStyle`, `FrameStroke`, `LabelTab`, `CropMarks`, `DotGrid`, `BlinkingCursor`, `HardShadow`,

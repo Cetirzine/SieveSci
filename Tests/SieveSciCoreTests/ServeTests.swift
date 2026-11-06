@@ -169,6 +169,23 @@ private final class SlowProvider: LLMProvider, @unchecked Sendable {
         await #expect(throws: ServeTestError.self) { try await c.call("secrets.set", ["ref": "X_KEY", "value": "v"]) }
     }
 
+    @Test func settingsRequests() async throws {
+        let ws = try workspace()
+        let c = Client(workspace: ws) { ScriptedProvider(replies: []) }
+        let added = try await c.call("providers.add", ["source": "custom", "name": "My Relay", "baseURL": "https://relay.example.com/v1", "family": "anthropic"])
+        #expect(added.str("id") == "my-relay")
+        let relay = added["config"]?["providers"]?.arrayValue?.first { $0.str("id") == "my-relay" }
+        #expect(relay?.str("apiKeyRef") == "MY_RELAY_API_KEY" && relay?.str("auth") == "xApiKey" && relay?.str("billing") == "relay")
+        #expect(added["providers"]?["my-relay"]?["ready"]?.boolValue == false)
+        #expect(try await c.call("providers.add", ["source": "custom", "name": "My Relay", "baseURL": "https://other.example.com"]).str("id")?.hasPrefix("my-relay-") == true)
+        #expect(try await c.call("providers.detectOptions", ["family": "anthropic", "baseURL": "https://api.anthropic.com"])["options"]?["anthropicCacheControl"]?.boolValue == true)
+        let overview = try await c.call("models.overview")
+        #expect(overview["roles"]?["main"] != nil && overview["benchmarks"]?.arrayValue?.isEmpty == false)
+        #expect(try await c.call("connectors.list")["connectors"]?.arrayValue?.isEmpty == false)
+        await #expect(throws: ServeTestError.self) { try await c.call("providers.test", ["id": "nope"]) }
+        await #expect(throws: ServeTestError.self) { try await c.call("system.open", ["url": "file:///etc/passwd"]) }
+    }
+
     @Test func renameForkAndMarkdown() async throws {
         let ws = try workspace()
         let c = Client(workspace: ws) { ScriptedProvider(replies: ["Reply one."]) }

@@ -56,7 +56,7 @@
 .action-button:disabled { opacity: 0.45; cursor: default; }
 .equal-width { display: inline-grid; grid-auto-flow: column; }
 
-.spec-field { width: 100%; min-height: var(--c-button); padding: 0 9px; font: 13px/1.4 var(--sans); color: var(--text); background: var(--canvas);
+.spec-field { box-sizing: border-box; width: 100%; min-height: var(--c-button); padding: 0 9px; font: 13px/1.4 var(--sans); color: var(--text); background: var(--canvas);
               border: 1px solid var(--rule); border-radius: 0; outline: none; transition: border-color var(--hover), box-shadow var(--hover); }
 .spec-field.mono { font: 12px/1.4 var(--mono); }
 .spec-field.multiline { padding: var(--s-s) 9px; resize: vertical; }

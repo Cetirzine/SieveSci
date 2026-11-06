@@ -9,6 +9,7 @@ import { demoScene, loadDemo } from "./app/demo";
 import { RootView } from "./views/Frame";
 import { WelcomeView } from "./views/Welcome";
 import { ChatView } from "./views/ChatView";
+import { SettingsPage } from "./views/Settings";
 import { applyAppearance } from "./theme/theme";
 
 const stored = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -16,16 +17,18 @@ const stored = (k: string) => { try { return localStorage.getItem(k); } catch { 
 export default function App() {
   const scene = demoScene();
   const appearance = useApp((s) => s.config.appearance);
+  const accent = useApp((s) => s.accent);
 
   useEffect(() => {
     const lang = stored("language") as Language | null;
     if (lang) setLanguage(lang);
     const params = new URLSearchParams(location.search);
     if (scene) { applyAppearance((params.get("appearance") ?? "system") as "system" | "light" | "dark", "blue"); loadDemo(scene); return; }
-    setState({ sidebarVisible: stored("sidebarVisible") !== "0" });
+    const pane = stored("settingsPane"), accentTheme = stored("accentTheme");
+    setState({ sidebarVisible: stored("sidebarVisible") !== "0", ...(pane ? { settingsPane: pane as never } : {}), ...(accentTheme ? { accent: accentTheme as never } : {}) });
   }, [scene]);
 
-  useEffect(() => { if (!scene) applyAppearance(appearance, "blue"); }, [scene, appearance]);
+  useEffect(() => { if (!scene) applyAppearance(appearance, accent); }, [scene, appearance, accent]);
 
   // Live: one serve connection for the window, as the app has one AppModel. It reopens the last
   // workspace and resumes its latest task (AppModel.init → resumeIfNeeded).
@@ -81,7 +84,7 @@ export default function App() {
       welcome={<WelcomeView onOpenWorkspace={() => void A.chooseWorkspace()} />}
       chat={<ChatView />}
       panel={(t) => <div className="secondary">{t}</div>}
-      settings={<div className="panel-column">{L("Settings")}</div>}
+      settings={<SettingsPage />}
       inspector={<div className="panel-column secondary">{L("Research panel")}</div>}
     />
   );
