@@ -1,0 +1,146 @@
+# The desktop app for macOS and Windows: the sievesci engine (Swift) is built in release mode and
+# staged into ui/src-tauri/engine/ with its resource bundle (and, on Windows, the Swift and MSVC
+# runtimes, which a clean machine lacks); the Tauri shell then packages it (.dmg / NSIS installer).
+#
+# A version tag (v0.2.5) publishes a draft GitHub release with both installers and, when the
+# TAURI_SIGNING_PRIVATE_KEY secret is set, the signed update files and latest.json the in-app updater
+# reads. Run it by hand (workflow_dispatch) to get the installers as build artifacts only.
+name: desktop
+
+on:
+  push:
+    tags: ["v*"]
+    # The port's branch builds the installers too, when the shell or this workflow changes.
+    branches: [claude/windows-port]
+    paths: ["ui/src-tauri/**", "ui/package.json", ".github/workflows/desktop.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - run: swift --version
+      - name: Build the engine
+        run: swift build -c release --product sievesci
+      - name: Stage the engine
+        run: |
+          mkdir -p ui/src-tauri/engine
+          cp .build/release/sievesci ui/src-tauri/engine/sievesci
+          cp -R .build/release/*.bundle ui/src-tauri/engine/
+      - name: Smoke test the staged engine
+        run: |
+          out=$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' '{"jsonrpc":"2.0","id":2,"method":"shutdown","params":{}}' \
+                | SIEVESCI_CONFIG_DIR="$RUNNER_TEMP/cfg" ui/src-tauri/engine/sievesci serve)
+          echo "$out" | head -c 400
+          echo "$out" | grep -q '"protocol":2'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm ci
+        working-directory: ui
+      - name: Updater signing (when the key is configured)
+        id: sign
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then echo 'config={"bundle":{"createUpdaterArtifacts":true}}' >> "$GITHUB_OUTPUT"; else echo 'config={}' >> "$GITHUB_OUTPUT"; fi
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          projectPath: ui
+          tauriScript: npx tauri
+          args: --bundles app,dmg --config '${{ steps.sign.outputs.config }}'
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          releaseName: SieveSci ${{ github.ref_name }}
+          releaseDraft: true
+          includeUpdaterJson: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SieveSci-macos
+          path: |
+            ui/src-tauri/target/release/bundle/dmg/*.dmg
+            ui/src-tauri/target/release/bundle/macos/*.tar.gz*
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: compnerd/gha-setup-swift@main
+        with:
+          swift-version: swift-6.3.1-release
+          swift-build: 6.3.1-RELEASE
+      - name: Patch MCP SDK for Windows
+        shell: pwsh
+        run: |
+          swift package resolve
+          swift package edit swift-sdk
+          $f = "Packages/swift-sdk/Sources/MCP/Base/Transports/HTTPClientTransport.swift"
+          (Get-Content $f -Raw) -replace 'os\(Linux\)', 'canImport(FoundationNetworking)' | Set-Content $f -NoNewline
+      - name: Build the engine
+        shell: pwsh
+        run: swift build -c release --product sievesci -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
+      - name: Stage the engine with its runtimes
+        shell: pwsh
+        run: |
+          $engine = "ui/src-tauri/engine"
+          New-Item -ItemType Directory -Force $engine | Out-Null
+          Copy-Item .build/release/sievesci.exe $engine/
+          Get-ChildItem .build/release -Directory | Where-Object { $_.Name -match '\.(bundle|resources)$' } | ForEach-Object { Copy-Item $_.FullName $engine/ -Recurse }
+          # The Swift runtime (swiftCore, Foundation, ICU, dispatch …) from the toolchain's runtime folder.
+          $core = Get-ChildItem -Path "$env:LOCALAPPDATA\Programs\Swift", "$env:ProgramFiles\Swift", "$env:SystemDrive\Library" -Recurse -Filter swiftCore.dll -ErrorAction SilentlyContinue |
+                  Where-Object { $_.FullName -match 'Runtimes' -or $_.FullName -match 'usr\\bin' } | Select-Object -First 1
+          if (-not $core) { throw "Swift runtime not found" }
+          Write-Host "Swift runtime: $($core.DirectoryName)"
+          Copy-Item "$($core.DirectoryName)\*.dll" $engine/
+          # The MSVC runtime the engine links against (redistributable).
+          foreach ($d in "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll") { if (Test-Path "$env:SystemRoot\System32\$d") { Copy-Item "$env:SystemRoot\System32\$d" $engine/ } }
+          Get-ChildItem $engine | Select-Object Name, Length | Format-Table | Out-String | Write-Host
+      - name: Smoke test the staged engine on a bare PATH
+        shell: pwsh
+        run: |
+          $env:Path = "$env:SystemRoot\System32;$env:SystemRoot"
+          $env:SIEVESCI_CONFIG_DIR = "$env:RUNNER_TEMP\cfg"
+          $out = @('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}', '{"jsonrpc":"2.0","id":2,"method":"shutdown","params":{}}') | & ui/src-tauri/engine/sievesci.exe serve
+          $out | Out-String | Write-Host
+          if (-not ($out -match '"protocol":2')) { throw "the staged engine did not answer" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm ci
+        working-directory: ui
+      - name: Updater signing (when the key is configured)
+        id: sign
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then echo 'config={"bundle":{"createUpdaterArtifacts":true}}' >> "$GITHUB_OUTPUT"; else echo 'config={}' >> "$GITHUB_OUTPUT"; fi
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          projectPath: ui
+          tauriScript: npx tauri
+          args: --bundles nsis --config ${{ steps.sign.outputs.config }}
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          releaseName: SieveSci ${{ github.ref_name }}
+          releaseDraft: true
+          includeUpdaterJson: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SieveSci-windows
+          path: ui/src-tauri/target/release/bundle/nsis/*

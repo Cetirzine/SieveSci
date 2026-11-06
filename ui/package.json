@@ -1,7 +1,7 @@
 {
   "name": "sievesci-ui",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.5",
   "type": "module",
   "scripts": {
     "dev": "npm run assets && vite",
@@ -14,6 +14,9 @@
   "dependencies": {
     "@tauri-apps/api": "^2.5.0",
     "@tauri-apps/plugin-dialog": "^2.2.0",
+    "@tauri-apps/plugin-notification": "^2.8.0",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "katex": "^0.16.47",
     "lucide-react": "^0.500.0",
     "marked": "^15.0.0",

@@ -11,6 +11,7 @@ import { ActionButton, ActionRow, Chip, IconButton, SectionLabel, Segmented, Spe
 import { Symbol, roleName } from "../theme/theme";
 import { RoleGhostIcon } from "../theme/brand";
 import { EffortSlider } from "../theme/effort";
+import { checkForUpdates, download, onUpdate, restart, updateState, type UpdateState } from "../app/updates";
 import "./settings.css";
 
 const panes: { id: SettingsPane; title: () => string; icon: string }[] = [
@@ -207,36 +208,30 @@ function GeneralSettings() {
   );
 }
 
-type UpdateState = { kind: "idle" } | { kind: "checking" } | { kind: "upToDate"; at: number } | { kind: "available"; version: string; url: string } | { kind: "failed"; message: string };
-let updateState: UpdateState = { kind: "idle" };
-
-/** UpdateSettings: rows of the Updates section (an array, so each is its own form row). The desktop
- *  app installs a release from its GitHub page. */
+/** UpdateSettings: rows of the Updates section (an array, so each is its own form row). */
 function UpdateSettings({ version }: { version: string }): ReactNode[] {
   return [<UpdateRow key="row" version={version} />, ...UpdateToggles()];
 }
 
 function UpdateRow({ version }: { version: string }) {
-  const [st, setSt] = useState<UpdateState>(updateState);
-  const update = (s: UpdateState) => { updateState = s; setSt(s); };
-  const check = async () => {
-    update({ kind: "checking" });
-    const r = await A.request<{ available: boolean; latest: string; url: string }>("updates.check");
-    if (!r.ok) update({ kind: "failed", message: r.error });
-    else if (r.value.available) update({ kind: "available", version: r.value.latest, url: r.value.url });
-    else update({ kind: "upToDate", at: Date.now() });
-  };
-  const status = st.kind === "checking" ? L("Checking…") : st.kind === "available" ? L("SieveSci %@ is available").replace("%@", st.version)
+  const [st, setSt] = useState<UpdateState>(updateState());
+  useEffect(() => onUpdate(setSt), []);
+  const status = st.kind === "checking" ? L("Checking…")
+    : st.kind === "downloading" ? `${L("Downloading")} ${st.version} · ${Math.round(st.progress * 100)}%`
+    : st.kind === "ready" ? L("SieveSci %@ is ready").replace("%@", st.version)
+    : st.kind === "available" ? L("SieveSci %@ is available").replace("%@", st.version)
+    : st.kind === "installing" ? L("Installing…")
     : st.kind === "failed" ? st.message : st.kind === "upToDate" ? L("Last checked") + " " + relative(st.at) : "";
+  const busy = st.kind === "checking" || st.kind === "downloading" || st.kind === "installing";
   return (
     <div className="lc">
       <div className="stack" style={{ gap: 3 }}>
         <span className="hstack">{L("Installed version")} <span className="mono-small secondary">{version}</span></span>
         {status && <span className={`mono-tiny ${st.kind === "failed" ? "c-bad" : "secondary"}`}>{status}</span>}
       </div>
-      {st.kind === "available"
-        ? <ActionButton kind="primary" width="column" onClick={() => A.systemOpen({ url: st.url })}>{L("Install")}</ActionButton>
-        : <ActionButton width="column" disabled={st.kind === "checking"} onClick={() => void check()}>{L("Check now")}</ActionButton>}
+      {st.kind === "ready" ? <ActionButton kind="primary" width="column" onClick={() => void restart()}>{L("Restart")}</ActionButton>
+        : st.kind === "available" ? <ActionButton kind="primary" width="column" onClick={() => void download()}>{L("Install")}</ActionButton>
+        : <ActionButton width="column" disabled={busy} onClick={() => void checkForUpdates(true)}>{L("Check now")}</ActionButton>}
     </div>
   );
 }

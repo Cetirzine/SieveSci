@@ -13,6 +13,62 @@ import { SettingsPage } from "./views/Settings";
 import { InspectorView, MainPanel } from "./views/Panels";
 import type { InspectorTab } from "./app/model";
 import { applyAppearance } from "./theme/theme";
+import { notify } from "./app/notify";
+import { startAutomaticChecks } from "./app/updates";
+import { L } from "./i18n";
+import { titleOf, type AskRequest } from "./app/model";
+import type { JsonObject } from "./serve";
+
+/** The notifications AppModel posts for an event (each behind its Live monitoring setting). */
+function notifyFor(e: JsonObject) {
+  const s = getState(), c = s.config;
+  const str = (k: string) => String(e[k] ?? "");
+  const mine = e.task === undefined || e.task === s.taskId;
+  const task = typeof e.task === "string" ? e.task : s.taskId;
+  switch (e.type) {
+    case "turnFinished":
+      if (mine && str("agentId") === "main" && c.notifyTurnFinished) {
+        const last = [...(s.streams.main ?? [])].reverse().find((i) => i.kind.type === "assistant");
+        notify(L("SieveSci finished"), last && last.kind.type === "assistant" ? last.kind.text.slice(0, 160) : titleOf(s, task, L("New task")), `turn-${task}`);
+      }
+      break;
+    case "jobNotification": {
+      if (!mine || !c.notifyJobs) break;
+      const n = e.notification as JsonObject;
+      const kind = String(n.kind);
+      const head = kind === "failed" ? L("Job failed") : kind === "stalled" ? L("Job stalled") : kind === "matched" ? L("Job update") : L("Job finished");
+      notify(`${head}: ${String(n.job)}`, String(n.text ?? "").slice(0, 200), `job-${String(n.job)}-${kind}-${String(n.at)}`);
+      break;
+    }
+    case "permissionRequested": {
+      const r = e.request as JsonObject;
+      // A background task's request always says so (it waits until the user comes back to it).
+      if (!mine) notify(L("Permission needed"), `${titleOf(s, task, L("New task"))} · ${String(r.tool)}: ${String(r.summary).slice(0, 120)}`, `perm-${String(r.id)}`);
+      else if (c.notifyPermission) notify(L("Permission needed"), `${String(r.tool)}: ${String(r.summary).slice(0, 140)}`, `perm-${String(r.id)}`);
+      break;
+    }
+    case "askRequested": {
+      const r = e.request as unknown as AskRequest;
+      if (c.notifyPermission) notify(L("SieveSci has a question"), r.questions[0]?.question ?? "", `ask-${r.id}`);
+      break;
+    }
+  }
+}
+
+/** A task entering a stage that needs the user, or a background task finishing (AppModel.refreshStage). */
+function notifyStage(p: JsonObject) {
+  const s = getState();
+  const id = String(p.task ?? "");
+  const before = s.attention[id];
+  const st = p.stage as JsonObject | null;
+  const title = titleOf(s, id, L("New task"));
+  if (st && st.needsPerson === true && before?.needsPerson !== true) {
+    const detail = String(st.detail ?? "");
+    notify(L("SieveSci needs you") + " · " + String(st.label ?? ""), title + (detail ? " — " + detail.slice(0, 140) : ""), `attn-${id}`);
+  } else if (!st && id !== s.taskId && s.backgroundTasks.includes(id) && s.config.notifyTurnFinished && before?.needsPerson !== true) {
+    notify(L("SieveSci finished"), title, `turn-${id}`);
+  }
+}
 
 const stored = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 
@@ -45,7 +101,7 @@ export default function App() {
         if (cancelled) { t.close(); return; }
         const c = new ServeClient(t);
         t.onClose((why) => setState({ lastError: `SieveSci stopped: ${why}`, live: false }));
-        c.onEvent(deliver);
+        c.onEvent((e) => { deliver(e); notifyFor(e); });
         c.onOutput((p) => { if (p.task === undefined || p.task === getState().taskId) deliver({ type: "notice", text: String(p.text ?? "") }); });
         // Development: the connection and its notifications, for the browser console.
         if (import.meta.env.DEV) {
@@ -56,6 +112,7 @@ export default function App() {
         c.onNotification((method, p) => {
           if (method === "agentInstall") { A.agentInstallListeners.forEach((f) => f(String(p.id), (p.lines ?? []) as string[])); return; }
           if (method !== "taskStatus") return;
+          notifyStage(p);
           taskStatus(p);
           // A background task was released: its row shows its new time (AppModel+Events).
           if (p.stage === null) { void A.refreshTaskList(); A.refreshOpenFolders(); }
@@ -71,6 +128,7 @@ export default function App() {
         if (local && local !== info.languageChoice) void c.call("language.set", { language: local });
         await A.refreshConfig();
         void A.loadCommands();
+        startAutomaticChecks();
         const params = new URLSearchParams(location.search);
         const last = params.get("workspace") ?? getState().config.recentWorkspaces[0];
         if (last) await A.openWorkspace(last);

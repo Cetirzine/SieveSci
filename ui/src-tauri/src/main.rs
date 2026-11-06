@@ -25,12 +25,20 @@ struct LinePayload { gen: u64, line: String }
 #[derive(Clone, serde::Serialize)]
 struct ExitPayload { gen: u64, reason: String }
 
-/// SIEVESCI_BIN, else the CLI next to this executable, else `sievesci` on PATH.
-fn sievesci_binary() -> PathBuf {
+/// SIEVESCI_BIN, else the engine bundled in the app's resources (`engine/sievesci`, with its resource
+/// bundle and, on Windows, the Swift runtime beside it), else the CLI next to this executable, else
+/// `sievesci` on PATH (development).
+fn sievesci_binary(app: &AppHandle) -> PathBuf {
     if let Some(p) = std::env::var_os("SIEVESCI_BIN") {
         return PathBuf::from(p);
     }
     let name = if cfg!(windows) { "sievesci.exe" } else { "sievesci" };
+    if let Ok(res) = app.path().resource_dir() {
+        let bundled = res.join("engine").join(name);
+        if bundled.is_file() {
+            return bundled;
+        }
+    }
     if let Some(dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf())) {
         let beside = dir.join(name);
         if beside.is_file() {
@@ -69,7 +77,8 @@ fn serve_start(app: AppHandle, state: State<ServeState>, workspace: Option<Strin
     stop_locked(&mut s);
     s.gen += 1;
     let gen = s.gen;
-    let mut cmd = Command::new(sievesci_binary());
+    let bin = sievesci_binary(&app);
+    let mut cmd = Command::new(&bin);
     cmd.arg("serve");
     // Without a workspace serve starts on the saved configuration; the UI opens folders itself.
     if let Some(ws) = workspace.filter(|w| !w.is_empty()) { cmd.arg("--workspace").arg(ws); }
@@ -80,7 +89,7 @@ fn serve_start(app: AppHandle, state: State<ServeState>, workspace: Option<Strin
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW: no console flashes up for the child
     }
-    let mut child = cmd.spawn().map_err(|e| format!("cannot start sievesci ({}): {e}", sievesci_binary().display()))?;
+    let mut child = cmd.spawn().map_err(|e| format!("cannot start sievesci ({}): {e}", bin.display()))?;
     let stdout = child.stdout.take().ok_or("no stdout")?;
     s.stdin = child.stdin.take();
     s.child = Some(child);
@@ -119,6 +128,9 @@ fn serve_stop(state: State<ServeState>, gen: u64) {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(ServeState(Mutex::new(Serve::default())))
         .invoke_handler(tauri::generate_handler![serve_start, serve_send, serve_stop])
         .on_window_event(|window, event| {
