@@ -147,18 +147,36 @@ func serve(_ args: [String]) async {
             return try ConfiguredModels.services(task: id, workspace: ws, config: config, secrets: PlatformSecretStore.shared)
         },
         write: { line in out.withLock { _ = FileHandle.standardOutput.writeSafely(Data((line + "\n").utf8)) } })
-    // Each request is handled on its own, so an answer to a permission request never waits behind
-    // a slow one. A `shutdown` ends the process once it has answered.
-    await withTaskGroup(of: Void.self) { group in
-        while let line = readLine(strippingNewline: true) {
-            group.addTask {
-                await server.handle(line)
-                // Replies to requests still in flight get a moment to go out before the process ends.
-                if server.isClosed { try? await Task.sleep(nanoseconds: 300_000_000); exit(0) }
-            }
+    // The engine belongs to the window that started it: when that process is gone (a crash, a forced
+    // quit), the engine goes too, even if something still holds its stdin open.
+    #if !os(Windows)
+    let parent = getppid()
+    Task.detached {
+        while true {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            if getppid() != parent { await server.shutdown(); exit(0) }
         }
     }
+    #endif
+    // Each request is handled on its own, so an answer to a permission request never waits behind
+    // a slow one. A `shutdown` ends the process once it has answered.
+    let inFlight = DispatchGroup()
+    while let line = readLine(strippingNewline: true) {
+        inFlight.enter()
+        Task {
+            await server.handle(line)
+            inFlight.leave()
+            // Replies to requests still in flight get a moment to go out before the process ends.
+            if server.isClosed { try? await Task.sleep(nanoseconds: 300_000_000); exit(0) }
+        }
+    }
+    // stdin closed: answer what is in flight (for at most 8 s: a request that never finishes must not
+    // keep the engine alive), then stop the work and exit.
+    await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+        DispatchQueue.global().async { _ = inFlight.wait(timeout: .now() + 8); c.resume() }
+    }
     await server.shutdown()
+    exit(0)
 }
 
 @MainActor
