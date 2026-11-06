@@ -1082,3 +1082,4 @@
 "Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …)." = "代理將不經詢問直接執行命令、修改檔案，且所有命令都不在沙盒中執行：命令能更動你的使用者帳號能更動的一切。只有安全拒絕清單仍然生效（sudo、rm -rf /、強制推送……）。";
 "Turn On" = "開啟";
 "No sandbox on this system" = "此系統無沙盒";
+"Thought" = "已思考";

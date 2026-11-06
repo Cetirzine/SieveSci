@@ -100,7 +100,10 @@ public final class AgentSession: @unchecked Sendable {
     public func send(_ text: String, attachments: [ContentBlock] = []) async throws -> Message? {
         if role != .main && !announced {
             announced = true
-            services.emit(.agentStarted(id: id, role: role, parent: parentId, purpose: purpose.isEmpty ? String(text.prefix(200)) : purpose))
+            let shown = purpose.isEmpty ? String(text.prefix(200)) : purpose
+            services.emit(.agentStarted(id: id, role: role, parent: parentId, purpose: shown))
+            // The card's title and parent, for a reopened task (ServeServer.timeline).
+            services.log("agent_start", actor: role.rawValue, ["agent": .string(id), "parent": .string(parentId), "purpose": .string(shown)])
         }
         defer {
             if role != .main {
@@ -239,12 +242,14 @@ public final class AgentSession: @unchecked Sendable {
         let resp: LLMResponse
         let meterAtStart = meter
         let userWindow = windowSetByUser
+        let thinking = ThinkingClock()
         do {
             resp = try await provider.complete(req) { ev in
                 draft?.add(ev)
                 switch ev {
-                case .textDelta(let t): emit(.textDelta(agentId: id, t))
-                case .thinkingDelta(let t): emit(.thinkingDelta(agentId: id, t))
+                case .textDelta(let t): thinking.stop(); emit(.textDelta(agentId: id, t))
+                case .thinkingDelta(let t): thinking.think(); emit(.thinkingDelta(agentId: id, t))
+                case .toolInputDelta: thinking.stop()
                 case .contextUsage(let tokens, let window):
                     var m = meterAtStart
                     m.lastPromptTokens = tokens
@@ -286,6 +291,10 @@ public final class AgentSession: @unchecked Sendable {
             "input": .int(resp.usage.input), "cache_read": .int(resp.usage.cacheRead), "cache_write": .int(resp.usage.cacheWrite),
             "output": .int(resp.usage.output), "stop": .string(resp.stopReason.rawValue),
             "seconds": .double(Date().timeIntervalSince(started)),
+            // Which saved reply this call made, and how long it thought: a reopened task shows
+            // "Thought for N s" as the live view did (DisplayTimeline).
+            "message": .string(resp.message.id),
+            "thinking_seconds": thinking.seconds.map { .double($0) } ?? .null,
         ])
         if resp.stopReason == .refusal { services.emit(.notice(L("The model declined this request."))) }
         return resp
@@ -825,4 +834,15 @@ final class TurnDraft: @unchecked Sendable {
     }
 
     func clear() { try? FileManager.default.removeItem(at: url) }
+}
+
+/// How long a model call spent thinking: from its first reasoning delta to the first text or tool
+/// input after it (or the end of the call).
+final class ThinkingClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var began: Date?
+    private var ended: Date?
+    func think() { lock.withLock { if began == nil { began = Date() } } }
+    func stop() { lock.withLock { if began != nil, ended == nil { ended = Date() } } }
+    var seconds: Double? { lock.withLock { began.map { (ended ?? Date()).timeIntervalSince($0) } } }
 }

@@ -262,7 +262,7 @@ function RowContent({ item, stream, showThinking, hovering }: { item: Transcript
           {hovering && <span className="assistant-copy"><IconButton symbol="doc.on.doc" label={L("Copy")} onClick={() => copy(k.text)} /></span>}
         </div>
       );
-    case "thinking": return showThinking ? <ThinkingRow text={k.text} started={k.started} ended={k.ended} /> : null;
+    case "thinking": return showThinking ? <ThinkingRow text={k.text} started={k.started} ended={k.ended} untimed={k.untimed} /> : null;
     case "tool": return <ToolRow call={k.call} />;
     case "agent": return <AgentCardView id={k.id} />;
     case "review": {
@@ -383,7 +383,7 @@ function useTicker(active: boolean) {
   return now;
 }
 
-function ThinkingRow({ text, started, ended }: { text: string; started: number; ended?: number }) {
+function ThinkingRow({ text, started, ended, untimed }: { text: string; started: number; ended?: number; untimed?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const now = useTicker(ended === undefined);
   const secs = Math.floor(((ended ?? now) - started) / 1000);
@@ -392,7 +392,7 @@ function ThinkingRow({ text, started, ended }: { text: string; started: number; 
     <div className="thinking-row">
       <button type="button" className="line-row plain-row" onClick={() => setExpanded(!expanded)}>
         <span className="gutter secondary"><Symbol name="brain" size={12} /></span>
-        <span className="t-body thinking-label">{ended === undefined ? L10n.f("Thinking… %ds", secs) : L10n.f("Thought for %ds", Math.max(1, secs))}</span>
+        <span className="t-body thinking-label">{ended === undefined ? L10n.f("Thinking… %ds", secs) : untimed ? L("Thought") : L10n.f("Thought for %ds", Math.max(1, secs))}</span>
         {!expanded && ended === undefined && <span className="t-body secondary clip">· {last}</span>}
         <span className={`chev ${expanded ? "open" : ""}`}><Symbol name="chevron.right" size={9} strokeWidth={3} /></span>
       </button>

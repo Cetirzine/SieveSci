@@ -388,7 +388,8 @@ public final class ServeServer: @unchecked Sendable {
             "running": .bool(l.bench.isRunning),
             // The lead agent's model and window, shown in the composer before the first reply (AppModel.open).
             "meter": Wire.meter(l.bench.main.meter),
-            "history": .array(Self.history(SessionStore.load(dir: s.taskDir, agent: "main"))),
+            // The conversation as the chat showed it: reasoning, tool rows with diffs, subagent cards and their steps.
+            "history": .array(Self.timeline(taskDir: s.taskDir)),
             "plan": Wire.value(s.research.snapshot), "claims": Wire.value(s.claims.snapshot), "ideas": Wire.value(s.ideas.snapshot), "brainstorm": s.ideas.live.map { Wire.value($0) } ?? .null,
             "asks": Wire.value(s.asks.pending), "stage": l.stage.map(Self.stageJSON) ?? .null,
             // The approval an agent of this task waits for; shown again, since a front end that switched away dropped it.
@@ -467,40 +468,6 @@ public final class ServeServer: @unchecked Sendable {
         case .idle: kind = "idle"
         }
         return ["kind": .string(kind), "label": .string(s.label), "detail": .string(s.detail), "needsPerson": .bool(s.needsPerson), "showsChip": .bool(s.showsChip)]
-    }
-
-    /// The saved transcript as a front end shows it: what the user typed (host context removed),
-    /// the replies, and each tool call with its result.
-    static func history(_ msgs: [Message]) -> [JSON] {
-        var results: [String: ToolResult] = [:]
-        for m in msgs { for b in m.blocks { if case .toolResult(let r) = b { results[r.toolUseId] = r } } }
-        var out: [JSON] = []
-        for m in msgs {
-            for b in m.blocks {
-                switch b {
-                case .text(let t) where m.role == .user && !HostContext.isHostBlock(t):
-                    let own = HostContext.userText(t)
-                    if !own.isEmpty, !own.hasPrefix("[tool result") { out.append(["kind": "user", "text": .string(own)]) }
-                case .text(let t) where m.role == .assistant && !t.isEmpty:
-                    out.append(["kind": "assistant", "text": .string(t)])
-                case .toolUse(let tu):
-                    var item: [String: JSON] = ["kind": "tool", "id": .string(tu.id), "name": .string(tu.name), "input": tu.input]
-                    if let r = results[tu.id] {
-                        var content = r.content
-                        // Results end with their receipt id, e.g. "[receipt r12]".
-                        if let range = content.range(of: #"\n*\[receipt (r\d+)\]\s*$"#, options: .regularExpression) {
-                            item["receipt"] = .string(String(content[range]).filter { $0.isLetter || $0.isNumber }.replacingOccurrences(of: "receipt", with: ""))
-                            content.removeSubrange(range)
-                        }
-                        item["output"] = .string(content)
-                        item["isError"] = .bool(r.isError)
-                    }
-                    out.append(.object(item))
-                default: break
-                }
-            }
-        }
-        return out
     }
 
     /// Task ids name folders under `.sievesci/tasks/`: no separators or `..` from a client.

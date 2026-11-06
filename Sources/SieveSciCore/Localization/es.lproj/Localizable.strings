@@ -1082,3 +1082,4 @@
 "Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …)." = "Los agentes ejecutan comandos y editan archivos sin preguntar, y nada se ejecuta en el sandbox: un comando puede cambiar todo lo que puede tu cuenta de usuario. Solo sigue aplicándose la lista de bloqueo de seguridad (sudo, rm -rf /, push forzados…).";
 "Turn On" = "Activar";
 "No sandbox on this system" = "Sin sandbox en este sistema";
+"Thought" = "Pensó";

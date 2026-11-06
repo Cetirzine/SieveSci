@@ -3,7 +3,7 @@
 import { inTauri, type ServeClient, type JsonObject } from "../serve";
 import { L, L10n, loadLanguage, type Language } from "../i18n";
 import { notify } from "./notify";
-import { deliver, getState, setState, resetTranscriptIndex, titleOf, type AppState, type MainTab, type AskRequest, type Config, type ContextMeter, type PermissionAsk, type ProviderInfo, type ProviderProfile, type Quota, type TaskEntry } from "./model";
+import { deliver, getState, setState, resetTranscriptIndex, summary, titleOf, type AgentCard, type FileDiff, type Role, type TranscriptItem, type AppState, type MainTab, type AskRequest, type Config, type ContextMeter, type PermissionAsk, type ProviderInfo, type ProviderProfile, type Quota, type TaskEntry } from "./model";
 
 let client: ServeClient | null = null;
 export function attach(c: ServeClient | null) { client = c; }
@@ -208,7 +208,11 @@ export async function openWorkspace(path: string, task?: string, newTask = false
 // MARK: Tasks
 
 interface RawTask { id: string; title: string | null; modified: string; running?: boolean }
-interface HistoryItem { kind: string; text?: string; id?: string; name?: string; input?: JsonObject; output?: string; isError?: boolean; receipt?: string }
+/** One entry of `task.open`'s history (ServeServer.timeline): what the chat showed live. */
+interface HistoryItem {
+  kind: string; text?: string; id?: string; name?: string; input?: JsonObject; output?: string; isError?: boolean; receipt?: string;
+  diff?: FileDiff; seconds?: number | null; role?: string; parent?: string; purpose?: string; steps?: HistoryItem[];
+}
 
 function entries(list: RawTask[]): TaskEntry[] { return list.map((t) => ({ id: t.id, modified: Date.parse(t.modified) })); }
 function mergeTitles(list: RawTask[]) {
@@ -267,13 +271,34 @@ export async function startSession(task?: string) {
   resetTranscriptIndex();
   const now = Date.now();
   let n = 0;
-  const main = ((r.history ?? []) as unknown as HistoryItem[]).map((h) => {
+  // Rows as the chat showed them live: reasoning with its duration, tool rows with their summary and
+  // diff, and each subagent's card with the steps it took (its own stream).
+  const cards: Record<string, AgentCard> = {};
+  const subStreams: Record<string, TranscriptItem[]> = {};
+  const toItem = (h: HistoryItem): TranscriptItem | null => {
     const id = `h${++n}`;
-    if (h.kind === "user") return { id, at: now, kind: { type: "user" as const, text: h.text ?? "", attachments: [] } };
-    if (h.kind === "assistant") return { id, at: now, kind: { type: "assistant" as const, text: h.text ?? "" } };
-    return { id, at: now, kind: { type: "tool" as const, call: { id: h.id ?? id, name: h.name ?? "tool", summary: "", input: h.input ?? {}, output: h.output ?? "",
-      isError: h.isError === true, receipt: h.receipt, started: now, ended: now, live: [] } } };
-  });
+    switch (h.kind) {
+      case "user": return { id, at: now, kind: { type: "user", text: h.text ?? "", attachments: [] } };
+      case "assistant": return { id, at: now, kind: { type: "assistant", text: h.text ?? "" } };
+      case "thinking": {
+        const timed = typeof h.seconds === "number";
+        return { id, at: now, kind: { type: "thinking", text: h.text ?? "", started: now - (timed ? (h.seconds as number) * 1000 : 0), ended: now, untimed: !timed } };
+      }
+      case "tool": {
+        const input = h.input ?? {};
+        return { id, at: now, kind: { type: "tool", call: { id: h.id ?? id, name: h.name ?? "tool", summary: summary(input), input, output: h.output ?? "",
+          isError: h.isError === true, receipt: h.receipt, started: now, ended: now, live: [], ...(h.diff ? { diff: h.diff } : {}) } } };
+      }
+      case "agent": {
+        const aid = h.id ?? id;
+        cards[aid] = { id: aid, role: (h.role ?? "worker") as Role, parent: h.parent ?? "main", purpose: h.purpose ?? "", started: now - (h.seconds ?? 0) * 1000, ended: now };
+        subStreams[aid] = (h.steps ?? []).map(toItem).filter((x): x is TranscriptItem => x !== null);
+        return { id, at: now, kind: { type: "agent", id: aid } };
+      }
+      default: return null;
+    }
+  };
+  const main = ((r.history ?? []) as unknown as HistoryItem[]).map(toItem).filter((x): x is TranscriptItem => x !== null);
   const id = String(r.task);
   setState((s) => {
     let backgroundTasks = s.backgroundTasks.filter((t) => t !== id);
@@ -284,7 +309,7 @@ export async function startSession(task?: string) {
     }
     const title = typeof r.title === "string" ? { ...s.taskTitles, [id]: r.title } : s.taskTitles;
     return {
-      taskId: id, live: true, lastError: null, streams: { main }, cards: {}, jobs: {}, jobOrder: [], changedFiles: [], figures: [], queued: [],
+      taskId: id, live: true, lastError: null, streams: { ...subStreams, main }, cards, jobs: {}, jobOrder: [], changedFiles: [], figures: [], queued: [],
       running: r.running === true, runStarted: Date.now(), backgroundTasks, backgroundWorkspaces, taskTitles: title,
       askQueue: (r.asks ?? []) as unknown as AskRequest[],
       pendingAsk: ((r.asks ?? []) as unknown as AskRequest[])[0] ?? null,

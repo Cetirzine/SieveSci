@@ -1082,3 +1082,4 @@
 "Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …)." = "Агенты запускают команды и правят файлы, не спрашивая, и ничего не выполняется в песочнице: команда может изменить всё, что может ваша учётная запись. Действует только защитный список запретов (sudo, rm -rf /, принудительные push…).";
 "Turn On" = "Включить";
 "No sandbox on this system" = "В этой системе нет песочницы";
+"Thought" = "Обдумано";

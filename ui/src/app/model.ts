@@ -19,7 +19,7 @@ export interface JobNotification { job: string; agentId: string; kind: string; t
 export type ItemKind =
   | { type: "user"; text: string; attachments: string[] }
   | { type: "assistant"; text: string }
-  | { type: "thinking"; text: string; started: number; ended?: number }
+  | { type: "thinking"; text: string; started: number; ended?: number; untimed?: boolean }
   | { type: "tool"; call: ToolCallView }
   | { type: "agent"; id: string }
   | { type: "review"; kind: string; verdict: string; body: string }

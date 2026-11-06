@@ -1082,3 +1082,4 @@
 "Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …)." = "Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …).";
 "Turn On" = "Turn On";
 "No sandbox on this system" = "No sandbox on this system";
+"Thought" = "Thought";

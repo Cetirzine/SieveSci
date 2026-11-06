@@ -1082,3 +1082,4 @@
 "Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …)." = "Les agents exécutent des commandes et modifient des fichiers sans demander, et rien ne tourne dans le bac à sable : une commande peut modifier tout ce que votre compte utilisateur peut modifier. Seule la liste de refus de sécurité s’applique encore (sudo, rm -rf /, push forcés…).";
 "Turn On" = "Activer";
 "No sandbox on this system" = "Pas de bac à sable sur ce système";
+"Thought" = "A réfléchi";
