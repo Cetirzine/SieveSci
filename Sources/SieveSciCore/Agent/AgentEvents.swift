@@ -95,6 +95,12 @@ public enum PermissionDecision: Sendable, Equatable {
 public enum PermissionMode: String, Codable, Sendable, CaseIterable {
     case ask          // ask before edits and execution
     case acceptEdits  // auto-allow file edits inside the workspace, ask before execution
-    case auto         // allow everything not on the deny list
+    case auto         // allow everything not on the deny list; commands always run in the sandbox
     case plan         // read-only: research and planning only
+    case yolo         // allow everything not on the deny list, with no sandbox
+
+    /// The modes Shift+Tab cycles through. YOLO is chosen on purpose, never stepped into.
+    public static let cycle: [PermissionMode] = [.ask, .acceptEdits, .auto, .plan]
+    /// The order the mode menus list them in.
+    public static let menu: [PermissionMode] = [.ask, .acceptEdits, .auto, .yolo, .plan]
 }

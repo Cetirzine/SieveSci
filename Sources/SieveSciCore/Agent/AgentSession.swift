@@ -209,7 +209,7 @@ public final class AgentSession: @unchecked Sendable {
     var cliHost: CLIHost {
         let mode = services.permissions.mode
         let readOnly = mode == .plan || role == .checker || role == .verifier
-        return CLIHost(workspace: services.workspace, readOnly: readOnly, allowCommands: !readOnly && mode == .auto)
+        return CLIHost(workspace: services.workspace, readOnly: readOnly, allowCommands: !readOnly && (mode == .auto || mode == .yolo))
     }
 
     static func hasImages(_ m: Message) -> Bool {

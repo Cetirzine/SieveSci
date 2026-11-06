@@ -1,5 +1,5 @@
 // Shared building blocks, one per SwiftUI primitive in Sources/SieveSciApp/Theme.swift.
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes } from "react";
+import { forwardRef, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes } from "react";
 import { Symbol } from "./theme";
 
 /** BoxStyle: framed block; dashed when provisional, a leading colour rule, a label tab on the top edge. */
@@ -108,6 +108,50 @@ export function ActionRow({ title, detail, children }: { title: string; detail?:
 }
 
 /** A borderless dropdown (SwiftUI Menu with .borderlessButton): label button, item list below. */
+/** Keeps a popup inside the window. One anchored below or above its control opens toward the side with
+ *  more room; any popup shifts sideways off the edges; one taller than the room it has scrolls. A fixed
+ *  one (a right-click menu at the pointer) is moved back inside. */
+export function fitInWindow(el: HTMLElement | null, margin = 8) {
+  if (!el) return;
+  const st = el.style, vw = window.innerWidth, vh = window.innerHeight;
+  st.translate = ""; st.maxHeight = ""; st.overflowY = "";
+  if (getComputedStyle(el).position === "fixed") {
+    const r = el.getBoundingClientRect();
+    st.left = `${Math.max(margin, Math.min(r.left, vw - margin - r.width))}px`;
+    st.top = `${Math.max(margin, Math.min(r.top, vh - margin - r.height))}px`;
+    if (r.height > vh - 2 * margin) { st.maxHeight = `${vh - 2 * margin}px`; st.overflowY = "auto"; }
+    return;
+  }
+  st.top = ""; st.bottom = "";
+  const anchor = el.parentElement?.getBoundingClientRect();
+  let r = el.getBoundingClientRect();
+  if (anchor) {
+    const below = vh - margin - anchor.bottom, above = anchor.top - margin;
+    const down = r.top >= anchor.top + anchor.height / 2;
+    if (down && r.bottom > vh - margin && above > below) { st.top = "auto"; st.bottom = "calc(100% + 4px)"; }
+    else if (!down && r.top < margin && below > above) { st.bottom = "auto"; st.top = "calc(100% + 4px)"; }
+    r = el.getBoundingClientRect();
+    const room = r.top >= anchor.top + anchor.height / 2 ? vh - margin - r.top : r.bottom - margin;
+    if (r.height > room) { st.maxHeight = `${Math.max(80, room)}px`; st.overflowY = "auto"; r = el.getBoundingClientRect(); }
+  }
+  let dx = 0;
+  if (r.right > vw - margin) dx = vw - margin - r.right;
+  if (r.left + dx < margin) dx = margin - r.left;
+  if (dx) st.translate = `${Math.round(dx)}px 0`;
+}
+
+/** A popup (menu, popover, right-click menu) fitted inside the window when it opens and when the window resizes. */
+export const Popup = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(function Popup(props, outer) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const fit = () => fitInWindow(ref.current);
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, []);
+  return <div {...props} ref={(el) => { ref.current = el; if (typeof outer === "function") outer(el); else if (outer) outer.current = el; }} />;
+});
+
 export function Menu({ label, items, className = "", align = "left", title }:
   { label: ReactNode; items: { label: ReactNode; onSelect?: () => void; checked?: boolean; destructive?: boolean; divider?: boolean; section?: boolean }[]; className?: string; align?: "left" | "right"; title?: string }) {
   const [open, setOpen] = useState(false);
@@ -124,14 +168,14 @@ export function Menu({ label, items, className = "", align = "left", title }:
     <span ref={ref} className={`menu ${className}`}>
       <button type="button" className="menu-label" onClick={() => setOpen(!open)} title={title} aria-haspopup="menu" aria-expanded={open}>{label}</button>
       {open && (
-        <div className={`menu-list ${align}`} role="menu">
+        <Popup className={`menu-list ${align}`} role="menu">
           {items.map((it, i) => it.divider ? <div key={i} className="menu-divider" />
             : it.section ? <div key={i} className="menu-section">{it.label}</div> : (
             <button key={i} type="button" role="menuitem" className={`menu-item ${it.destructive ? "c-bad" : ""}`} onClick={() => { setOpen(false); it.onSelect?.(); }}>
               <span className="menu-check">{it.checked ? "✓" : ""}</span>{it.label}
             </button>
           ))}
-        </div>
+        </Popup>
       )}
     </span>
   );

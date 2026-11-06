@@ -194,7 +194,7 @@ public final class ToolContext: @unchecked Sendable {
     /// exists, even if the user turned the sandbox off: without it, its code could read the very
     /// files it is blinded to.
     public var sandboxMode: SandboxMode {
-        let m = services.sandboxMode
+        let m = services.sandboxMode.effective(for: services.permissions.mode)
         return isBlind && m == .off ? .workspaceWrite : m
     }
 

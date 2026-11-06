@@ -13,6 +13,16 @@ public enum SandboxMode: String, Codable, Sendable, CaseIterable {
     case off                    // no sandbox (Linux, or the user opted out)
     case workspaceWrite         // write workspace only; network allowed (default: research needs APIs)
     case workspaceWriteOffline  // write workspace only; no network (strict reproducibility)
+
+    /// What commands actually run under in a permission mode. Auto mode approves without asking only
+    /// because commands stay in the sandbox, so it never runs them unsandboxed; YOLO never sandboxes.
+    public func effective(for mode: PermissionMode) -> SandboxMode {
+        switch mode {
+        case .yolo: return .off
+        case .auto: return self == .off ? .workspaceWrite : self
+        default: return self
+        }
+    }
 }
 
 public enum Seatbelt {

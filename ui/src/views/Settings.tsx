@@ -897,7 +897,7 @@ function ResearchSettings() {
         <Caption>{L("Agents may question and rebut each other, but only with new evidence, without repetition and within this limit; unsettled points are marked contested and shown to you.")}</Caption>
       </Section>
       <Section label={L("Sandbox")}>
-        <Picker label={L("Commands the agents run")} value={c.sandboxMode} onChange={(v) => set({ sandboxMode: v })}
+        <Picker label={L("Commands the agents run")} value={A.effectiveSandbox(c)} onChange={(v) => void A.setSandbox(v)}
                 options={[{ value: "workspaceWrite", label: L("Write workspace only, network on") }, { value: "workspaceWriteOffline", label: L("Write workspace only, offline") }, { value: "off", label: L("No sandbox") }]} />
         <Caption>{L("The audit log, provenance and history (.sievesci, .git) are always write-protected from agent code.")}</Caption>
       </Section>

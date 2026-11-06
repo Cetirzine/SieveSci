@@ -6,7 +6,7 @@ import { L, L10n } from "../i18n";
 import { useApp, setState, getState } from "../app/model";
 import * as A from "../app/actions";
 import { inTauri } from "../serve";
-import { Menu, SectionLabel } from "../theme/primitives";
+import { Menu, Popup, SectionLabel } from "../theme/primitives";
 import { Symbol } from "../theme/theme";
 import { EffortMiniGauge, EffortSlider, GlitchLabel, effortName } from "../theme/effort";
 
@@ -139,8 +139,12 @@ function sandboxLabel(m: string) {
 }
 
 function SandboxMenu() {
-  const mode = useApp((s) => s.config.sandboxMode);
-  const set = (m: "workspaceWrite" | "workspaceWriteOffline" | "off") => void A.updateConfig({ sandboxMode: m });
+  const mode = useApp((s) => A.effectiveSandbox(s.config));
+  const available = useApp((s) => s.sandbox);
+  const set = (m: "workspaceWrite" | "workspaceWriteOffline" | "off") => void A.setSandbox(m);
+  if (!available) {
+    return <span className="sandbox-menu c-warn t-meta" title={L("Commands the agents run")}><Symbol name="exclamationmark.triangle" size={13} /> {L("No sandbox on this system")}</span>;
+  }
   return (
     <Menu className={`sandbox-menu ${mode === "off" ? "c-warn" : ""}`} title={L("Commands the agents run")}
           label={<><Symbol name={mode === "off" ? "exclamationmark.triangle" : "checkmark.shield"} size={13} /> {sandboxLabel(mode)} <Symbol name="chevron.down" size={10} strokeWidth={2.5} /></>}
@@ -172,10 +176,10 @@ function EffortMenu() {
         {effort === "max" ? <GlitchLabel text={effortName(effort)} font="11px var(--mono)" /> : <span className="t-mono-tiny secondary">{effortName(effort ?? null)}</span>}
       </button>
       {open && (
-        <div className="effort-popover appear-pop">
+        <Popup className="effort-popover appear-pop">
           <SectionLabel>{L("Reasoning effort")}</SectionLabel>
           <EffortSlider effort={effort} onChange={(e) => void A.updateConfig({ effort: e })} width={308} />
-        </div>
+        </Popup>
       )}
     </span>
   );
@@ -218,7 +222,7 @@ function ModelMenu() {
             ]} />
       <button type="button" className="plain" onClick={() => setShowUsage(!showUsage)}><ContextRing fill={meter.fill} /></button>
       {showUsage && (
-        <div className="usage-popover">
+        <Popup className="usage-popover">
           <SectionLabel>{L("Context")}</SectionLabel>
           <div className="t-mono-small">{meter.lastPromptTokens.toLocaleString()} / {meter.contextWindow.toLocaleString()} {L("tokens")} ({Math.round(meter.fill * 100)}%)</div>
           <div className="usage-bar"><i style={{ width: `${Math.round(meter.fill * 100)}%`, background: meter.fill > 0.85 ? "var(--bad)" : "var(--accent)" }} /></div>
@@ -231,7 +235,7 @@ function ModelMenu() {
             <span>{L("Output")}</span><span>{meter.session.output.toLocaleString()}</span>
             <span>{L("Cache hit rate")}</span><span className={meter.cacheHitRate > 0.7 ? "c-ok" : ""}>{prompt ? (meter.cacheHitRate * 100).toFixed(1) : "0.0"}%</span>
           </div>
-        </div>
+        </Popup>
       )}
     </span>
   );

@@ -115,6 +115,8 @@ public final class ServeServer: @unchecked Sendable {
             #else
             r["platform"] = "linux"
             #endif
+            // Whether commands can run sandboxed here (Seatbelt; none on Windows and Linux yet).
+            r["sandbox"] = .bool(Seatbelt.available)
             return .object(r)
         case "language.set":
             // The interface language, shared with the macOS app and the CLI; texts serve sends

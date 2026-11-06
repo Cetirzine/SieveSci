@@ -85,7 +85,7 @@ export interface Config {
   providers: ProviderProfile[];
   roles: RoleAssignment;
   webSearch: WebSearchConfig;
-  permissionMode: "ask" | "acceptEdits" | "auto" | "plan";
+  permissionMode: "ask" | "acceptEdits" | "auto" | "plan" | "yolo";
   retention: string;
   effort?: string | null;
   contactEmail: string;
@@ -182,6 +182,8 @@ export interface AppState {
   accent: "blue" | "violet" | "green" | "orange" | "graphite";
   /** Where serve runs, for wording such as where keys are kept ("macos" until initialize says). */
   platform: "macos" | "windows" | "linux";
+  /** Commands can run sandboxed on this system (serve's `initialize`; Seatbelt on macOS only). */
+  sandbox: boolean;
   /** A task is open in serve (the app's `bench != nil`). */
   live: boolean;
   settingsPane: "general" | "providers" | "models" | "search" | "research" | "memory" | "schedules";
@@ -204,6 +206,7 @@ export const initialState: AppState = {
   ideas: [], brainstorm: null, panelTick: 0, pendingProposals: 0, mathVersion: 0,
   keys: {}, usable: [], languageChoice: "system", live: false, settingsPane: "general", providerInfo: {}, quotas: {}, accent: "blue",
   platform: typeof navigator !== "undefined" && /Win/.test(navigator.platform) ? "windows" : typeof navigator !== "undefined" && /Linux/.test(navigator.platform) ? "linux" : "macos",
+  sandbox: typeof navigator === "undefined" || /Mac/.test(navigator.platform),
 };
 
 // MARK: Store

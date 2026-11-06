@@ -79,7 +79,7 @@ public final class PermissionPolicy: @unchecked Sendable {
         if effect == .readOnly { return .allow }
         switch mode {
         case .plan: return .deny("plan mode is read-only; ask the user to leave plan mode to run or edit")
-        case .auto: return .allow
+        case .auto, .yolo: return .allow
         case .acceptEdits: if effect == .writesFiles { return .allow }
         case .ask: break
         }

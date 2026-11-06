@@ -7,7 +7,7 @@ import { L, L10n } from "../i18n";
 import { useApp, getState, setState, onPlatform, type AgentCard, type FileDiff, type InspectorTab, type JobState } from "../app/model";
 import * as A from "../app/actions";
 import type { JsonObject } from "../serve";
-import { ActionButton, Box, Chip, EqualWidthButtons, Menu, SectionLabel, Segmented } from "../theme/primitives";
+import { ActionButton, Box, Chip, EqualWidthButtons, Menu, Popup, SectionLabel, Segmented } from "../theme/primitives";
 import { Symbol, agentName, toolIcon, toolTitle } from "../theme/theme";
 import { RoleGhostBadge } from "../theme/brand";
 import { DiffView, VerdictChip } from "./ChatView";
@@ -545,11 +545,11 @@ function FigureTile({ path }: { path: string }) {
       <div className="figure-mat">{src ? <img src={src} alt={base(path)} /> : <Symbol name="doc.richtext" size={28} className="secondary" />}</div>
       <span className="t-caption secondary clip-middle">{base(path)}</span>
       {menu && (
-        <div className="menu-list left context">
+        <Popup className="menu-list left context">
           <button type="button" className="menu-item" onClick={() => A.systemOpen({ path })}>{L("Open")}</button>
           <button type="button" className="menu-item" onClick={() => A.systemOpen({ path, reveal: true })}>{revealLabel()}</button>
           <button type="button" className="menu-item" onClick={() => { A.setMainTab("chat"); void A.send("/review " + L("figure") + " " + base(path)); }}>{L("Ask the checker to review this figure")}</button>
-        </div>
+        </Popup>
       )}
     </div>
   );
@@ -612,11 +612,11 @@ function FolderRows({ path, depth, selected, onSelect, changed, reload }: { path
           {changed.has(e.path) && <i className="changed-dot" title={L("Changed in this task")} />}
         </button>
         {menu === e.path && (
-          <div className="menu-list left context">
+          <Popup className="menu-list left context">
             <button type="button" className="menu-item" onClick={() => A.systemOpen({ path: absPath(e.path) })}>{L("Open")}</button>
             <button type="button" className="menu-item" onClick={() => A.systemOpen({ path: absPath(e.path), reveal: true })}>{revealLabel()}</button>
             <button type="button" className="menu-item" onClick={() => setState({ draft: "@" + e.path + " ", mainTab: "chat" })}>{L("Mention in prompt")}</button>
-          </div>
+          </Popup>
         )}
         {e.isDir && open[e.path] && <FolderRows path={e.path} depth={depth + 1} selected={selected} onSelect={onSelect} changed={changed} reload={reload} />}
       </div>

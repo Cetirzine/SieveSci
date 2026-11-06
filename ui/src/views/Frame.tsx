@@ -2,9 +2,9 @@
 // TaskRow, StageChip, NeedsYouList, MainArea, TopBar, ModeMenu, JobsMenu, ResearchStatus.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { L, L10n, resolvedLanguage } from "../i18n";
-import { useApp, titleOf, isFolderOpen, mainTabs, onPlatform, type MainTab, type AppState, type Attention } from "../app/model";
+import { useApp, getState, titleOf, isFolderOpen, mainTabs, onPlatform, type MainTab, type AppState, type Attention } from "../app/model";
 import * as A from "../app/actions";
-import { ActionButton, Box, Chip, EqualWidthButtons, IconButton, Menu, SectionLabel, SpecField } from "../theme/primitives";
+import { ActionButton, Box, Chip, EqualWidthButtons, IconButton, Menu, Popup, SectionLabel, SpecField } from "../theme/primitives";
 import { DotProgress } from "../theme/dots";
 import { banner, dismissBanner, download, onUpdate, restart, updateState, type UpdateState } from "../app/updates";
 import { BrandLogo, RoleGhostBadge } from "../theme/brand";
@@ -215,16 +215,14 @@ function ContextMenu({ at, items, close }: { at: { x: number; y: number }; items
     document.addEventListener("keydown", esc);
     return () => { document.removeEventListener("mousedown", off); document.removeEventListener("keydown", esc); };
   }, [close]);
-  // Kept inside the window.
-  const x = Math.min(at.x, window.innerWidth - 240), y = Math.min(at.y, window.innerHeight - 32 * items.length - 16);
   return (
-    <div ref={ref} className="menu-list context-menu" role="menu" style={{ left: x, top: y }}>
+    <Popup ref={ref} className="menu-list context-menu" role="menu" style={{ left: at.x, top: at.y }}>
       {items.map((it, i) => it === null ? <div key={i} className="menu-divider" /> : (
         <button key={i} type="button" role="menuitem" className={`menu-item ${it.destructive ? "c-bad" : ""}`} onClick={() => { close(); it.run(); }}>
           <span className="menu-check" />{it.label}
         </button>
       ))}
-    </div>
+    </Popup>
   );
 }
 
@@ -352,17 +350,21 @@ export function modeStyle(mode: AppState["config"]["permissionMode"]): { icon: s
   switch (mode) {
     case "ask": return { icon: "hand.raised", text: L("ask before edits & code"), tint: "var(--secondary)" };
     case "acceptEdits": return { icon: "pencil", text: L("accept edits on"), tint: "var(--accent)" };
-    case "auto": return { icon: "bolt", text: L("auto mode on"), tint: "var(--warn)" };
+    case "auto": return { icon: "bolt", text: getState().sandbox ? L("auto mode on · sandboxed") : L("auto mode on"), tint: "var(--warn)" };
+    case "yolo": return { icon: "exclamationmark.triangle", text: L("YOLO mode on · no sandbox"), tint: "var(--bad)" };
     case "plan": return { icon: "pause.circle", text: L("plan mode on"), tint: "var(--info)" };
   }
 }
 
 function ModeMenu() {
   const mode = useApp((s) => s.config.permissionMode);
+  // Without a sandbox on this system auto mode already runs unsandboxed, so YOLO adds nothing there.
+  const sandbox = useApp((s) => s.sandbox);
   const m = modeStyle(mode);
+  const modes = (["ask", "acceptEdits", "auto", "yolo", "plan"] as const).filter((x) => x !== "yolo" || sandbox || mode === "yolo");
   return (
-    <Menu className="mode-menu" title={L("(⇧⇥ to cycle)")} label={<><Symbol name={m.icon} size={12} /> {m.text}</>}
-          items={(["ask", "acceptEdits", "auto", "plan"] as const).map((x) => ({ label: <><Symbol name={modeStyle(x).icon} size={12} /> {modeStyle(x).text}</>, onSelect: () => A.setPermissionMode(x), checked: x === mode }))} />
+    <Menu className={`mode-menu ${mode === "yolo" ? "c-bad" : ""}`} title={L("(⇧⇥ to cycle)")} label={<><Symbol name={m.icon} size={12} /> {m.text}</>}
+          items={modes.map((x) => ({ label: <><Symbol name={modeStyle(x).icon} size={12} /> {modeStyle(x).text}</>, onSelect: () => void A.setPermissionMode(x), checked: x === mode }))} />
   );
 }
 

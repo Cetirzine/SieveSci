@@ -337,7 +337,28 @@ export function setFolder(path: string, open: boolean) {
   if (open && path !== s.workspace) void loadFolderTasks(path);
 }
 
-export function setPermissionMode(mode: Config["permissionMode"]) { void updateConfig({ permissionMode: mode }); }
+/** YOLO mode is asked about first: nothing is sandboxed and nothing is asked. */
+export async function setPermissionMode(mode: Config["permissionMode"]) {
+  if (mode === "yolo" && getState().config.permissionMode !== "yolo") {
+    const ok = await confirmDialog(L("Turn on YOLO mode?"),
+      L("Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …)."),
+      L("Turn On"), L("Cancel"), true);
+    if (!ok) return;
+  }
+  void updateConfig({ permissionMode: mode });
+}
+
+/** What commands actually run under (SandboxMode.effective): auto mode always sandboxes, YOLO never does. */
+export function effectiveSandbox(c: Pick<Config, "permissionMode" | "sandboxMode">): Config["sandboxMode"] {
+  return c.permissionMode === "yolo" ? "off" : c.permissionMode === "auto" && c.sandboxMode === "off" ? "workspaceWrite" : c.sandboxMode;
+}
+
+/** The sandbox choice, kept consistent with the mode: no sandbox in auto mode is YOLO, a sandbox in YOLO is auto. */
+export async function setSandbox(m: Config["sandboxMode"]) {
+  const mode = getState().config.permissionMode;
+  if (m === "off" && mode === "auto") { await setPermissionMode("yolo"); return; }
+  void updateConfig(mode === "yolo" && m !== "off" ? { permissionMode: "auto", sandboxMode: m } : { sandboxMode: m });
+}
 
 // MARK: Turns
 
