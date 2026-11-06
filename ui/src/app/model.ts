@@ -334,5 +334,7 @@ function handle(s: AppState, e: JsonObject) {
     case "permissionRequested": s.pendingPermission = s.pendingPermission ?? (e.request as unknown as PermissionAsk); break;
     case "askRequested": { const r = e.request as unknown as AskRequest; if (!s.pendingAsk || s.pendingAsk.id === r.id) s.pendingAsk = r; break; }
     case "askResolved": if (s.pendingAsk?.id === str("id")) s.pendingAsk = null; break;
+    // A generated title replaces the row's text in place (names given by hand were skipped by the core).
+    case "titleChanged": s.taskTitles = { ...s.taskTitles, [str("task")]: str("title") }; break;
   }
 }

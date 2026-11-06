@@ -114,7 +114,7 @@ public final class SessionStore: @unchecked Sendable {
     public static func setAutoTitle(_ title: String, dir: URL) {
         let f = dir.appendingPathComponent(autoTitleFile)
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if t.isEmpty { try? FileManager.default.removeItem(at: f) } else { try? t.write(to: f, atomically: true, encoding: .utf8) }
+        if t.isEmpty { try? FileManager.default.removeItem(at: f) } else { try? t.writeReliably(to: f) }
     }
 
     /// A task's title: the user's own name for it, else the generated one, else the first thing the

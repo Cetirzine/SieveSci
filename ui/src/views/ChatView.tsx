@@ -161,7 +161,7 @@ function EmptyChatHero() {
   const spent = useApp((s) => s.meter.session.input + s.meter.session.cacheRead + s.meter.session.cacheWrite > 0);
   return (
     <div className="empty-hero">
-      <div className="empty-hero-field"><SieveField /></div>
+      <div className="empty-hero-field"><SieveField fadeMid={0.2} /></div>
       <div className="empty-hero-column appear-pop">
         <div className="welcome-brand">
           <DotMatrixText text="SieveSci" rows={18} dot={4.5} gap={1.5} />

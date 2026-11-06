@@ -115,6 +115,7 @@ public enum Wire {
         case .askResolved(let id, let o): return ev("askResolved", ["id": .string(id), "outcome": ask(o)])
         case .brainstormChanged(let s): return ev("brainstormChanged", ["state": value(s)])
         case .ideasChanged(let i): return ev("ideasChanged", ["ideas": value(i)])
+        case .titleChanged(let task, let title): return ev("titleChanged", ["task": .string(task), "title": .string(title)])
         }
     }
 }

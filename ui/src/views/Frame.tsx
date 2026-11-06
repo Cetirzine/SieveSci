@@ -198,9 +198,13 @@ function tabTitle(t: MainTab): string {
 function TopBar() {
   const sidebar = useApp((s) => s.sidebarVisible);
   const tab = useApp((s) => s.mainTab);
+  // The same title as the sidebar row: the user's name for it, the generated title, or (until one
+  // arrives) the first question.
   const title = useApp((s) => {
+    const t = s.taskTitles[s.taskId];
+    if (t) return t;
     for (const it of s.streams.main ?? []) if (it.kind.type === "user") return it.kind.text.slice(0, 60);
-    return s.taskTitles[s.taskId] ?? L("New task");
+    return L("New task");
   });
   const badge = useApp((s) => s.contested.length + s.claims.filter((c) => c.status === "verifying").length);
   const ref = useRef<HTMLDivElement>(null);

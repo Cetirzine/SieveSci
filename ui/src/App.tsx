@@ -8,6 +8,7 @@ import * as A from "./app/actions";
 import { demoScene, loadDemo } from "./app/demo";
 import { RootView } from "./views/Frame";
 import { WelcomeView } from "./views/Welcome";
+import { ChatView } from "./views/ChatView";
 import { applyAppearance } from "./theme/theme";
 
 const stored = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -64,7 +65,7 @@ export default function App() {
   return (
     <RootView
       welcome={<WelcomeView onOpenWorkspace={openWorkspace} />}
-      chat={<div className="panel-scroll"><div className="panel-column secondary">{L("Chat")}</div></div>}
+      chat={<ChatView />}
       panel={(t) => <div className="secondary">{t}</div>}
       settings={<div className="panel-column">{L("Settings")}</div>}
       inspector={<div className="panel-column secondary">{L("Research panel")}</div>}

@@ -1,7 +1,7 @@
 // Dot-matrix graphics, ported from Sources/SieveSciApp/DotMatrix.swift (same maths, same timings):
 // text sampled into square dots that sift in and get a scan band, an activity lamp, the sieve
 // field behind empty states, and a dot progress bar. Still under prefers-reduced-motion.
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { reducedMotion, useThemeColor } from "./theme";
 
 interface Bitmap { columns: number; rows: number; on: Uint8Array }
@@ -32,28 +32,24 @@ export function dotBitmap(text: string, rows: number): Bitmap {
   return b;
 }
 
-function useCanvasLoop(draw: (ctx: CanvasRenderingContext2D, t: number, w: number, h: number) => void, deps: unknown[], fps = 60) {
+/** Redraws a canvas each frame for `playTime` seconds, then stops on its final frame. */
+function useCanvasPlay(draw: (ctx: CanvasRenderingContext2D, t: number) => void, deps: unknown[], playTime: number) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
     const start = performance.now();
-    let frame = 0, last = 0;
+    let frame = 0;
     const tick = (now: number) => {
-      if (now - last >= 1000 / fps - 1) {
-        last = now;
-        const dpr = window.devicePixelRatio || 1;
-        const w = canvas.clientWidth, h = canvas.clientHeight;
-        if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
-          canvas.width = Math.round(w * dpr);
-          canvas.height = Math.round(h * dpr);
-        }
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.clearRect(0, 0, w, h);
-        draw(ctx, reducedMotion() ? 99 : (now - start) / 1000, w, h);
-      }
-      if (!reducedMotion()) frame = requestAnimationFrame(tick);
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      const t = reducedMotion() ? 99 : (now - start) / 1000;
+      draw(ctx, t);
+      if (t < playTime) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
@@ -62,13 +58,16 @@ function useCanvasLoop(draw: (ctx: CanvasRenderingContext2D, t: number, w: numbe
   return ref;
 }
 
-/** A string drawn in dots that sift in (top rows first), then a diagonal scan band every 5 s. */
+/** Landing (~1.2 s) plus one full sweep of the scan band (5 s); the wordmark stays still after. */
+const PLAY_TIME = 6.2;
+
+/** A string drawn in dots that sift in (top rows first), then one diagonal scan band, then still. */
 export function DotMatrixText({ text, rows = 22, dot = 4, gap = 1.5, color = "--ink", accent = "--accent" }:
   { text: string; rows?: number; dot?: number; gap?: number; color?: string; accent?: string }) {
   const bm = useMemo(() => dotBitmap(text, rows), [text, rows]);
   const pitch = dot + gap;
   const ink = useThemeColor(color), acc = useThemeColor(accent);
-  const ref = useCanvasLoop((ctx, t) => {
+  const ref = useCanvasPlay((ctx, t) => {
     for (let y = 0; y < bm.rows; y++) {
       for (let x = 0; x < bm.columns; x++) {
         if (!bm.on[y * bm.columns + x]) continue;
@@ -79,56 +78,79 @@ export function DotMatrixText({ text, rows = 22, dot = 4, gap = 1.5, color = "--
         const eased = 1 - Math.pow(1 - p, 3);
         const fall = (1 - eased) * pitch * 3;
         const phase = ((t - 1.2) % 5) / 5;
-        const band = t > 1.2 ? Math.max(0, 1 - Math.abs((x + Math.floor(y / 2)) / (bm.columns + bm.rows) - phase) * 14) : 0;
+        const band = t > 1.2 && t < PLAY_TIME ? Math.max(0, 1 - Math.abs((x + Math.floor(y / 2)) / (bm.columns + bm.rows) - phase) * 14) : 0;
         ctx.globalAlpha = band > 0.05 ? 0.55 + 0.45 * band : eased;
         ctx.fillStyle = band > 0.05 ? acc : ink;
         ctx.fillRect(x * pitch, y * pitch - fall, dot, dot);
       }
     }
     ctx.globalAlpha = 1;
-  }, [bm, pitch, dot, ink, acc]);
+  }, [bm, pitch, dot, ink, acc], PLAY_TIME);
   return <canvas ref={ref} role="img" aria-label={text} style={{ width: bm.columns * pitch, height: bm.rows * pitch, display: "block" }} />;
 }
 
-/** A small grid that ripples from the centre while an agent works (20 fps). */
-export function DotActivity({ size = 5, dot = 3, gap = 1.5, color = "--accent" }: { size?: number; dot?: number; gap?: number; color?: string }) {
-  const pitch = dot + gap;
-  const c = useThemeColor(color);
-  const ref = useCanvasLoop((ctx) => {
-    const t = performance.now() / 1000;
-    const mid = (size - 1) / 2;
-    ctx.fillStyle = c;
-    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-      const d = Math.hypot(x - mid, y - mid);
-      const wave = reducedMotion() ? 0.5 : (Math.sin(d * 1.6 - t * 5) + 1) / 2;
-      ctx.globalAlpha = 0.15 + 0.85 * wave * wave;
-      ctx.fillRect(x * pitch, y * pitch, dot, dot);
-    }
-    ctx.globalAlpha = 1;
-  }, [size, pitch, dot, c], 20);
-  return <canvas ref={ref} aria-hidden style={{ width: size * pitch - gap, height: size * pitch - gap, display: "inline-block", flex: "none" }} />;
+/** A small grid that ripples from the centre while an agent works. Each dot plays its own sampled
+ *  opacity curve as a CSS animation (as the Swift version uses Core Animation): no per-frame work. */
+export function DotActivity({ size = 5, dot = 3, gap = 1.5, color = "var(--accent)" }: { size?: number; dot?: number; gap?: number; color?: string }) {
+  const period = (2 * Math.PI) / 5;
+  const mid = (size - 1) / 2;
+  const dots = useMemo(() => Array.from({ length: size * size }, (_, i) => {
+    const x = i % size, y = Math.floor(i / size);
+    const d = Math.hypot(x - mid, y - mid);
+    // sin(d·1.6 − t·5) is the centre wave shifted in time by d·1.6/5.
+    return -((d * 1.6) / 5) % period;
+  }), [size, mid, period]);
+  return (
+    <span className="dot-activity" aria-hidden style={{ gridTemplateColumns: `repeat(${size}, ${dot}px)`, gap, ["--period" as string]: `${period}s` }}>
+      {dots.map((delay, i) => <i key={i} style={{ width: dot, height: dot, background: color, animationDelay: `${delay}s` }} />)}
+    </span>
+  );
 }
 
-/** Dots that thin out downward, like grains through a sieve, flickering slowly (empty states). */
-export function SieveField({ pitch = 12 }: { pitch?: number }) {
+/** Dots that thin out downward, like grains through a sieve. Six phases of the field are drawn once
+ *  and cross-faded by CSS (SieveField in LayerAnimations.swift), so an idle window does no work. */
+export function SieveField({ pitch = 12, fadeMid = 0.25 }: { pitch?: number; fadeMid?: number }) {
   const ink = useThemeColor("--ink");
-  const ref = useCanvasLoop((ctx, _t, w, h) => {
-    const t = reducedMotion() ? 0 : performance.now() / 1000;
-    const cols = Math.floor(w / pitch) + 1, rows = Math.floor(h / pitch) + 1;
-    ctx.fillStyle = ink;
-    for (let y = 0; y < rows; y++) {
-      const density = 1 - y / Math.max(rows, 1);
-      for (let x = 0; x < cols; x++) {
-        const hsh = ((Math.imul(x, 2_654_435_761 | 0) ^ Math.imul(y, 40_503)) & 4095) / 4095;
-        if (hsh >= density * 0.85) continue;
-        const flicker = (Math.sin(t * 0.8 + hsh * 12) + 1) / 2;
-        ctx.globalAlpha = 0.10 + 0.22 * flicker * density;
-        ctx.fillRect(x * pitch, y * pitch, 2, 2);
+  const wrap = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setSize({ w: Math.ceil(el.clientWidth), h: Math.ceil(el.clientHeight) }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const speed = 0.8, period = (2 * Math.PI) / speed;
+  const phases = reducedMotion() ? 1 : 6;
+  const frames = useMemo(() => {
+    if (!size.w || !size.h) return [] as string[];
+    const cols = Math.floor(size.w / pitch) + 1, rows = Math.floor(size.h / pitch) + 1;
+    return Array.from({ length: phases }, (_, k) => {
+      const t = (period * k) / phases;
+      const c = document.createElement("canvas");
+      c.width = size.w; c.height = size.h;
+      const ctx = c.getContext("2d")!;
+      ctx.fillStyle = ink;
+      for (let y = 0; y < rows; y++) {
+        const density = 1 - y / Math.max(rows, 1);
+        const fy = (y * pitch) / Math.max(size.h, 1);
+        const fade = fy < 0.5 ? 1 - (1 - fadeMid) * fy * 2 : fadeMid * (1 - (fy - 0.5) * 2);
+        for (let x = 0; x < cols; x++) {
+          const hh = ((Math.imul(x, 2_654_435_761 | 0) ^ Math.imul(y, 40_503)) & 4095) / 4095;
+          if (hh >= density * 0.85) continue;
+          const flicker = (Math.sin(t * speed + hh * 12) + 1) / 2;
+          ctx.globalAlpha = (0.10 + 0.22 * flicker * density) * Math.max(0, fade);
+          ctx.fillRect(x * pitch, y * pitch, 2, 2);
+        }
       }
-    }
-    ctx.globalAlpha = 1;
-  }, [pitch, ink], 15);
-  return <canvas ref={ref} aria-hidden className="sieve-field" />;
+      return c.toDataURL();
+    });
+  }, [size.w, size.h, pitch, fadeMid, ink, phases, period]);
+  return (
+    <div ref={wrap} className="sieve-field" aria-hidden style={{ ["--period" as string]: `${period}s`, ["--phases" as string]: phases }}>
+      {frames.map((src, k) => <img key={k} src={src} alt="" style={{ animationDelay: `${(-period * k) / phases}s`, opacity: phases === 1 ? 1 : undefined }} />)}
+    </div>
+  );
 }
 
 /** Progress as square dots filling from the left. */

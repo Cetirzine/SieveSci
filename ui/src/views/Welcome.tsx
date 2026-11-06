@@ -14,7 +14,7 @@ export function WelcomeView({ onOpenWorkspace }: { onOpenWorkspace: () => void }
   const sidebar = useApp((s) => s.sidebarVisible);
   return (
     <div className="welcome-view">
-      <div className="welcome-field"><SieveField /></div>
+      <div className="welcome-field"><SieveField fadeMid={0.25} /></div>
       {!sidebar && <span className="welcome-show-sidebar"><IconButton symbol="sidebar.left" label={L("Show sidebar")} onClick={() => A.setSidebarVisible(true)} /></span>}
       <div className="welcome-column appear-pop">
         <div className="welcome-hero">

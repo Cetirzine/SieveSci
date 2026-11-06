@@ -58,7 +58,8 @@ No `id`; the front end does not answer them.
   `literature {agentId, action, key, title, detail}`, `fileChanged {agentId, path, diff}`,
   `committed {hash, subject, files}`, `jobOutput {job, lines}`, `jobFinished {job, exitCode, seconds}`,
   `jobNotification {notification}`, `deliberation {thread, from, to, kind, text}`,
-  `askRequested {request}`, `askResolved {id, outcome}`, `brainstormChanged {state}`, `ideasChanged {ideas}`.
+  `askRequested {request}`, `askResolved {id, outcome}`, `brainstormChanged {state}`, `ideasChanged {ideas}`,
+  `titleChanged {task, title}` (a generated conversation title).
   Text arrives as deltas: append `textDelta` for one `agentId` until a tool, a `thinkingDelta`
   or `turnFinished` for it. `agentId` `main` is the lead agent; others are checkers, verifiers, workers.
 - `output {text}` — the direct result of a slash command.
