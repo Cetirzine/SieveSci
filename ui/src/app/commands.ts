@@ -14,7 +14,8 @@ export const commands = {
   newTask: () => void A.startSession(),
   openWorkspace: () => void A.chooseWorkspace(),
   interrupt: () => void A.stop(),
-  cycleMode: () => { const m = getState().config.permissionMode; A.setPermissionMode(modes[(modes.indexOf(m) + 1) % modes.length]); },
+  // YOLO is chosen on purpose, never stepped into (PermissionMode.cycle); from YOLO the cycle starts over.
+  cycleMode: () => { const m = getState().config.permissionMode; void A.setPermissionMode(modes[(modes.indexOf(m as (typeof modes)[number]) + 1) % modes.length]); },
   fork: () => { const id = getState().taskId; if (id) void A.forkTask(id); },
   review: () => void A.send("/review"),
   report: () => void A.send("/report"),

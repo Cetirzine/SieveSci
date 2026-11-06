@@ -500,6 +500,8 @@ final class AppModel: ObservableObject {
 
     func interrupt() {
         bench?.interrupt()
+        // An agent waiting for an approval would keep the turn alive: Stop answers it.
+        if permissionContinuation != nil { answerPermission(.deny("stopped by the user")) }
         running = false
     }
 

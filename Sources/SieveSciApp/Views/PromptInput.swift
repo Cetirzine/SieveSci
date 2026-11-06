@@ -260,6 +260,7 @@ enum PermissionModeChip {
         case .acceptEdits: return ("pencil", L("accept edits on"), Theme.accent)
         case .auto: return ("bolt", L("auto mode on"), Theme.warn)
         case .plan: return ("pause.circle", L("plan mode on"), Theme.info)
+        case .yolo: return ("exclamationmark.triangle", L("YOLO mode on · no sandbox"), Theme.bad)
         }
     }
 }

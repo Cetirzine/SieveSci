@@ -476,8 +476,8 @@ public final class AgentSession: @unchecked Sendable {
             let req = PermissionRequest(id: use.id, tool: t.name, summary: (who + PermissionPolicy.summary(t.name, use.input)).truncated(500),
                                         input: use.input, effect: effect,
                                         rememberPattern: PermissionPolicy.rememberPattern(tool: t.name, input: use.input))
-            services.emit(.permissionRequested(req))
-            let d = await services.askUser(req)
+            if cancelled { return "Stopped by the user." }
+            let d = await services.askUser(req, cancelled: { [weak self] in self?.cancelled ?? true })
             services.log("permission", actor: "user", ["tool": .string(t.name), "agent": .string(id), "decision": .string("\(d)")])
             switch d {
             case .allowOnce: return nil

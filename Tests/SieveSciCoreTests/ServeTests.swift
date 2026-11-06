@@ -238,6 +238,39 @@ private final class SlowProvider: LLMProvider, @unchecked Sendable {
         try await c.call("shutdown")
     }
 
+    @Test func aWaitingApprovalSurvivesASwitchAndStopAnswersIt() async throws {
+        let ws = try workspace()
+        let c = Client(workspace: ws) { ToolThenTextProvider(command: "echo stage-ok") }
+        let first = try #require(try await c.call("task.open").str("task"))
+        _ = try await c.call("task.send", ["text": "run it"])
+        let ask = try #require(await c.waitFor { $0.str("type") == "permissionRequested" })
+        let id = try #require(ask["request"]?.str("id"))
+        // Another task is shown, then this one again: the approval it waits for comes back with it.
+        _ = try await c.call("task.open")
+        let again = try await c.call("task.open", ["id": .string(first)])
+        #expect(again["permission"]?.str("id") == id, "\(again["permission"] ?? .null)")
+        // Stop answers it, so the turn ends instead of waiting for a prompt no one sees.
+        _ = try await c.call("task.stop")
+        #expect(await c.waitFor { $0.str("type") == "turnFinished" && $0.str("task") == first && $0.str("agentId") == "main" } != nil)
+        try await c.call("shutdown")
+    }
+
+    @Test func openingATaskTwiceAtOnceStartsItOnce() async throws {
+        let ws = try workspace()
+        let c = Client(workspace: ws) { ScriptedProvider(replies: ["hi"]) }
+        let id = try #require(try await c.call("task.open").str("task"))
+        _ = try await c.call("task.open")   // another task: the first, idle, is released
+        async let a = c.call("task.open", ["id": .string(id)])
+        async let b = c.call("task.open", ["id": .string(id)])
+        let (ra, rb) = try await (a, b)
+        #expect(ra.str("task") == id && rb.str("task") == id)
+        let audit = ws.appendingPathComponent(".sievesci/tasks/\(id)/audit.jsonl")
+        let kinds = try String(contentsOf: audit, encoding: .utf8).split(separator: "\n")
+            .compactMap { try? JSONDecoder().decode(JSON.self, from: Data($0.utf8)).str("kind") }
+        #expect(kinds.filter { $0 == "session_start" }.count == 2, "started when first opened and once when reopened: \(kinds)")
+        try await c.call("shutdown")
+    }
+
     @Test func aRunningTaskContinuesInTheBackground() async throws {
         let ws = try workspace()
         let c = Client(workspace: ws) { SlowProvider() }

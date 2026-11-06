@@ -2,7 +2,7 @@
 // it (docs/SERVE_PROTOCOL.md); in demo scenes they only change local state.
 import { inTauri, type ServeClient, type JsonObject } from "../serve";
 import { L, L10n, loadLanguage, type Language } from "../i18n";
-import { getState, setState, resetTranscriptIndex, titleOf, type AppState, type MainTab, type AskRequest, type Config, type ContextMeter, type ProviderInfo, type ProviderProfile, type Quota, type TaskEntry } from "./model";
+import { getState, setState, resetTranscriptIndex, titleOf, type AppState, type MainTab, type AskRequest, type Config, type ContextMeter, type PermissionAsk, type ProviderInfo, type ProviderProfile, type Quota, type TaskEntry } from "./model";
 
 let client: ServeClient | null = null;
 export function attach(c: ServeClient | null) { client = c; }
@@ -171,7 +171,14 @@ export async function openWorkspace(path: string, task?: string, newTask = false
   }
   const r = await call<{ workspace: string; tasks: RawTask[] }>("workspace.open", { path });
   if (!r) return;
-  setState((st) => ({ workspace: r.workspace, config: { ...st.config, recentWorkspaces: [r.workspace, ...st.config.recentWorkspaces.filter((p) => p !== r.workspace)].slice(0, 12) } }));
+  // Another folder: its task replaces the conversation shown, never shown under the old one's. A task
+  // still running there carries on in the background (as startSession records when it switches).
+  const other = r.workspace !== s.workspace;
+  const leaving = getState();
+  const moved = other && leaving.running && leaving.taskId && leaving.workspace
+    ? { backgroundTasks: [...leaving.backgroundTasks.filter((t) => t !== leaving.taskId), leaving.taskId],
+        backgroundWorkspaces: { ...leaving.backgroundWorkspaces, [leaving.taskId]: leaving.workspace } } : {};
+  setState((st) => ({ ...(other ? { ...moved, taskId: "", live: false, streams: { main: [] }, cards: {}, running: false, pendingPermission: null, pendingAsk: null } : {}), workspace: r.workspace, config: { ...st.config, recentWorkspaces: [r.workspace, ...st.config.recentWorkspaces.filter((p) => p !== r.workspace)].slice(0, 12) } }));
   applyTasks(r.tasks);
   await startSession(newTask ? undefined : (task ?? r.tasks[0]?.id));
   void loadCommands();
@@ -220,12 +227,20 @@ export function refreshOpenFolders() {
 
 /** model.startSession(task:): opens a task (a new one without an id) and shows its saved conversation.
  *  A turn still running in the task being left keeps going in the background. */
+/** The task being opened ("" for a new one): a second click while it opens is ignored, so a slow
+ *  open never starts the same task twice or two new tasks. */
+let opening: string | null = null;
+
 export async function startSession(task?: string) {
   setState({ showSettingsPage: false, mainTab: "chat" });
   const before = getState();
   if (task !== undefined && task === before.taskId && before.live) return;
   if (!client) { setState({ taskId: task ?? `new-${Date.now()}`, streams: { main: [] }, cards: {}, running: false }); return; }
-  const r = await call<JsonObject>("task.open", task ? { id: task } : {});
+  if (opening !== null && opening === (task ?? "")) return;
+  opening = task ?? "";
+  let r: JsonObject | null;
+  try { r = await call<JsonObject>("task.open", task ? { id: task } : {}); }
+  finally { opening = null; }
   if (!r) { setState({ live: false }); return; }
   resetTranscriptIndex();
   const now = Date.now();
@@ -249,7 +264,9 @@ export async function startSession(task?: string) {
     return {
       taskId: id, live: true, lastError: null, streams: { main }, cards: {}, jobs: {}, jobOrder: [], changedFiles: [], figures: [], queued: [],
       running: r.running === true, runStarted: Date.now(), backgroundTasks, backgroundWorkspaces, taskTitles: title,
-      pendingAsk: ((r.asks ?? []) as unknown as AskRequest[])[0] ?? null, pendingPermission: null,
+      pendingAsk: ((r.asks ?? []) as unknown as AskRequest[])[0] ?? null,
+      // An agent of this task may be waiting for an approval asked while another task was shown.
+      pendingPermission: (r.permission as unknown as PermissionAsk) ?? null,
       plan: (r.plan as never) ?? s.plan, claims: (r.claims as never) ?? [], contested: (r.contested as never) ?? [],
       ideas: (r.ideas as never) ?? [], brainstorm: (r.brainstorm as never) ?? null,
       grounding: (r.grounding as never) ?? null,
@@ -382,7 +399,8 @@ export async function send(text: string, attachments: string[] = []) {
   await call("task.send", attachments.length ? { text, attachments } : { text });
 }
 
-export async function stop() { await call("task.stop"); }
+/** Stop also answers the approval on screen (serve denies it), so the prompt goes too. */
+export async function stop() { setState({ pendingPermission: null }); await call("task.stop"); }
 
 export async function answerPermission(id: string | undefined, decision: "allow" | "always" | "deny", reason?: string) {
   setState({ pendingPermission: null, demoAsk: null });

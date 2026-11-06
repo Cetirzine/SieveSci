@@ -108,10 +108,17 @@ public final class SessionServices: @unchecked Sendable {
     public var requestPermission: @Sendable (PermissionRequest) async -> PermissionDecision = { _ in .deny("no UI attached") }
     let permissionQueue = PermissionQueue()
 
-    /// Asks the user, one request at a time (parallel workers may ask concurrently).
-    func askUser(_ req: PermissionRequest) async -> PermissionDecision {
-        let handler = requestPermission
-        return await permissionQueue.ask(req, handler)
+    /// Asks the user, one request at a time (parallel workers may ask concurrently). A request is
+    /// announced (`permissionRequested`) only when its turn in the queue comes: announced earlier, a
+    /// front end showing one prompt at a time drops the later ones and their agents wait unseen. An
+    /// agent stopped while it waited is not asked about at all.
+    func askUser(_ req: PermissionRequest, cancelled: @escaping @Sendable () -> Bool = { false }) async -> PermissionDecision {
+        let handler = requestPermission, emit = self.emit
+        return await permissionQueue.ask(req) { r in
+            if cancelled() { return .deny("stopped by the user") }
+            emit(.permissionRequested(r))
+            return await handler(r)
+        }
     }
 
     public init(taskId: String, workspace: URL, models: RoleModels, secrets: SecretStore, webSearch: WebSearchConfig = WebSearchConfig(),

@@ -23,6 +23,9 @@ public final class ServeServer: @unchecked Sendable {
         let workspace: URL
         let bench: Workbench
         var permission: String?
+        /// The request on screen, sent again when the task is reopened (a front end that switched away
+        /// dropped it, and the agent waits for it).
+        var pendingRequest: PermissionRequest?
         var lastError: String?
         var stage: TaskStage?
         init(id: String, workspace: URL, bench: Workbench) { self.id = id; self.workspace = workspace; self.bench = bench }
@@ -33,6 +36,9 @@ public final class ServeServer: @unchecked Sendable {
     private var saveConfig: Bool
     private var workspace: URL?
     var live: [String: Live] = [:]
+    /// Tasks being started: a second `task.open` of the same task waits for the first instead of
+    /// starting the same task twice (two sessions writing one transcript).
+    var opening: [String: Task<Live, Error>] = [:]
     var currentKey: String?
     /// Permission request id → the live task asking.
     private var askers: [String: String] = [:]
@@ -181,7 +187,11 @@ public final class ServeServer: @unchecked Sendable {
             Task.detached { await l.bench.submit(text, attachments: atts) }   // the turn runs on; its progress arrives as events
             return ["accepted": true]
         case "task.stop":
-            try current(p).bench.interrupt()
+            // Stop also answers the request on screen: an agent waiting for it would keep the turn alive.
+            let l = try current(p)
+            l.bench.interrupt()
+            let k = Self.key(l.workspace, l.id)
+            for id in lock.withLock({ askers.filter { $0.value == k }.map(\.key) }) { resolvePermission(id, .deny("stopped by the user")) }
             return .object([:])
         case "permission.respond":
             guard let id = p.str("id") else { throw RPCError(code: -32602, message: "id is required") }
@@ -302,6 +312,39 @@ public final class ServeServer: @unchecked Sendable {
         return l
     }
 
+    /// The task's live session: the one being started, the open one, or a new one. Opening a task
+    /// twice at once (a double click, a restart racing a switch) starts it once.
+    func liveTask(_ k: String, id: String, ws: URL) async throws -> Live {
+        let pending: Task<Live, Error> = lock.withLock {
+            if let t = opening[k] { return t }
+            if let l = live[k] { return Task { l } }
+            let c = config
+            let t = Task<Live, Error> { [self] in
+                do {
+                    let services = try makeServices(id, ws, c)
+                    services.asks.interactive = true
+                    let b = Workbench(services: services)
+                    b.autoTitle = c.autoTitles
+                    b.autoWake = c.autoWake
+                    let made = Live(id: id, workspace: ws, bench: b)
+                    services.emit = { [weak self, weak made] e in if let self, let made { self.event(e, made) } }
+                    services.requestPermission = { [weak self] req in await self?.waitForPermission(req.id) ?? .deny("front end gone") }
+                    b.onOutput = { [weak self] text in self?.notify("output", ["task": .string(id), "workspace": .string(ws.path), "text": .string(text)]) }
+                    lock.withLock { live[k] = made }
+                    await b.start()
+                    lock.withLock { opening[k] = nil }
+                    return made
+                } catch {
+                    lock.withLock { opening[k] = nil }
+                    throw error
+                }
+            }
+            opening[k] = t
+            return t
+        }
+        return try await pending.value
+    }
+
     func taskList(_ ws: URL) -> [JSON] {
         let byKey = lock.withLock { live }
         return SessionStore.tasks(in: ws).map { t -> JSON in
@@ -325,24 +368,7 @@ public final class ServeServer: @unchecked Sendable {
             for _ in 0..<60 where old.bench.isRunning { try? await Task.sleep(nanoseconds: 50_000_000) }
             await close(old)
         }
-        let l: Live
-        if let existing = lock.withLock({ live[k] }) {
-            l = existing
-        } else {
-            let c = lock.withLock { config }
-            let services = try makeServices(id, ws, c)
-            services.asks.interactive = true
-            let b = Workbench(services: services)
-            b.autoTitle = c.autoTitles
-            b.autoWake = c.autoWake
-            let made = Live(id: id, workspace: ws, bench: b)
-            services.emit = { [weak self, weak made] e in if let self, let made { self.event(e, made) } }
-            services.requestPermission = { [weak self] req in await self?.waitForPermission(req.id) ?? .deny("front end gone") }
-            b.onOutput = { [weak self] text in self?.notify("output", ["task": .string(id), "workspace": .string(ws.path), "text": .string(text)]) }
-            lock.withLock { live[k] = made; workspace = ws }
-            await b.start()
-            l = made
-        }
+        let l = try await liveTask(k, id: id, ws: ws)
         lock.withLock { currentKey = k; workspace = ws }
         // Starting this one took a moment: the previous task may have finished meanwhile, while it was
         // still the open one (so its own release skipped it).
@@ -359,6 +385,8 @@ public final class ServeServer: @unchecked Sendable {
             "history": .array(Self.history(SessionStore.load(dir: s.taskDir, agent: "main"))),
             "plan": Wire.value(s.research.snapshot), "claims": Wire.value(s.claims.snapshot), "ideas": Wire.value(s.ideas.snapshot), "brainstorm": s.ideas.live.map { Wire.value($0) } ?? .null,
             "asks": Wire.value(s.asks.pending), "stage": l.stage.map(Self.stageJSON) ?? .null,
+            // The approval an agent of this task waits for; shown again, since a front end that switched away dropped it.
+            "permission": lock.withLock { l.pendingRequest }.map(Wire.permission) ?? .null,
             "contested": .array(s.deliberation.contested.map { ["thread": .string($0.thread), "kind": .string($0.kind), "issue": .string($0.issue), "reason": .string($0.reason)] }),
             "grounding": { let g = s.research.hasGrounding(); return ["web": .bool(g.web), "literature": .bool(g.literature)] }(),
         ]
@@ -369,7 +397,7 @@ public final class ServeServer: @unchecked Sendable {
     func event(_ e: AgentEvent, _ l: Live) {
         switch e {
         case .permissionRequested(let r):
-            lock.withLock { l.permission = "\(r.tool): \(r.summary)"; askers[r.id] = Self.key(l.workspace, l.id) }
+            lock.withLock { l.permission = "\(r.tool): \(r.summary)"; l.pendingRequest = r; askers[r.id] = Self.key(l.workspace, l.id) }
         case .turnStarted(_, "main"): lock.withLock { l.lastError = nil }
         case .error(let m): lock.withLock { l.lastError = m }
         default: break
@@ -490,6 +518,7 @@ public final class ServeServer: @unchecked Sendable {
         let (c, asker): (CheckedContinuation<PermissionDecision, Never>?, Live?) = lock.withLock {
             let l = askers.removeValue(forKey: id).flatMap { live[$0] }
             l?.permission = nil
+            if l?.pendingRequest?.id == id { l?.pendingRequest = nil }
             if let c = waiters.removeValue(forKey: id) { return (c, l) }
             early[id] = d
             return (nil, l)
