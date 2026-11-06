@@ -1,0 +1,229 @@
+// The composer, ported from Sources/SieveSciApp/Views/PromptInput.swift: PromptInput (slash
+// completion, attachments, Esc to interrupt), SandboxMenu, ModelMenu with ContextRing and
+// UsagePopover, StatsLine; and the composer's effort control (EffortMenu / EffortMiniGauge).
+import { useEffect, useRef, useState } from "react";
+import { L, L10n } from "../i18n";
+import { useApp, setState, getState } from "../app/model";
+import * as A from "../app/actions";
+import { Menu, SectionLabel } from "../theme/primitives";
+import { Symbol } from "../theme/theme";
+
+export const effortStops = [null, "low", "medium", "high", "xhigh", "max"] as const;
+export const effortName = (e: string | null) => (e ? L(e) : L("Model default"));
+
+export function PromptInput() {
+  const running = useApp((s) => s.running);
+  const draft = useApp((s) => s.draft);
+  const commands = useApp((s) => s.commands);
+  const [text, setText] = useState("");
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [selection, setSelection] = useState(0);
+  const [focused, setFocused] = useState(false);
+  const area = useRef<HTMLTextAreaElement>(null);
+  const lastEscape = useRef(0);
+
+  useEffect(() => { area.current?.focus(); }, []);
+  useEffect(() => {
+    if (draft) { setText(draft); setState({ draft: "" }); area.current?.focus(); }
+  }, [draft]);
+  // Grows with the text up to 180 px, like the SwiftUI TextEditor.
+  useEffect(() => {
+    const el = area.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(180, Math.max(22, el.scrollHeight))}px`;
+  }, [text]);
+
+  const suggestions = text.startsWith("/") && !text.includes(" ")
+    ? commands.filter((c) => { const q = text.slice(1).toLowerCase(); return !q || c.name.toLowerCase().startsWith(q) || c.name.toLowerCase().includes(q); }).slice(0, 12)
+    : [];
+  const canSend = text.trim() !== "" || attachments.length > 0;
+  const interrupts = running && text === "";
+
+  const send = () => {
+    const t = text;
+    setText(""); setAttachments([]);
+    if (t.trim()) void A.send(t);
+  };
+  const complete = (c: { name: string; args: string }) => {
+    const next = `/${c.name}${c.args ? " " : ""}`;
+    if (c.args) setText(next); else { setText(""); void A.send(next); }
+  };
+
+  return (
+    <div className="prompt-input">
+      {suggestions.length > 0 && (
+        <div className="slash-list">
+          {suggestions.map((c, i) => (
+            <div key={c.name} className={`slash-item ${i === selection ? "selected" : ""}`} onMouseDown={(e) => { e.preventDefault(); complete(c); }}>
+              <span className="t-mono-small">/{c.name}</span>
+              {c.args && <span className="t-mono-tiny tertiary">{c.args}</span>}
+              <span style={{ flex: 1, minWidth: 12 }} />
+              <span className="t-meta secondary clip">{L(c.summary)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className={`composer-box ${focused ? "focused" : ""}`} onClick={() => area.current?.focus()}>
+        {attachments.length > 0 && (
+          <div className="attachment-row">
+            {attachments.map((a) => (
+              <span key={a} className="attachment-chip t-meta"><Symbol name="paperclip" size={11} className="secondary" /><span className="clip">{a.split(/[\\/]/).pop()}</span>
+                <button type="button" className="plain tertiary" onClick={() => setAttachments(attachments.filter((x) => x !== a))}><Symbol name="xmark" size={9} strokeWidth={3} /></button></span>
+            ))}
+          </div>
+        )}
+        <textarea ref={area} className="composer-text t-prose" rows={1} value={text}
+                  placeholder={running ? L("Queue a message, or press Esc to interrupt…") : L("Ask a research question, paste a GitHub link, or type / for commands")}
+                  onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+                  onChange={(e) => { setText(e.target.value); setSelection(0); }}
+                  onKeyDown={(e) => {
+                    // Return while an input method composes (pinyin, kana …) confirms the candidate; it must not send.
+                    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      const c = suggestions[selection];
+                      if (c && text !== `/${c.name}`) { complete(c); return; }
+                      send();
+                    } else if (e.key === "Tab" && suggestions[selection]) { e.preventDefault(); complete(suggestions[selection]); }
+                    else if (e.key === "ArrowUp" && suggestions.length) { e.preventDefault(); setSelection(Math.max(0, selection - 1)); }
+                    else if (e.key === "ArrowDown" && suggestions.length) { e.preventDefault(); setSelection(Math.min(suggestions.length - 1, selection + 1)); }
+                    else if (e.key === "Escape") {
+                      e.preventDefault();
+                      if (getState().running) { void A.stop(); return; }
+                      if (Date.now() - lastEscape.current < 600) void A.send("/rewind");
+                      lastEscape.current = Date.now();
+                    }
+                  }} />
+        <div className="composer-bar">
+          <Menu className="attach-menu" title={L("Attach files, images, PDFs or data")}
+                label={<span className="attach-button"><Symbol name="plus" size={12} strokeWidth={2.5} /></span>}
+                items={[{ label: L("Attach files…"), onSelect: () => {} }, { label: L("Add a read-only folder…"), onSelect: () => {} }]} />
+          <SandboxMenu />
+          <span style={{ flex: 1 }} />
+          <EffortMenu />
+          <ModelMenu />
+          <button type="button" className={`send-button ${canSend || interrupts ? "" : "disabled"}`} disabled={!canSend && !interrupts}
+                  title={interrupts ? L("Interrupt (Esc)") : L("Send (Enter)")} aria-label={interrupts ? L("Interrupt (Esc)") : L("Send (Enter)")}
+                  onClick={() => (interrupts ? void A.stop() : send())}>
+            <Symbol name={interrupts ? "stop.fill" : "arrow.up"} size={interrupts ? 10 : 13} strokeWidth={3} style={interrupts ? { fill: "currentColor" } : undefined} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function sandboxLabel(m: string) {
+  return m === "workspaceWriteOffline" ? L("Workspace write · offline") : m === "off" ? L("No sandbox") : L("Workspace write");
+}
+
+function SandboxMenu() {
+  const mode = useApp((s) => s.config.sandboxMode);
+  const set = (m: "workspaceWrite" | "workspaceWriteOffline" | "off") => setState((s) => ({ config: { ...s.config, sandboxMode: m } }));
+  return (
+    <Menu className={`sandbox-menu ${mode === "off" ? "c-warn" : ""}`} title={L("Commands the agents run")}
+          label={<><Symbol name={mode === "off" ? "exclamationmark.triangle" : "checkmark.shield"} size={13} /> {sandboxLabel(mode)} <Symbol name="chevron.down" size={10} strokeWidth={2.5} /></>}
+          items={[
+            { label: L("Write workspace only, network on"), onSelect: () => set("workspaceWrite"), checked: mode === "workspaceWrite" },
+            { label: L("Write workspace only, offline"), onSelect: () => set("workspaceWriteOffline"), checked: mode === "workspaceWriteOffline" },
+            { label: L("No sandbox"), onSelect: () => set("off"), checked: mode === "off" },
+          ]} />
+  );
+}
+
+/** The composer's effort control: a 3-row dot gauge and the level name. */
+function EffortMenu() {
+  const effort = useApp((s) => s.config.effort);
+  const level = Math.max(0, effortStops.indexOf(effort as never));
+  const max = effortStops.length - 1;
+  return (
+    <Menu className="effort-menu" align="right" title={L("Reasoning effort")}
+          label={<span className="effort-label"><EffortMiniGauge level={level} max={max} /><span className="t-mono-tiny secondary">{effortName(effort)}</span></span>}
+          items={effortStops.map((e) => ({ label: effortName(e), checked: e === effort, onSelect: () => setState((s) => ({ config: { ...s.config, effort: e } })) }))} />
+  );
+}
+
+export function EffortMiniGauge({ level, max }: { level: number; max: number }) {
+  const cols = 13, rows = 3;
+  const lit = Math.max(1, Math.round((cols * level) / max));
+  return (
+    <span className={`effort-gauge ${level === max ? "hot" : ""}`} aria-hidden>
+      {Array.from({ length: rows * cols }, (_, i) => <i key={i} className={i % cols < lit ? "on" : ""} />)}
+    </span>
+  );
+}
+
+function ContextRing({ fill }: { fill: number }) {
+  const color = fill > 0.85 ? "var(--bad)" : fill > 0.6 ? "var(--warn)" : "var(--accent)";
+  const r = 5, c = 2 * Math.PI * r;
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-label={L10n.f("Context %d%% full", Math.round(fill * 100))}>
+      <circle cx="6" cy="6" r={r} fill="none" stroke="var(--separator)" strokeWidth="2" />
+      <circle cx="6" cy="6" r={r} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeDasharray={`${c * Math.max(0.02, fill)} ${c}`} transform="rotate(-90 6 6)" />
+    </svg>
+  );
+}
+
+function ModelMenu() {
+  const meter = useApp((s) => s.meter);
+  const [showUsage, setShowUsage] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!showUsage) return;
+    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setShowUsage(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [showUsage]);
+  const prompt = meter.session.input + meter.session.cacheRead + meter.session.cacheWrite;
+  return (
+    <span className="model-menu" ref={ref}>
+      <Menu align="right" label={<span className="t-meta">{meter.model || L("no model")} <Symbol name="chevron.down" size={10} strokeWidth={2.5} /></span>}
+            items={[{ label: L("Providers…"), onSelect: A.openSettings }]} />
+      <button type="button" className="plain" onClick={() => setShowUsage(!showUsage)}><ContextRing fill={meter.fill} /></button>
+      {showUsage && (
+        <div className="usage-popover">
+          <SectionLabel>{L("Context")}</SectionLabel>
+          <div className="t-mono-small">{meter.lastPromptTokens.toLocaleString()} / {meter.contextWindow.toLocaleString()} {L("tokens")} ({Math.round(meter.fill * 100)}%)</div>
+          <div className="usage-bar"><i style={{ width: `${Math.round(meter.fill * 100)}%`, background: meter.fill > 0.85 ? "var(--bad)" : "var(--accent)" }} /></div>
+          <div className="h-hairline" />
+          <SectionLabel>{L("This session")}</SectionLabel>
+          <div className="usage-grid t-mono-small">
+            <span>{L("Input (uncached)")}</span><span>{meter.session.input.toLocaleString()}</span>
+            <span>{L("Cache read")}</span><span>{meter.session.cacheRead.toLocaleString()}</span>
+            <span>{L("Cache write")}</span><span>{meter.session.cacheWrite.toLocaleString()}</span>
+            <span>{L("Output")}</span><span>{meter.session.output.toLocaleString()}</span>
+            <span>{L("Cache hit rate")}</span><span className={meter.cacheHitRate > 0.7 ? "c-ok" : ""}>{prompt ? (meter.cacheHitRate * 100).toFixed(1) : "0.0"}%</span>
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
+const compact = (n: number) => new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(n);
+
+export function StatsLine() {
+  const turns = useApp((s) => (s.streams.main ?? []).filter((i) => i.kind.type === "user").length);
+  const steps = useApp((s) => Object.values(s.streams).flat().filter((i) => i.kind.type === "tool").length);
+  const m = useApp((s) => s.meter);
+  const running = useApp((s) => Object.values(s.jobs).filter((j) => j.running).length);
+  const prompt = m.session.input + m.session.cacheRead + m.session.cacheWrite;
+  return (
+    <div className="stats-line t-mono-tiny tertiary">
+      <span>{L10n.f("%d turns", turns)} · {L10n.f("%d steps", steps)}</span>
+      {prompt > 0 && <>
+        <i />
+        <span className={m.cacheHitRate > 0.7 ? "c-ok" : "secondary"} title={L("Share of prompt tokens served from the provider's prefix cache this session")}>{L10n.f("cache %d%%", Math.round(m.cacheHitRate * 100))}</span>
+        <i />
+        <span>{L10n.s("%@ in · %@ out", compact(prompt), compact(m.session.output))}</span>
+      </>}
+      {running > 0 && <>
+        <i />
+        <button type="button" className="plain c-accent" title={L("Background jobs stream live; the agent is notified when they finish or report errors")} onClick={() => A.setMainTab("jobs")}>
+          <Symbol name="waveform" size={11} /> {L10n.f("%d jobs", running)}
+        </button>
+      </>}
+    </div>
+  );
+}

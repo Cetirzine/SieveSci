@@ -59,6 +59,7 @@ export interface Config {
   showThinking: boolean;
   appearance: "system" | "light" | "dark";
   effort: string | null;
+  sandboxMode: "workspaceWrite" | "workspaceWriteOffline" | "off";
 }
 
 export interface AppState {
@@ -98,12 +99,15 @@ export interface AppState {
   searchStatus: { ready: boolean; text: string };
   lastError: string | null;
   version: string;
+  /** Text handed to the composer (start cards, quote in reply), taken once. */
+  draft: string;
+  commands: { name: string; args: string; summary: string }[];
 }
 
 export const verbs = ["Sieving", "Pipetting", "Titrating", "Centrifuging", "Sequencing", "Culturing", "Incubating", "Annealing", "Distilling", "Staining"];
 
 export const initialState: AppState = {
-  config: { permissionMode: "ask", recentWorkspaces: [], folderOpen: {}, showThinking: true, appearance: "system", effort: null },
+  config: { permissionMode: "ask", recentWorkspaces: [], folderOpen: {}, showThinking: true, appearance: "system", effort: null, sandboxMode: "workspaceWrite" },
   workspace: null, taskId: "", tasks: [], folderTasks: {}, taskTitles: {},
   streams: { main: [] }, cards: {},
   meter: { model: "", contextWindow: 0, lastPromptTokens: 0, lastOutputTokens: 0, fill: 0, cacheHitRate: 0, session: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 } },
@@ -113,7 +117,7 @@ export const initialState: AppState = {
   jobs: {}, jobOrder: [], changedFiles: [], figures: [], queued: [],
   mainTab: "chat", inspectorTab: "files", showInspector: false, showSettingsPage: false, sidebarVisible: true,
   backgroundTasks: [], backgroundWorkspaces: {}, attention: {}, grounding: null,
-  modelStatus: { ready: false, text: "" }, searchStatus: { ready: false, text: "" }, lastError: null, version: "",
+  modelStatus: { ready: false, text: "" }, searchStatus: { ready: false, text: "" }, lastError: null, version: "", draft: "", commands: [],
 };
 
 // MARK: Store
