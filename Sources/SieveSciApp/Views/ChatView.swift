@@ -714,6 +714,8 @@ struct TranscriptRow: View, Equatable {
         case .notice(let s):
             Text(s).font(Theme.monoSmall).foregroundStyle(.secondary).textSelection(.enabled)
                 .padding(.vertical, Theme.Space.xs)
+        case .brainstorm(let b):
+            BrainstormPanel(state: b).padding(.vertical, Theme.Space.s)
         case .error(let s):
             HStack(alignment: .top, spacing: Theme.Space.s) {
                 Image(systemName: "xmark.octagon.fill").foregroundStyle(Theme.bad)

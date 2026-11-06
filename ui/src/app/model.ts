@@ -27,6 +27,8 @@ export type ItemKind =
   | { type: "fileChange"; path: string; diff: FileDiff }
   | { type: "commit"; hash: string; subject: string; files: number }
   | { type: "job"; notification: JobNotification }
+  /** A brainstorm that has ended, where it ended: what follows continues below it. */
+  | { type: "brainstorm"; state: BrainstormState }
   | { type: "signal"; text: string }
   | { type: "notice"; text: string }
   | { type: "error"; text: string };
@@ -41,10 +43,21 @@ export interface Claim { id: string; statement: string; successCriteria: string;
 export interface Contested { thread: string; kind: string; issue: string; reason: string }
 export interface JobState { id: string; label: string; lines: string[]; running: boolean; unread: number; exitCode?: number; seconds?: number }
 export interface PermissionAsk { id?: string; tool: string; summary: string; input: JsonObject; effect: string; rememberPattern: string }
-export interface AskOption { label: string; description?: string; recommended: boolean; evidence: string[] }
-export interface AskQuestion { id: string; header: string; question: string; kind: "single" | "multi" | "text"; options: AskOption[]; allow_other: boolean; placeholder?: string; optional: boolean }
+export interface AskOption { label: string; description?: string; recommended: boolean; evidence: string[]; idea?: string }
+export interface AskQuestion { id: string; header: string; question: string; kind: "single" | "multi" | "text"; options: AskOption[]; allow_other: boolean; placeholder?: string; optional: boolean; reason?: "direction" | "missing_value" | "user_decision" }
 export interface AskRequest { id: string; agent_id: string; questions: AskQuestion[] }
 export interface TaskEntry { id: string; modified: number }
+export interface Idea {
+  id: string; statement: string; mechanism: string; test: string; falsifier: string; op: string; seeds: string[]; evidence: string[];
+  status: "raw" | "merged" | "checked" | "promoted" | "discarded"; mergedInto?: string; novelty?: "not_found_in_search" | "incremental" | "known";
+  noveltyReceipts: string[]; closestPrior: string[]; rank?: number; hypothesisId?: string; origin: string; createdAt: string;
+}
+export interface BrainstormState {
+  id: string; topic: string; reason: string; trigger: "auto" | "user" | "dream"; stage: string; stageNote: string; stagesDone: string[];
+  startedAt: string; endedAt?: string; summary?: string; wrapUpRequested: boolean; stopped: boolean;
+}
+export const brainstormStages = ["ground", "diverge", "dedupe", "rank", "novelty", "review", "evolve", "report"];
+export const ideaIsLive = (i: Idea) => i.status !== "merged" && i.status !== "discarded" && i.novelty !== "known";
 export interface Attention { stage: string; label?: string; detail: string; workspace: string; needsPerson?: boolean; showsChip?: boolean }
 
 export type InspectorTab = "activity" | "plan" | "claims" | "library" | "changes" | "files" | "figures" | "jobs" | "history" | "notebook" | "learning";
@@ -146,6 +159,9 @@ export interface AppState {
   /** Text handed to the composer (start cards, quote in reply), taken once. */
   draft: string;
   commands: { name: string; args: string; summary: string; group?: string }[];
+  ideas: Idea[];
+  /** The open task's running brainstorm (an ended one is a transcript row). */
+  brainstorm: BrainstormState | null;
   /** Which key references hold a key (values never leave serve). */
   keys: Record<string, boolean>;
   /** Providers that can run now. */
@@ -157,6 +173,8 @@ export interface AppState {
   /** Plan limits and balances, by provider (Settings → Providers). */
   quotas: Record<string, Quota>;
   accent: "blue" | "violet" | "green" | "orange" | "graphite";
+  /** Where serve runs, for wording such as where keys are kept ("macos" until initialize says). */
+  platform: "macos" | "windows" | "linux";
   /** A task is open in serve (the app's `bench != nil`). */
   live: boolean;
   settingsPane: "general" | "providers" | "models" | "search" | "research" | "memory" | "schedules";
@@ -176,7 +194,9 @@ export const initialState: AppState = {
   mainTab: "chat", inspectorTab: "files", showInspector: false, showSettingsPage: false, sidebarVisible: true,
   backgroundTasks: [], backgroundWorkspaces: {}, attention: {}, grounding: null,
   modelStatus: { ready: false, text: "" }, searchStatus: { ready: false, text: "" }, lastError: null, version: "", draft: "", commands: [],
+  ideas: [], brainstorm: null,
   keys: {}, usable: [], languageChoice: "system", live: false, settingsPane: "general", providerInfo: {}, quotas: {}, accent: "blue",
+  platform: typeof navigator !== "undefined" && /Win/.test(navigator.platform) ? "windows" : typeof navigator !== "undefined" && /Linux/.test(navigator.platform) ? "linux" : "macos",
 };
 
 // MARK: Store
@@ -399,6 +419,8 @@ function handle(s: AppState, e: JsonObject) {
     case "permissionRequested": s.pendingPermission = s.pendingPermission ?? (e.request as unknown as PermissionAsk); break;
     case "askRequested": { const r = e.request as unknown as AskRequest; if (!s.pendingAsk || s.pendingAsk.id === r.id) s.pendingAsk = r; break; }
     case "askResolved": if (s.pendingAsk?.id === str("id")) s.pendingAsk = null; break;
+    case "brainstormChanged": showBrainstorm(s, e.state as unknown as BrainstormState); break;
+    case "ideasChanged": s.ideas = e.ideas as unknown as Idea[]; break;
     // A generated title replaces the row's text in place (names given by hand were skipped by the core).
     case "titleChanged": s.taskTitles = { ...s.taskTitles, [str("task")]: str("title") }; break;
   }
@@ -431,4 +453,26 @@ export function taskStatus(p: JsonObject) {
     }
     return { attention, backgroundTasks, backgroundWorkspaces };
   });
+}
+
+// MARK: Platform wording
+
+type Platform = AppState["platform"];
+/** The text for this platform: SwiftUI's macOS wording, or its Windows / Linux counterpart. */
+export function onPlatform(p: Platform, mac: string, windows: string, linux: string = windows): string {
+  return p === "macos" ? mac : p === "windows" ? windows : linux;
+}
+
+/** AppModel.showBrainstorm: a running brainstorm sits at the end of the conversation; once it ends it
+ *  becomes a row where it ended, so the report and the conversation that follows continue below it. */
+export function showBrainstorm(s: AppState, b: BrainstormState | null) {
+  if (!b || !b.endedAt) { s.brainstorm = b; return; }
+  const rows = s.streams.main ?? [];
+  let at = -1;
+  for (let i = rows.length - 1; i >= 0; i--) { const k = rows[i].kind; if (k.type === "brainstorm" && k.state.id === b.id) { at = i; break; } }
+  if (at >= 0) mutate(s, "main", at, () => ({ type: "brainstorm", state: b }));
+  else append(s, { type: "brainstorm", state: b }, "main");
+  openText.delete("main");
+  openThinking.delete("main");
+  s.brainstorm = null;
 }

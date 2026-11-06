@@ -12,7 +12,12 @@ struct BrainstormPanel: View {
     @State private var showAll = false
 
     var live: Bool { state.endedAt == nil }
-    var ideas: [Idea] { model.ideas.filter { $0.createdAt >= state.startedAt.addingTimeInterval(-1) } }
+    /// This brainstorm's ideas (an ended one stays in the conversation, so later brainstorms' are left out).
+    var ideas: [Idea] {
+        model.ideas.filter { i in
+            i.createdAt >= state.startedAt.addingTimeInterval(-1) && (state.endedAt.map { i.createdAt <= $0.addingTimeInterval(5) } ?? true)
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {

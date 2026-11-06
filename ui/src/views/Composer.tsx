@@ -7,9 +7,9 @@ import { useApp, setState, getState } from "../app/model";
 import * as A from "../app/actions";
 import { Menu, SectionLabel } from "../theme/primitives";
 import { Symbol } from "../theme/theme";
+import { EffortMiniGauge, EffortSlider, GlitchLabel, effortName } from "../theme/effort";
 
-export const effortStops = [null, "low", "medium", "high", "xhigh", "max"] as const;
-export const effortName = (e: string | null) => (e ? L(e) : L("Model default"));
+export { effortStops, effortName } from "../theme/effort";
 
 export function PromptInput() {
   const running = useApp((s) => s.running);
@@ -132,24 +132,31 @@ function SandboxMenu() {
   );
 }
 
-/** The composer's effort control: a 3-row dot gauge and the level name. */
+/** Composer control (EffortMenu): the mini gauge and the level; click opens the slider. */
 function EffortMenu() {
   const effort = useApp((s) => s.config.effort);
-  const level = Math.max(0, effortStops.indexOf((effort ?? null) as never));
-  const max = effortStops.length - 1;
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); };
+  }, [open]);
   return (
-    <Menu className="effort-menu" align="right" title={L("Reasoning effort")}
-          label={<span className="effort-label"><EffortMiniGauge level={level} max={max} /><span className="t-mono-tiny secondary">{effortName(effort ?? null)}</span></span>}
-          items={effortStops.map((e) => ({ label: effortName(e), checked: e === effort, onSelect: () => void A.updateConfig({ effort: e }) }))} />
-  );
-}
-
-export function EffortMiniGauge({ level, max }: { level: number; max: number }) {
-  const cols = 13, rows = 3;
-  const lit = Math.max(1, Math.round((cols * level) / max));
-  return (
-    <span className={`effort-gauge ${level === max ? "hot" : ""}`} aria-hidden>
-      {Array.from({ length: rows * cols }, (_, i) => <i key={i} className={i % cols < lit ? "on" : ""} />)}
+    <span className="effort-menu" ref={ref} style={{ position: "relative" }}>
+      <button type="button" className="plain effort-label" title={L("Reasoning effort")} aria-expanded={open} onClick={() => setOpen(!open)}>
+        <EffortMiniGauge effort={effort} />
+        {effort === "max" ? <GlitchLabel text={effortName(effort)} font="11px var(--mono)" /> : <span className="t-mono-tiny secondary">{effortName(effort ?? null)}</span>}
+      </button>
+      {open && (
+        <div className="effort-popover appear-pop">
+          <SectionLabel>{L("Reasoning effort")}</SectionLabel>
+          <EffortSlider effort={effort} onChange={(e) => void A.updateConfig({ effort: e })} width={308} />
+        </div>
+      )}
     </span>
   );
 }

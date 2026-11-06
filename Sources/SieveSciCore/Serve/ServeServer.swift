@@ -108,6 +108,13 @@ public final class ServeServer: @unchecked Sendable {
             r["workspace"] = lock.withLock { workspace }.map { .string($0.path) } ?? .null
             r["language"] = .string(L10n.resolved)
             r["languageChoice"] = .string(L10n.language.rawValue)
+            #if os(macOS)
+            r["platform"] = "macos"
+            #elseif os(Windows)
+            r["platform"] = "windows"
+            #else
+            r["platform"] = "linux"
+            #endif
             return .object(r)
         case "language.set":
             // The interface language, shared with the macOS app and the CLI; texts serve sends
@@ -338,7 +345,7 @@ public final class ServeServer: @unchecked Sendable {
             "title": SessionStore.title(dir: s.taskDir).map { .string($0) } ?? .null,
             "running": .bool(l.bench.isRunning),
             "history": .array(Self.history(SessionStore.load(dir: s.taskDir, agent: "main"))),
-            "plan": Wire.value(s.research.snapshot), "claims": Wire.value(s.claims.snapshot), "ideas": Wire.value(s.ideas.snapshot),
+            "plan": Wire.value(s.research.snapshot), "claims": Wire.value(s.claims.snapshot), "ideas": Wire.value(s.ideas.snapshot), "brainstorm": s.ideas.live.map { Wire.value($0) } ?? .null,
             "asks": Wire.value(s.asks.pending), "stage": l.stage.map(Self.stageJSON) ?? .null,
             "contested": .array(s.deliberation.contested.map { ["thread": .string($0.thread), "kind": .string($0.kind), "issue": .string($0.issue), "reason": .string($0.reason)] }),
             "grounding": { let g = s.research.hasGrounding(); return ["web": .bool(g.web), "literature": .bool(g.literature)] }(),

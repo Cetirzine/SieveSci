@@ -36,7 +36,7 @@ export function AskPrompt({ request }: { request: AskRequest }) {
     else { setPicks({ ...picks, [q.id]: p.length === 1 && p[0] === label ? [] : [label] }); setOtherOn({ ...otherOn, [q.id]: false }); }
   };
   const reason = ({ direction: L("Directions found by searching and brainstorming — pick what to pursue."),
-    missing_value: L("Something only you can tell it."), user_decision: L("A decision that is yours to make.") } as Record<string, string>)[(q as AskQuestion & { reason?: string }).reason ?? "user_decision"];
+    missing_value: L("Something only you can tell it."), user_decision: L("A decision that is yours to make.") } as Record<string, string>)[q.reason ?? "user_decision"];
 
   return (
     <div className="ask-prompt appear-pop">
@@ -68,7 +68,7 @@ export function AskPrompt({ request }: { request: AskRequest }) {
           <>
             {q.options.map((o) => {
               const on = (picks[q.id] ?? []).includes(o.label);
-              const idea = (o as typeof o & { idea?: string }).idea;
+              const idea = o.idea;
               return (
                 <button key={o.label} type="button" className={`hover-row ask-option ${on ? "picked" : ""}`} onClick={() => toggle(q, o.label)}>
                   <Mark on={on} multi={q.kind === "multi"} />

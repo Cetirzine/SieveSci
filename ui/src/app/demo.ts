@@ -3,6 +3,7 @@
 // chat (default), welcome, empty, folders, folders-collapsed, inspector, tab-<tab>, settings-<pane>;
 // &appearance=light|dark.
 import type { JsonObject } from "../serve";
+import { showBrainstorm, brainstormStages, type Idea, type BrainstormState } from "./model";
 import { initialState, setState, type AppState, type FileDiff, type ItemKind, type ToolCallView, type TranscriptItem, type InspectorTab } from "./model";
 
 /** Line diff with context (a small LCS; demo-sized inputs only). */
@@ -143,5 +144,44 @@ export function loadDemo(scene: string) {
     s.streams = { main: [] }; s.cards = {}; s.contested = []; s.demoAsk = null; s.running = false;
     s.meter = { ...s.meter, lastPromptTokens: 0, fill: 0, session: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 }, cacheHitRate: 0 };
   }
+  if (scene === "brainstorm" || scene === "ask") loadBrainstormDemo(s, scene === "ask");
   setState(s);
+}
+
+/** DemoBrainstorm.swift: a brainstorm in its novelty stage, or ("ask") ended, with the card offering its ideas. */
+function loadBrainstormDemo(s: AppState, ask: boolean) {
+  const now = Date.now();
+  const iso = (secondsAgo: number) => new Date(now - secondsAgo * 1000).toISOString();
+  s.streams = { main: [
+    { id: "bu", at: now - 100_000, kind: { type: "user", text: "Our electrolyte additive stopped helping above 45 °C. Give me some new angles.", attachments: [] } },
+    { id: "bt", at: now - 20_000, kind: { type: "thinking", text: "The pool is thin on interface effects.\nAnalogy from load balancing: a second additive that takes over at high temperature. Checking whether dual-additive studies already exist.", started: now - 20_000 } },
+  ] };
+  s.cards = {}; s.contested = []; s.demoAsk = null; s.running = !ask;
+  const idea = (id: string, statement: string, op: string, status: Idea["status"], o: { novelty?: Idea["novelty"]; rank?: number; merged?: string } = {}): Idea => ({
+    id, statement, mechanism: "", test: "", falsifier: "", op, seeds: [], evidence: [], status, mergedInto: o.merged, novelty: o.novelty,
+    noveltyReceipts: [], closestPrior: [], rank: o.rank, origin: "brainstorm:Bdemo", createdAt: iso(30) });
+  s.ideas = [
+    idea("I1", "A second additive that only decomposes above 45 °C takes over film formation", "analogy", "checked", { novelty: "not_found_in_search", rank: 1 }),
+    idea("I2", "The interphase cracks from thermal mismatch, not chemistry", "invert", "checked", { novelty: "incremental", rank: 2 }),
+    idea("I3", "Additive is consumed faster at high temperature; dose it from a reservoir", "seed", "raw", { rank: 3 }),
+    idea("I4", "Two additives that switch roles with temperature", "analogy", "merged", { merged: "I1" }),
+    idea("I5", "Salt concentration shift changes which species reaches the surface first", "facet", "raw", { rank: 4 }),
+    idea("I6", "Coat the cathode instead of relying on the electrolyte", "free", "discarded", { novelty: "known" }),
+    idea("I7", "Trace water catalyses additive breakdown above 45 °C", "invert", "raw"),
+  ];
+  const state: BrainstormState = { id: "Bdemo", topic: "Why the additive fails above 45 °C", reason: "The current hypothesis was refuted at 50 °C", trigger: "auto",
+    stage: "novelty", stageNote: "Searching prior work for I1 (dual-additive, temperature-gated film formation)", stagesDone: ["ground", "diverge", "dedupe", "rank"],
+    startedAt: iso(95), wrapUpRequested: false, stopped: false };
+  if (!ask) { s.brainstorm = state; return; }
+  // Ended: the brainstorm becomes a row of the conversation, and the reply continues below it.
+  showBrainstorm(s, { ...state, endedAt: iso(0), summary: "Seven ideas, five distinct; I1 found no prior work in 6 searches.", stage: "report", stagesDone: brainstormStages });
+  s.streams = { main: [...s.streams.main, { id: "ba", at: now, kind: { type: "assistant", text: "I1 is the strongest lead: no prior work turned up in six searches, and your existing cells can test it. Two quick questions before I plan it." } }] };
+  s.pendingAsk = { id: "ask-demo", agent_id: "main", questions: [
+    { id: "dir", header: "Direction", question: "Which ideas should I pursue first?", kind: "multi", reason: "direction", allow_other: true, optional: false, options: [
+      { label: "Temperature-gated second additive", description: "No prior work found in 6 searches; testable with existing cells", recommended: true, evidence: ["@lee2024additive", "r31"], idea: "I1" },
+      { label: "Thermal-mismatch cracking", description: "Incremental on known interphase studies", recommended: false, evidence: ["@chen2023sei"], idea: "I2" },
+      { label: "Additive reservoir dosing", description: "Not checked yet", recommended: false, evidence: [], idea: "I3" },
+    ] },
+    { id: "cells", header: "Cells", question: "Which cells can you test in the next two weeks?", kind: "text", reason: "missing_value", allow_other: false, optional: false, options: [], placeholder: "e.g. 12 coin cells, NMC811/graphite" },
+  ] };
 }

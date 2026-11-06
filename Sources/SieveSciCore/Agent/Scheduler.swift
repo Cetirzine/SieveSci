@@ -1,9 +1,10 @@
 import Foundation
 
 /// Scheduled tasks (after Goose's recipes schedule and Hermes' cron): a recurring prompt that runs
-/// headless (`sievesci -p`) in a workspace. On macOS each schedule is a per-user LaunchAgent
-/// (`~/Library/LaunchAgents/app.sievesci.schedule.<id>.plist`), so it runs even when the app is
-/// closed and survives reboots; elsewhere the matching crontab line is printed for the user.
+/// headless (`sievesci -p`) in a workspace, even when the app is closed, and survives reboots:
+/// - macOS: a per-user LaunchAgent (`~/Library/LaunchAgents/app.sievesci.schedule.<id>.plist`);
+/// - Windows: a task in Task Scheduler (`\SieveSci\<id>`) running `sievesci run-schedule <id>`;
+/// - Linux and other Unixes: a line in the user's crontab, tagged so it can be removed again.
 /// Every run writes its own task directory, audit log and notebook like an interactive session.
 public struct ScheduledTask: Codable, Sendable, Equatable {
     public var id: String
@@ -65,17 +66,53 @@ public enum Scheduler {
         }
     }
 
-    static func cronLine(_ t: ScheduledTask, cli: String) -> String {
-        let p = t.when.lowercased().split(separator: " ").map(String.init)
-        var spec = "0 * * * *"
-        if p.first == "daily", p.count == 2 {
-            let x = p[1].split(separator: ":"); spec = "\(x.last ?? "0") \(x.first ?? "0") * * *"
-        } else if p.first == "weekly", p.count == 3 {
-            let x = p[2].split(separator: ":"); spec = "\(x.last ?? "0") \(x.first ?? "0") * * \(p[1].prefix(3))"
-        } else if p.first == "every", p.count == 2, p[1].hasSuffix("h") {
-            spec = "0 */\(p[1].dropLast()) * * *"
+    /// The cron line for a schedule: `sievesci run-schedule <id>`, tagged with the schedule's id.
+    static func cronLine(_ t: ScheduledTask, cli: String) -> String? {
+        guard let timing = launchdTiming(t.when) else { return nil }
+        let spec: String
+        if let c = timing.calendar {
+            spec = "\(c["Minute"] ?? 0) \(c["Hour"] ?? 0) * * " + (c["Weekday"].map(String.init) ?? "*")
+        } else {
+            let i = timing.interval ?? 3600
+            spec = i % 3600 == 0 ? (i == 3600 ? "0 * * * *" : "0 */\(i / 3600) * * *") : "*/\(i / 60) * * * *"
         }
-        return "\(spec) cd \(shellQuote(t.workspace)) && \(shellQuote(cli)) --mode \(t.mode ?? "auto") -p \(shellQuote(t.prompt))"
+        let log = logsDir.appendingPathComponent("\(t.id).log").path
+        return "\(spec) \(shellQuote(cli)) run-schedule \(t.id) >> \(shellQuote(log)) 2>&1 \(cronTag)\(t.id)"
+    }
+
+    static let cronTag = "# sievesci-schedule "
+
+    /// Task Scheduler arguments (`schtasks /Create`) for a schedule.
+    static func schtasksArgs(_ t: ScheduledTask, cli: String) -> [String]? {
+        guard let timing = launchdTiming(t.when) else { return nil }
+        let log = logsDir.appendingPathComponent("\(t.id).log").path
+        var a = ["/Create", "/F", "/TN", "SieveSci\\" + t.id, "/TR", "cmd.exe /c \"\"\(cli)\" run-schedule \(t.id) >> \"\(log)\" 2>&1\""]
+        if let c = timing.calendar {
+            let time = String(format: "%02d:%02d", c["Hour"] ?? 0, c["Minute"] ?? 0)
+            if let d = c["Weekday"] {
+                a += ["/SC", "WEEKLY", "/D", ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][d], "/ST", time]
+            } else {
+                a += ["/SC", "DAILY", "/ST", time]
+            }
+        } else {
+            let i = timing.interval ?? 3600
+            a += i % 3600 == 0 ? ["/SC", "HOURLY", "/MO", String(i / 3600)] : ["/SC", "MINUTE", "/MO", String(i / 60)]
+        }
+        return a
+    }
+
+    /// Rewrites the user's crontab with `line` for the schedule (nil removes it). Returns an error text.
+    static func updateCrontab(id: String, line: String?) async -> String? {
+        let current = (try? await ProcessRunner.run("crontab", ["-l"], timeout: 30))
+        // `crontab -l` fails when there is no crontab yet: that is an empty one.
+        var lines = current?.exitCode == 0 ? current!.stdout.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) : []
+        while lines.last?.isEmpty == true { lines.removeLast() }
+        lines.removeAll { $0.hasSuffix(cronTag + id) }
+        if let line { lines.append(line) }
+        guard let r = try? await ProcessRunner.run("crontab", ["-"], stdin: lines.joined(separator: "\n") + "\n", timeout: 30) else {
+            return L("crontab is not available.")
+        }
+        return r.exitCode == 0 ? nil : r.stderr.truncated(200)
     }
 
     static func shellQuote(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
@@ -124,9 +161,23 @@ public enum Scheduler {
         return L10n.s("Scheduled %@: “%@” %@ in %@", t.id, prompt.truncated(80, marker: "…"), when, workspace.lastPathComponent)
             + (r?.exitCode == 0 ? "" : " " + L10n.s("(launchctl: %@; it will load at next login)", r?.stderr.truncated(200) ?? L("failed")))
             + "\n" + L10n.s("Logs: %@ · runs use permission mode %@ inside the sandbox.", "\(logsDir.path)/\(t.id).log", mode.rawValue)
-        #else
+        #elseif os(Windows)
+        guard let args = schtasksArgs(t, cli: cli) else { return L("Could not build the scheduled task.") }
+        try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
+        let r = try? await ProcessRunner.run("schtasks.exe", args, timeout: 30)
+        guard r?.exitCode == 0 else { return L10n.s("Task Scheduler refused the schedule: %@", (r.map { $0.stderr + $0.stdout } ?? L("failed")).truncated(200)) }
         save(list() + [t])
-        return L("LaunchAgents are macOS-only. Add this line with `crontab -e`:") + "\n" + cronLine(t, cli: cli)
+        return L10n.s("Scheduled %@: “%@” %@ in %@", t.id, prompt.truncated(80, marker: "…"), when, workspace.lastPathComponent)
+            + "\n" + L10n.s("Logs: %@ · runs use permission mode %@ inside the sandbox.", logsDir.appendingPathComponent("\(t.id).log").path, mode.rawValue)
+        #else
+        guard let line = cronLine(t, cli: cli) else { return L("Could not build the scheduled task.") }
+        try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
+        if let error = await updateCrontab(id: t.id, line: line) {
+            return L10n.s("Could not add the schedule to your crontab (%@). Add this line with `crontab -e`:", error) + "\n" + line
+        }
+        save(list() + [t])
+        return L10n.s("Scheduled %@: “%@” %@ in %@", t.id, prompt.truncated(80, marker: "…"), when, workspace.lastPathComponent)
+            + "\n" + L10n.s("Logs: %@ · runs use permission mode %@ inside the sandbox.", logsDir.appendingPathComponent("\(t.id).log").path, mode.rawValue)
         #endif
     }
 
@@ -137,6 +188,10 @@ public enum Scheduler {
         #if os(macOS)
         _ = try? await ProcessRunner.run("launchctl", ["bootout", "gui/\(getuid())/\(label + id)"], timeout: 30)
         try? FileManager.default.removeItem(at: agentsDir.appendingPathComponent(label + id + ".plist"))
+        #elseif os(Windows)
+        _ = try? await ProcessRunner.run("schtasks.exe", ["/Delete", "/F", "/TN", "SieveSci\\" + id], timeout: 30)
+        #else
+        _ = await updateCrontab(id: id, line: nil)
         #endif
         return L10n.s("Removed schedule %@.", id)
     }
@@ -146,6 +201,13 @@ public enum Scheduler {
         if ts.isEmpty { return L("No scheduled tasks. Usage: /schedule daily 08:30 <prompt> · /schedule remove <id>") }
         return ts.map { "\($0.id)  \($0.when)  \(URL(fileURLWithPath: $0.workspace).lastPathComponent)  “\($0.prompt.truncated(70, marker: "…"))”" }
             .joined(separator: "\n")
+    }
+
+    /// The command line a schedule runs with (`sievesci run-schedule <id>`), and where its output goes.
+    public static func runArguments(_ id: String) -> (args: [String], log: URL)? {
+        guard let t = list().first(where: { $0.id == id }) else { return nil }
+        try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
+        return (["--workspace", t.workspace, "--mode", t.mode ?? "auto", "-p", t.prompt], logsDir.appendingPathComponent("\(t.id).log"))
     }
 
     /// Splits "daily 08:30 summarize new papers" into (when, prompt).

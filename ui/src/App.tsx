@@ -57,14 +57,14 @@ export default function App() {
           // A background task was released: its row shows its new time (AppModel+Events).
           if (p.stage === null) { void A.refreshTaskList(); A.refreshOpenFolders(); }
         });
-        const info = await c.call<{ version: string; languageChoice?: string }>("initialize", { client: inTauri ? "desktop" : "browser" });
+        const info = await c.call<{ version: string; languageChoice?: string; platform?: "macos" | "windows" | "linux" }>("initialize", { client: inTauri ? "desktop" : "browser" });
         A.attach(c);
         // The language is shared with the macOS app and the CLI; a choice made here before wins only
         // when none was made there.
         const local = stored("language") as Language | null;
         const choice = (info.languageChoice && info.languageChoice !== "system" ? info.languageChoice : local ?? "system") as Language;
         setLanguage(choice);
-        setState({ version: info.version, languageChoice: choice });
+        setState({ version: info.version, languageChoice: choice, ...(info.platform ? { platform: info.platform } : {}) });
         if (local && local !== info.languageChoice) void c.call("language.set", { language: local });
         await A.refreshConfig();
         void A.loadCommands();

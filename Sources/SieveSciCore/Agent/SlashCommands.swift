@@ -13,6 +13,14 @@ public struct SlashCommandInfo: Sendable, Identifiable, Equatable {
 }
 
 public enum SlashCommands {
+    #if os(macOS)
+    static let scheduleSummary = "Recurring headless runs (macOS LaunchAgents), e.g. daily literature watch"
+    #elseif os(Windows)
+    static let scheduleSummary = "Recurring headless runs (Windows Task Scheduler), e.g. daily literature watch"
+    #else
+    static let scheduleSummary = "Recurring headless runs (cron), e.g. daily literature watch"
+    #endif
+
     public static let builtins: [SlashCommandInfo] = [
         // Session
         .init(name: "help", args: "", summary: "List commands and input shortcuts", group: "Session"),
@@ -66,7 +74,7 @@ public enum SlashCommands {
         .init(name: "plugins", args: "[install <pack>]", summary: "Skill packs (e.g. K-Dense scientific skills)", group: "Extensions"),
         .init(name: "mcp", args: "", summary: "MCP servers and their tools", group: "Extensions"),
         .init(name: "hooks", args: "", summary: "Configured hooks", group: "Extensions"),
-        .init(name: "schedule", args: "[daily HH:MM|weekly mon HH:MM|every 6h <prompt> | remove <id>]", summary: "Recurring headless runs (macOS LaunchAgents), e.g. daily literature watch", group: "Extensions"),
+        .init(name: "schedule", args: "[daily HH:MM|weekly mon HH:MM|every 6h <prompt> | remove <id>]", summary: scheduleSummary, group: "Extensions"),
         .init(name: "memory", args: "", summary: "Project memory files (SIEVESCI.md / AGENTS.md / CLAUDE.md)", group: "Extensions"),
         .init(name: "init", args: "", summary: "Analyse the workspace and write SIEVESCI.md", group: "Extensions"),
         .init(name: "add-dir", args: "<path>", summary: "Grant access to another directory (next session)", group: "Extensions"),

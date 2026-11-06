@@ -88,6 +88,16 @@
   0% { opacity: 1; } 8% { opacity: 0.94; } 17% { opacity: 0.74; } 25% { opacity: 0.5; } 33% { opacity: 0.29; } 42% { opacity: 0.17; }
   50% { opacity: 0.15; } 58% { opacity: 0.17; } 67% { opacity: 0.29; } 75% { opacity: 0.5; } 83% { opacity: 0.74; } 92% { opacity: 0.94; } 100% { opacity: 1; }
 }
+/* DotStorm: a bright band per arm passing each dot (rotation), grains swelling as it passes. */
+.dot-storm { display: inline-grid; flex: none; }
+.dot-storm i { display: block; opacity: 0.12; animation: dot-storm var(--period) linear infinite; }
+.dot-storm i.eye { opacity: 0.22; animation: none; transform: scale(0.7); }
+@keyframes dot-storm {
+  0% { opacity: var(--peak, 1); transform: scale(1); } 12% { opacity: calc(var(--peak, 1) * 0.6); transform: scale(0.9); }
+  28% { opacity: 0.16; transform: scale(0.7); } 72% { opacity: 0.12; transform: scale(0.7); }
+  88% { opacity: calc(var(--peak, 1) * 0.55); transform: scale(0.85); } 100% { opacity: var(--peak, 1); transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .dot-storm i { animation: none; opacity: 0.55; transform: none; } }
 /* SieveField: six phase frames, each fading in and out across one period (a linear cross-fade). */
 .sieve-field { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .sieve-field img { position: absolute; left: 0; top: 0; image-rendering: pixelated; opacity: 0; animation: sieve-phase var(--period) linear infinite; }

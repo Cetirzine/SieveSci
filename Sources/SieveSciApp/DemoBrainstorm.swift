@@ -39,8 +39,14 @@ extension AppModel {
          "stagesDone":["ground","diverge","dedupe","rank"],"startedAt":\(now - 95),"wrapUpRequested":false,"stopped":false}
         """)
         if ask {
-            brainstorm?.endedAt = Date()
-            brainstorm?.summary = "Seven ideas, five distinct; I1 found no prior work in 6 searches."
+            // Ended: the brainstorm becomes a row of the conversation, and the reply continues below it.
+            var ended = brainstorm
+            ended?.endedAt = Date()
+            ended?.summary = "Seven ideas, five distinct; I1 found no prior work in 6 searches."
+            ended?.stage = "report"
+            ended?.stagesDone = BrainstormState.stages
+            showBrainstorm(ended)
+            streams["main"]?.append(TranscriptItem(id: "ba", kind: .assistant("I1 is the strongest lead: no prior work turned up in six searches, and your existing cells can test it. Two quick questions before I plan it.")))
             pendingAsk = AskRequest(id: "ask-demo", agentId: "main", questions: [
                 AskQuestion(id: "dir", header: "Direction", question: "Which ideas should I pursue first?", kind: .multi, reason: .direction, options: [
                     AskOption(label: "Temperature-gated second additive", description: "No prior work found in 6 searches; testable with existing cells", recommended: true, evidence: ["@lee2024additive", "r31"], idea: "I1"),

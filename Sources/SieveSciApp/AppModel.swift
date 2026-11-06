@@ -391,7 +391,7 @@ final class AppModel: ObservableObject {
         }
         pendingAsk = live.services.asks.first
         ideas = live.services.ideas.snapshot
-        brainstorm = live.services.ideas.live
+        showBrainstorm(live.services.ideas.live)
         refreshSidePanels()
         refreshStage(id, notify: false)
         Task { await refreshHistory() }

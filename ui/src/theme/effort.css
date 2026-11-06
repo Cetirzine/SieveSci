@@ -1,0 +1,38 @@
+/* EffortSlider.swift: the gauge, its square paper thumb with a hard ink shadow, and the flip books. */
+.flip-book { display: inline-block; flex: none; background-repeat: no-repeat; background-position: 0 0; image-rendering: auto;
+             animation: flip-book var(--flip-duration) steps(var(--flip-steps)) infinite; }
+@keyframes flip-book { to { background-position: var(--flip-end) 0; } }
+
+.mini-gauge { box-shadow: inset 0 0 0 1px var(--rule); }
+.mini-gauge.hot { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bad) 60%, transparent); }
+
+.glitch-label { position: relative; display: inline-block; white-space: nowrap; }
+
+.effort-slider { display: flex; flex-direction: column; gap: var(--s-s); outline: none; }
+.effort-slider:focus-visible .effort-thumb { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+.effort-track { position: relative; height: 24px; cursor: pointer; touch-action: none; user-select: none; }
+.effort-frame { position: absolute; top: 4px; height: 16px; box-shadow: inset 0 0 0 1px var(--rule); }
+.effort-frame.hot { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bad) 60%, transparent); }
+.effort-frame canvas { display: block; }
+/* The frame's ghost in a glitch burst: accent and red copies of the border, offset apart. */
+.effort-frame.ghost::before, .effort-frame.ghost::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
+.effort-frame.ghost::before { border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent); transform: translate(calc(-1 * var(--split)), calc(-0.3 * var(--split))); }
+.effort-frame.ghost::after { border: 1px solid color-mix(in srgb, var(--bad) 70%, transparent); transform: translate(var(--split), calc(0.3 * var(--split))); }
+
+.effort-thumb-pos { position: absolute; left: 0; top: 3px; width: 18px; height: 18px; }
+.effort-thumb-pos.settle { transition: transform 0.28s cubic-bezier(0.34, 1.45, 0.64, 1); }
+.effort-thumb { position: absolute; inset: 0; transform: translate(var(--jitter, 0px), var(--lift, 0px)); transition: box-shadow 0.12s; width: 18px; height: 18px; box-sizing: border-box; background: var(--raised);
+                border: 1.5px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); display: flex; align-items: center; justify-content: center; }
+.effort-thumb.hot { border-color: var(--bad); }
+.effort-thumb.pressed { box-shadow: 0 0 0 var(--ink); }
+.effort-thumb i { width: 6px; height: 6px; }
+.effort-thumb.split::before, .effort-thumb.split::after { content: ""; position: absolute; inset: -1.5px; pointer-events: none; }
+.effort-thumb.split::before { border: 1.5px solid color-mix(in srgb, var(--accent) 80%, transparent); transform: translateX(-2px); }
+.effort-thumb.split::after { border: 1.5px solid color-mix(in srgb, var(--bad) 80%, transparent); transform: translate(2px, 1px); }
+
+.effort-labels { display: flex; justify-content: space-between; align-items: center; }
+.effort-labels button { border: 0; padding: 0; background: transparent; cursor: pointer; }
+
+.effort-popover { position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 60; width: 340px; box-sizing: border-box; padding: var(--s-l);
+                  display: flex; flex-direction: column; gap: var(--s-m); background: var(--raised); border: 1px solid var(--rule); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); }
+@media (prefers-reduced-motion: reduce) { .flip-book { animation: none; } }

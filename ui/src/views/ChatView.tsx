@@ -13,6 +13,7 @@ import { agentName, deliberationTone, literatureIcon, roleVar, Symbol, toolIcon,
 import { renderMarkdown } from "./markdown";
 import { PromptInput, StatsLine } from "./Composer";
 import { AskPrompt } from "./AskPrompt";
+import { BrainstormPanel } from "./BrainstormPanel";
 
 const PAGE = 60;
 const scrollMemory: Record<string, number | null> = {};   // task → distance from the end (null = at the end)
@@ -29,13 +30,14 @@ const searchable = (it: TranscriptItem): string => {
     case "commit": return `${k.hash} ${k.subject}`;
     case "fileChange": return k.path;
     case "job": return k.notification.text;
+    case "brainstorm": return k.state.topic + " " + (k.state.summary ?? "");
     case "agent": return k.id;
   }
 };
 
 export function ChatView() {
   const items = useApp((s) => s.streams.main ?? []);
-  const empty = useApp((s) => (s.streams.main ?? []).length === 0 && !s.running && !s.pendingPermission && !s.demoAsk && !s.lastError && !s.pendingAsk);
+  const empty = useApp((s) => (s.streams.main ?? []).length === 0 && !s.running && !s.pendingPermission && !s.demoAsk && !s.lastError && !s.pendingAsk && !s.brainstorm);
   return empty ? <EmptyChatHero /> : <Conversation items={items} />;
 }
 
@@ -46,6 +48,7 @@ function Conversation({ items }: { items: TranscriptItem[] }) {
   const planMode = useApp((s) => s.config.permissionMode === "plan" && s.plan.steps.length > 0 && !s.running);
   const contested = useApp((s) => s.contested.length > 0);
   const pendingAsk = useApp((s) => s.pendingAsk);
+  const brainstorm = useApp((s) => s.brainstorm);
   const permission = useApp((s) => s.pendingPermission ?? s.demoAsk);
   const lastError = useApp((s) => s.lastError);
   const live = useApp((s) => s.live);
@@ -109,6 +112,7 @@ function Conversation({ items }: { items: TranscriptItem[] }) {
           <div className="chat-tail">
             {planMode && <PlanApprovalBar />}
             {contested && <ContestedBanner />}
+            {brainstorm && <BrainstormPanel state={brainstorm} />}
             {running && <Spinner />}
             {pendingAsk && !permission && <AskPrompt request={pendingAsk} />}
             {permission && <PermissionPrompt request={permission} />}
@@ -292,6 +296,7 @@ function RowContent({ item, stream, showThinking, hovering }: { item: Transcript
     case "signal":
       return <div className="line-row align-top"><span className="gutter c-warn"><Symbol name="exclamationmark.triangle" size={11} /></span><span className="t-meta">{k.text}</span></div>;
     case "notice": return <div className="notice t-mono-small secondary">{k.text}</div>;
+    case "brainstorm": return <div className="brainstorm-row"><BrainstormPanel state={k.state} /></div>;
     case "error":
       return <div className="error-row"><Symbol name="exclamationmark.circle.fill" size={15} className="c-bad" /><span className="t-body">{L("Error")}: {k.text}</span></div>;
   }

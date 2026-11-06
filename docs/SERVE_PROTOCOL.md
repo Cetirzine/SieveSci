@@ -41,7 +41,7 @@ Requests about tasks take optional `workspace` (a path; default: the open worksp
 
 | method | params | result |
 |---|---|---|
-| `initialize` | `{client?}` | `{name, version, protocol: 2, workspace, language, languageChoice, provider?, model?, mode?}` (`provider`/`model`/`mode` only with `--provider`; `language` is the language in effect, e.g. `zh-Hans`, `languageChoice` the user's pick or `system`) |
+| `initialize` | `{client?}` | `{name, version, protocol: 2, platform, workspace, language, languageChoice, provider?, model?, mode?}` (`platform`: `macos`, `windows` or `linux`, for wording such as where keys are kept) (`provider`/`model`/`mode` only with `--provider`; `language` is the language in effect, e.g. `zh-Hans`, `languageChoice` the user's pick or `system`) |
 | `language.set` | `{language: "system" \| "en" \| "zh-Hans" \| "zh-Hant" \| "ru" \| "es" \| "fr"}` | `{language, languageChoice}` The interface language, shared with the macOS app and the CLI; texts serve sends follow it. |
 | `config.get` | `{}` | `{config, keys, usable, status}` — see below |
 | `config.set` | `{patch: {field: value, …}}` | Same as `config.get`. Top-level fields of `config` are replaced, the result is saved and applied to live tasks (permission mode, effort, sandbox, auto titles, …). A value the configuration does not accept is refused with `invalid value for <field>`. |
@@ -62,7 +62,7 @@ checklist: `{models: {ready, text}, search: {ready, text}}`.
 |---|---|---|
 | `workspace.open` | `{path}` | `{workspace, tasks}` Makes it the open workspace and adds it to `recentWorkspaces`. |
 | `tasks.list` | `{workspace?}` | `{tasks: [{id, title, modified, running, stage}]}` newest first; `title` is null until the task has one; `stage` is null unless the task is live. |
-| `task.open` | `{workspace?, id?, restart?}` | Opens the task (a new one without `id`) and makes it the open task; the previous one is closed unless it is still working or needs the user. `restart: true` stops a live task first and starts it again on the current configuration (after a model switch). Returns `{task, workspace, title, running, history, plan, claims, ideas, asks, stage, contested, grounding}`. |
+| `task.open` | `{workspace?, id?, restart?}` | Opens the task (a new one without `id`) and makes it the open task; the previous one is closed unless it is still working or needs the user. `restart: true` stops a live task first and starts it again on the current configuration (after a model switch). Returns `{task, workspace, title, running, history, plan, claims, ideas, brainstorm, asks, stage, contested, grounding}` (`brainstorm`: the task's current or last brainstorm, or null). |
 | `task.send` | `{text, task?}` | `{accepted: true}` at once; the turn streams as `event` notifications and ends with `turnFinished` for agent `main`. Slash commands (`/goal`, `/trace r3`, …) work as in the CLI; their direct output arrives as an `output` notification. Text sent while a turn runs is queued. |
 | `task.stop` | `{task?}` | `{}` Stops the running turn (and its tools and workers). |
 | `permission.respond` | `{id, decision: "allow" \| "always" \| "deny", reason?}` | `{}` Answers a `permissionRequested` event (of any live task). |

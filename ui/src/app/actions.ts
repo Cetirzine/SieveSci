@@ -251,6 +251,7 @@ export async function startSession(task?: string) {
       running: r.running === true, runStarted: Date.now(), backgroundTasks, backgroundWorkspaces, taskTitles: title,
       pendingAsk: ((r.asks ?? []) as unknown as AskRequest[])[0] ?? null, pendingPermission: null,
       plan: (r.plan as never) ?? s.plan, claims: (r.claims as never) ?? [], contested: (r.contested as never) ?? [],
+      ideas: (r.ideas as never) ?? [], brainstorm: (r.brainstorm as never) ?? null,
       grounding: (r.grounding as never) ?? null,
     };
   });

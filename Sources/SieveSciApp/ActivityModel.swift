@@ -43,6 +43,8 @@ struct TranscriptItem: Identifiable, Equatable {
         case fileChange(path: String, diff: FileDiff)
         case commit(hash: String, subject: String, files: Int)
         case job(JobNotification)
+        /// A brainstorm that has ended, where it ended: what follows continues below it.
+        case brainstorm(BrainstormState)
         case signal(String)
         case notice(String)
         case error(String)
@@ -63,6 +65,7 @@ struct TranscriptItem: Identifiable, Equatable {
         case .fileChange(let p, _): return p
         case .commit(let h, let s, _): return h + " " + s
         case .job(let n): return n.text
+        case .brainstorm(let b): return b.topic + " " + (b.summary ?? "")
         case .agent: return ""
         }
     }

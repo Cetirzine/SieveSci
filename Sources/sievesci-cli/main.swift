@@ -161,8 +161,8 @@ func serve(_ args: [String]) async {
 }
 
 @MainActor
-func main() async {
-    let o = parse()
+func main(_ args: [String] = Array(CommandLine.arguments.dropFirst())) async {
+    let o = parse(args)
     do {
         let task = o.task ?? ISO8601DateFormatter.string(from: Date(), timeZone: .current, formatOptions: [.withFullDate]) + "-" + String(UUID().uuidString.prefix(6)).lowercased()
         let (services, mainModel) = try buildServices(o, task: task)
@@ -511,6 +511,15 @@ if cliArgs.first == "mcp-bridge" {
     await mcpBridge()
 } else if cliArgs.first == "serve" {
     await serve(Array(cliArgs.dropFirst()))
+} else if cliArgs.first == "run-schedule", let id = cliArgs.dropFirst().first {
+    // Task Scheduler (Windows) and cron run schedules through this, so a long prompt never has to fit a
+    // command line; they append the output to the schedule's log.
+    guard let run = Scheduler.runArguments(id) else {
+        FileHandle.standardError.writeSafely(Data("sievesci: no schedule \(id)\n".utf8))
+        exit(2)
+    }
+    print("— \(ISO8601DateFormatter().string(from: Date())) schedule \(id)")
+    await main(run.args)
 } else if cliArgs.first == "quota" {
     await quota(Array(cliArgs.dropFirst()))
 } else if cliArgs.first == "ping" {

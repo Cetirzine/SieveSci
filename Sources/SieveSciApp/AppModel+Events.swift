@@ -269,9 +269,24 @@ extension AppModel {
             }
         case .askResolved(let id, _):
             if pendingAsk?.id == id { pendingAsk = bench?.services.asks.first }
-        case .brainstormChanged(let b): brainstorm = b
+        case .brainstormChanged(let b): showBrainstorm(b)
         case .ideasChanged(let i): ideas = i
         case .titleChanged: break   // applied in `route` for every task, open or in the background
         }
+    }
+
+    /// A running brainstorm sits at the end of the conversation; once it ends it becomes a row where it
+    /// ended, so the report and the conversation that follows continue below it (and it stays there).
+    func showBrainstorm(_ b: BrainstormState?) {
+        guard let b, b.endedAt != nil else { brainstorm = b; return }
+        let rows = streams["main"] ?? []
+        if let i = rows.lastIndex(where: { if case .brainstorm(let s) = $0.kind { return s.id == b.id }; return false }) {
+            if case .brainstorm(let s) = rows[i].kind, s != b { streams["main"]![i].kind = .brainstorm(b) }
+        } else {
+            append(.brainstorm(b), to: "main")
+        }
+        openText["main"] = nil
+        openThinking["main"] = nil
+        brainstorm = nil
     }
 }

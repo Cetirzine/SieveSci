@@ -3,14 +3,14 @@
 // from `sievesci serve` (providers.*, models.*, connectors.*, memory.*, schedules.*).
 import { Children, useEffect, useMemo, useState, type ReactNode } from "react";
 import { L, L10n, languageNames, resolvedLanguage, type Language } from "../i18n";
-import { useApp, getState, type Config, type ModelRef, type ProviderProfile, type Quota } from "../app/model";
+import { useApp, getState, onPlatform, type Config, type ModelRef, type ProviderProfile, type Quota } from "../app/model";
 import * as A from "../app/actions";
 import type { SettingsPane } from "../app/actions";
 import type { JsonObject } from "../serve";
 import { ActionButton, ActionRow, Chip, IconButton, SectionLabel, SpecField } from "../theme/primitives";
 import { Symbol, roleName } from "../theme/theme";
 import { RoleGhostIcon } from "../theme/brand";
-import { effortName, effortStops } from "./Composer";
+import { EffortSlider } from "../theme/effort";
 import "./settings.css";
 
 const panes: { id: SettingsPane; title: () => string; icon: string }[] = [
@@ -381,6 +381,7 @@ function ProviderDetail({ profile: p }: { profile: ProviderProfile }) {
   const [refreshingUsage, setRefreshingUsage] = useState(false);
   const [header, setHeader] = useState({ name: "", value: "" });
   const hasKey = st?.hasKey ?? false;
+  const platform = useApp((s) => s.platform);
   const admin = adminKeyRef(p);
   const update = (change: Partial<ProviderProfile>, typing = false) => void A.updateProvider(p.id, change, typing);
   const subscriptionFetch = p.flavor === "antigravity" || p.flavor === "codex";
@@ -447,7 +448,9 @@ function ProviderDetail({ profile: p }: { profile: ProviderProfile }) {
 
   const keySection = (
     <div className="stack">
-      <Caption>{hasKey ? L("API key saved in the macOS Keychain. Paste a new one to replace it.") : L("Paste your API key. It is stored in the macOS Keychain, never in a file.")}</Caption>
+      <Caption>{hasKey
+        ? L(onPlatform(platform, "API key saved in the macOS Keychain. Paste a new one to replace it.", "API key saved in Windows Credential Manager. Paste a new one to replace it.", "API key saved in a private file only you can read. Paste a new one to replace it."))
+        : L(onPlatform(platform, "Paste your API key. It is stored in the macOS Keychain, never in a file.", "Paste your API key. It is stored in Windows Credential Manager, never in a plain file.", "Paste your API key. It is kept in a private file only you can read, never in the configuration."))}</Caption>
       <div className="hstack">
         <span className="grow"><SpecField mono type="password" value={key} onChange={setKey} placeholder={hasKey ? L("Saved — paste a new key to replace it") : L("Paste your API key")}
                                            onKeyDown={(e) => { if (e.key === "Enter") void saveAndCheck(); }} /></span>
@@ -466,9 +469,10 @@ function ProviderDetail({ profile: p }: { profile: ProviderProfile }) {
     <div className="stack">
       {st?.cliPath
         ? <span className="check-line c-ok"><Symbol name="checkmark.circle.fill" size={12} />{L10n.f("Found %@ — SieveSci drives it with your existing sign-in, so usage counts against your plan. Your login token is never read.", st.cliPath)}</span>
-        : <span className="check-line secondary"><Symbol name="xmark.circle" size={12} />{L10n.f("%@ is not installed on this Mac.", exe)}</span>}
+        : <span className="check-line secondary"><Symbol name="xmark.circle" size={12} />{L10n.f(onPlatform(platform, "%@ is not installed on this Mac.", "%@ is not installed on this computer."), exe)}</span>}
       {help && <>
-        <Caption>{st?.cliPath ? L("Not signed in yet? Run this once in Terminal:") : L("Install it in Terminal, then sign in once:")}</Caption>
+        <Caption>{st?.cliPath ? L(onPlatform(platform, "Not signed in yet? Run this once in Terminal:", "Not signed in yet? Run this once in a terminal:"))
+                               : L(onPlatform(platform, "Install it in Terminal, then sign in once:", "Install it in a terminal, then sign in once:"))}</Caption>
         <div className="code-box">{st?.cliPath ? help.signIn : `${help.install}\n${help.signIn}`}</div>
       </>}
     </div>
@@ -550,7 +554,7 @@ function ProviderDetail({ profile: p }: { profile: ProviderProfile }) {
             ? <SpecField title={L("Executable")} mono value={exe} placeholder="claude" onChange={(v) => update({ executable: v }, true)} />
             : [<SpecField key="u" title={L("Base URL")} mono value={p.baseURL} placeholder="https://api.example.com/v1" onChange={(v) => update({ baseURL: v }, true)}
                           onKeyDown={(e) => { if (e.key === "Enter") void detect(p.family, p.baseURL); }} />,
-               <SpecField key="k" title={L("Keychain / environment name")} mono value={p.apiKeyRef} placeholder="EXAMPLE_API_KEY" onChange={(v) => update({ apiKeyRef: v }, true)} />]}
+               <SpecField key="k" title={L(onPlatform(platform, "Keychain / environment name", "Credential Manager / environment name", "Key file / environment name"))} mono value={p.apiKeyRef} placeholder="EXAMPLE_API_KEY" onChange={(v) => update({ apiKeyRef: v }, true)} />]}
           <Picker label={L("Billing")} value={p.billing} onChange={(b) => update({ billing: b })}
                   options={[{ value: "api", label: L("API (pay per token)") }, { value: "plan", label: L("Coding plan / subscription") }, { value: "relay", label: L("Relay (中转站)") }, { value: "local", label: L("Local") }]} />
           <span className="t-caption secondary" style={{ fontWeight: 600 }}>{L("Cache & compatibility")}</span>
@@ -831,8 +835,7 @@ function ResearchSettings() {
       <Section label={L("Model calls")}>
         <Picker label={L("Prompt cache retention")} value={c.retention} onChange={(v) => set({ retention: v })}
                 options={[{ value: "short", label: L("Vendor default") }, { value: "long", label: L("Long (1h / 24h; best for long sessions)") }, { value: "none", label: L("Off") }]} />
-        <Picker label={L("Reasoning effort")} value={c.effort ?? ""} onChange={(v) => set({ effort: v || null })}
-                options={effortStops.map((e) => ({ value: e ?? "", label: effortName(e) }))} />
+        <Row label={L("Reasoning effort")}><EffortSlider effort={c.effort} width={320} onChange={(e) => set({ effort: e })} /></Row>
       </Section>
     </Form>
   );
@@ -890,6 +893,7 @@ interface Scheduled { id: string; workspace: string; prompt: string; when: strin
 
 function ScheduleSettings() {
   const workspace = useApp((s) => s.workspace);
+  const platform = useApp((s) => s.platform);
   const [tasks, setTasks] = useState<Scheduled[]>([]);
   const [when, setWhen] = useState("daily 08:30");
   const [prompt, setPrompt] = useState("");
@@ -926,7 +930,9 @@ function ScheduleSettings() {
             if (r.ok) { setMessage(r.value.message); setTasks(r.value.schedules); setPrompt(""); } else setMessage(r.error);
           }}>{L("Schedule")}</ActionButton>
         </ActionRow>
-        <Caption>{L("Runs headless as a macOS LaunchAgent with the same research rules, audit log and notebook; results land in the workspace's task list.")}</Caption>
+        <Caption>{L(onPlatform(platform, "Runs headless as a macOS LaunchAgent with the same research rules, audit log and notebook; results land in the workspace's task list.",
+          "Runs headless as a Windows scheduled task with the same research rules, audit log and notebook; results land in the workspace's task list.",
+          "Runs headless from your crontab with the same research rules, audit log and notebook; results land in the workspace's task list."))}</Caption>
       </Section>
     </Form>
   );

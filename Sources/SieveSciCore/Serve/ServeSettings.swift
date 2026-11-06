@@ -165,7 +165,11 @@ extension ServeServer {
             } else if prof.family == .cliAgent {
                 path = ProcessRunner.which(prof.executable ?? "")
                 ready = path != nil
+                #if os(macOS)
                 short = ready ? L("Found on this Mac — uses your sign-in") : L("CLI not installed")
+                #else
+                short = ready ? L("Found on this computer — uses your sign-in") : L("CLI not installed")
+                #endif
             } else {
                 ready = secrets.secret(for: prof.apiKeyRef) != nil
                 short = ready ? L("Ready") : (prof.billing == "relay" || prof.billing == "local" ? L("Needs a URL and key") : L("Needs an API key"))
@@ -261,7 +265,7 @@ extension ServeServer {
     static func installCLI() -> String {
         let exe = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
         #if os(Windows)
-        return L10n.f("Linked %@ (make sure ~/.local/bin is on your PATH).", exe.path).replacingOccurrences(of: "~/.local/bin", with: exe.deletingLastPathComponent().path)
+        return L10n.f("Add %@ to your PATH to run sievesci from a terminal.", exe.deletingLastPathComponent().path)
         #else
         let bin = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin")
         try? FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)

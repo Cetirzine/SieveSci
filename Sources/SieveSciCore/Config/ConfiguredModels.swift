@@ -65,7 +65,12 @@ public enum ConfiguredModels {
         guard !ready.isEmpty else {
             return (false, L("An API key (DeepSeek, Anthropic, OpenAI, Gemini, GLM …), a relay, or a signed-in Claude Code / Codex / Gemini CLI."))
         }
-        let names = ready.prefix(3).map { $0.family == .cliAgent ? L10n.s("%@ — found on this Mac", $0.displayName) : $0.displayName }
+        #if os(macOS)
+        let found = "%@ — found on this Mac"
+        #else
+        let found = "%@ — found on this computer"
+        #endif
+        let names = ready.prefix(3).map { $0.family == .cliAgent ? L10n.s(found, $0.displayName) : $0.displayName }
         return (true, L10n.s("Ready: %@", names.joined(separator: ", ") + (ready.count > 3 ? " …" : "")))
     }
 

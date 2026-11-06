@@ -107,6 +107,32 @@ export function DotActivity({ size = 5, dot = 3, gap = 1.5, color = "var(--accen
   );
 }
 
+/** The brainstorm's own indicator, unlike the model's centre ripple: a storm. Two spiral arms sweep
+ *  round a calm eye, turning like a cyclone. Each dot plays one bright band of a CSS loop, delayed by
+ *  its angle and twisted by its distance from the eye, so the arms rotate with no per-frame work. */
+export function DotStorm({ size = 7, dot = 3, gap = 1.5, color = "var(--accent)", turn = 1.8 }: { size?: number; dot?: number; gap?: number; color?: string; turn?: number }) {
+  const arms = 2, twist = 1.25;
+  const period = turn / arms;
+  const mid = (size - 1) / 2;
+  const dots = useMemo(() => Array.from({ length: size * size }, (_, i) => {
+    const x = i % size - mid, y = Math.floor(i / size) - mid;
+    const r = Math.hypot(x, y);
+    if (r < 0.5) return null;   // the eye stays calm
+    // Counter-clockwise on screen; the band reaches a dot when the arm's angle passes it.
+    const phase = (arms * Math.atan2(-y, x) - twist * r) / (2 * Math.PI);
+    const frac = ((phase % 1) + 1) % 1;
+    return { delay: -frac * period, edge: r / (mid * Math.SQRT2) };
+  }), [size, mid, period]);
+  return (
+    <span className="dot-storm" aria-hidden style={{ gridTemplateColumns: `repeat(${size}, ${dot}px)`, gap, ["--period" as string]: `${period}s` }}>
+      {dots.map((d, i) => d === null
+        ? <i key={i} className="eye" style={{ width: dot, height: dot, background: color }} />
+        // Outer dots are the storm's thin edge: smaller peaks, as grains fly off.
+        : <i key={i} style={{ width: dot, height: dot, background: color, animationDelay: `${d.delay.toFixed(3)}s`, ["--peak" as string]: (1 - 0.35 * d.edge).toFixed(2) }} />)}
+    </span>
+  );
+}
+
 /** Dots that thin out downward, like grains through a sieve. Six phases of the field are drawn once
  *  and cross-faded by CSS (SieveField in LayerAnimations.swift), so an idle window does no work. */
 export function SieveField({ pitch = 12, fadeMid = 0.25 }: { pitch?: number; fadeMid?: number }) {
