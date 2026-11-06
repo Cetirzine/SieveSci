@@ -468,6 +468,9 @@ export function JobsPanel() {
   const [info] = usePanel<{ jobs: JobInfo[] }>("panels.jobs");
   const [selected, setSelected] = useState<string | null>(null);
   const [follow, setFollow] = useState(true);
+  // A job chosen elsewhere ("Log" on its notification) is shown, following its output to the end.
+  const asked = useApp((s) => s.selectedJob);
+  useEffect(() => { if (asked) { setSelected(asked); setFollow(true); setState({ selectedJob: null }); } }, [asked]);
   const log = useRef<HTMLDivElement>(null);
   // Live lines arrive as events; a job from before this window opened comes from serve with its tail.
   const merged = useMemo(() => {
@@ -495,15 +498,20 @@ export function JobsPanel() {
         );
       })}
       detail={j ? <>
-        <div className="hstack">
-          <Chip text={j.running ? L("running") : L10n.f("exit %d", j.exitCode ?? -1)} tint={j.running ? "var(--accent)" : j.exitCode === 0 ? "var(--ok)" : "var(--bad)"} />
-          <span className="t-caption tertiary">{L10n.f("%d lines", j.lines.length)}</span>
-          <span style={{ flex: 1 }} />
-          <label className="hstack-xs t-meta"><input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> {L("Follow")}</label>
-          <EqualWidthButtons>
-            {j.running && <ActionButton kind="destructive" onClick={() => void A.request("jobs.stop", { id: j.id })}>{L("Stop")}</ActionButton>}
-            {j.logPath && <ActionButton onClick={() => A.systemOpen({ path: j.logPath! })}>{L("Open log")}</ActionButton>}
-          </EqualWidthButtons>
+        {/* A compact toolbar for the narrow panel: status on the left, small square tools on the right; when
+            the panel is too narrow the tools move to a line of their own, never a word per line. */}
+        <div className="job-bar">
+          <span className="job-meta">
+            <Chip text={j.running ? L("running") : L10n.f("exit %d", j.exitCode ?? -1)} tint={j.running ? "var(--accent)" : j.exitCode === 0 ? "var(--ok)" : "var(--bad)"} />
+            <span className="t-caption tertiary">{L10n.f("%d lines", j.lines.length)}</span>
+          </span>
+          <span className="job-actions">
+            <button type="button" className={`job-tool ${follow ? "on" : ""}`} aria-pressed={follow} title={L("Follow")} onClick={() => setFollow(!follow)}>
+              <Symbol name="arrow.down.to.line" size={12} />{L("Follow")}
+            </button>
+            {j.running && <button type="button" className="job-tool danger" onClick={() => void A.request("jobs.stop", { id: j.id })}><Symbol name="stop.fill" size={10} style={{ fill: "currentColor" }} />{L("Stop")}</button>}
+            {j.logPath && <button type="button" className="job-tool" onClick={() => A.systemOpen({ path: j.logPath! })}><Symbol name="doc.text" size={12} />{L("Open log")}</button>}
+          </span>
         </div>
         <div className="job-log" ref={log}>{j.lines.map((l, i) => <div key={i} className={errorLine.test(l) ? "c-bad" : ""}>{l || " "}</div>)}</div>
       </> : null} />

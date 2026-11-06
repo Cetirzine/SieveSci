@@ -126,3 +126,6 @@
 .seg-group { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: var(--s-s) var(--s-m); }
 .seg-group > .seg-row { display: contents; }
 .seg-group .seg { justify-self: start; }
+
+/* Text for assistive technology only (a heading drawn as dot-matrix art keeps its words for screen readers). */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

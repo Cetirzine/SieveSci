@@ -128,7 +128,17 @@ public struct ModelRules: Sendable {
         var config: JSON
     }
 
-    public var rules: [Rule]
+    public var rules: [Rule] { didSet { cache = SettingsCache() } }
+
+    public init(rules: [Rule]) { self.rules = rules }
+
+    /// Resolved settings per (model, API format, endpoint). Resolving merges the matching rules (about a
+    /// millisecond each); Settings and every configuration change resolve every configured model twice.
+    final class SettingsCache: @unchecked Sendable {
+        let lock = NSLock()
+        var values: [String: ModelSettings] = [:]
+    }
+    private var cache = SettingsCache()
 
     static func parse(_ data: Data) throws -> ModelRules {
         let root = try JSONCodec.parse(data)
@@ -175,6 +185,14 @@ public struct ModelRules: Sendable {
     }
 
     public func settings(modelId: String, family: ProviderFamily, baseURL: String) -> ModelSettings {
+        let key = "\(modelId)\u{1}\(family.rawValue)\u{1}\(baseURL)"
+        if let hit = cache.lock.withLock({ cache.values[key] }) { return hit }
+        let s = resolvedSettings(modelId: modelId, family: family, baseURL: baseURL)
+        cache.lock.withLock { cache.values[key] = s }
+        return s
+    }
+
+    func resolvedSettings(modelId: String, family: ProviderFamily, baseURL: String) -> ModelSettings {
         let c = resolve(modelId: modelId, family: family, baseURL: baseURL)
         let props = c["properties"]
         let input = props?["inputFormat"]

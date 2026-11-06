@@ -43,8 +43,18 @@ public final class SkillRegistry: @unchecked Sendable {
 
     public init(workspace: URL) {
         self.workspace = workspace
-        reload()
+        // Opening several tasks of a workspace in a row (switching between them) scans once.
+        if let hit = Self.recentLock.withLock({ Self.recent[workspace.standardizedFileURL.path] }), Date().timeIntervalSince(hit.at) < 20 {
+            skills = hit.skills
+        } else {
+            reload()
+        }
     }
+
+    /// The last scan per workspace, reused for a few seconds by new registries. `reload()` (an install,
+    /// a learned skill, `/skills reload`) always scans again.
+    private static var recent: [String: (at: Date, skills: [Skill])] = [:]
+    private static let recentLock = NSLock()
 
     static var home: URL { FileManager.default.homeDirectoryForCurrentUser }
     public static var packsDir: URL { home.appendingPathComponent(".sievesci/skill-packs") }
@@ -72,22 +82,47 @@ public final class SkillRegistry: @unchecked Sendable {
         return r
     }
 
+    /// How deep a SKILL.md may sit under a root (`<skill>/SKILL.md`, `<group>/<skill>/SKILL.md`, a
+    /// plugin's `<plugin>/skills/<skill>/SKILL.md`). Below that are a skill's own scripts and data,
+    /// tens of thousands of files that every task open would otherwise walk.
+    static let maxDepth = 4
+    /// Parsed SKILL.md files by path, kept while the file is unchanged (every task builds a registry).
+    private static var parsed: [String: (modified: Date, skill: Skill?)] = [:]
+    private static let parsedLock = NSLock()
+
+    static func parseCached(_ url: URL, source: String) -> Skill? {
+        let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+        if let hit = parsedLock.withLock({ parsed[url.path] }), hit.modified == modified {
+            return hit.skill.map { var s = $0; s.source = source; return s }
+        }
+        let s = parse(url, source: source)
+        parsedLock.withLock { parsed[url.path] = (modified, s) }
+        return s
+    }
+
     public func reload() {
         var found: [String: Skill] = [:]
         for (root, source) in roots {
-            guard let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else { continue }
+            guard let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else { continue }
+            let base = root.standardizedFileURL.pathComponents.count
             for case let url as URL in en {
                 // ~/.claude/skills/synced/<account>/ holds skills the Claude app syncs for its own tools
                 // (built-in browser, computer use, Chrome …); they refer to tools SieveSci does not have.
                 if url.lastPathComponent == "synced", root.path.hasSuffix("/.claude/skills") { en.skipDescendants(); continue }
-                guard url.lastPathComponent == "SKILL.md" else { continue }
-                guard let s = Self.parse(url, source: source), found[s.name] == nil else { continue }
+                if url.lastPathComponent != "SKILL.md" {
+                    if url.standardizedFileURL.pathComponents.count - base >= Self.maxDepth,
+                       (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true { en.skipDescendants() }
+                    continue
+                }
+                guard let s = Self.parseCached(url, source: source), found[s.name] == nil else { continue }
                 found[s.name] = s
             }
         }
+        let sorted = found.values.sorted { $0.name < $1.name }
         lock.lock()
-        skills = found.values.sorted { $0.name < $1.name }
+        skills = sorted
         lock.unlock()
+        Self.recentLock.withLock { Self.recent[workspace.standardizedFileURL.path] = (Date(), sorted) }
     }
 
     public static func frontMatter(_ text: String) -> (meta: [String: Any], body: String) {

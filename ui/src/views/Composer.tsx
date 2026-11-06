@@ -141,6 +141,7 @@ function sandboxLabel(m: string) {
 
 function SandboxMenu() {
   const mode = useApp((s) => A.effectiveSandbox(s.config));
+  const yolo = useApp((s) => s.config.permissionMode === "yolo");
   const available = useApp((s) => s.sandbox);
   const set = (m: "workspaceWrite" | "workspaceWriteOffline" | "off") => void A.setSandbox(m);
   if (!available) {
@@ -148,7 +149,7 @@ function SandboxMenu() {
   }
   return (
     <Menu className={`sandbox-menu ${mode === "off" ? "c-warn" : ""}`} title={L("Commands the agents run")}
-          label={<><Symbol name={mode === "off" ? "exclamationmark.triangle" : "checkmark.shield"} size={13} /> {sandboxLabel(mode)} <Symbol name="chevron.down" size={10} strokeWidth={2.5} /></>}
+          label={<><Symbol name={mode === "off" ? "exclamationmark.triangle" : "checkmark.shield"} size={13} /> {yolo ? <GlitchLabel text={sandboxLabel(mode)} font="500 11px var(--mono)" /> : sandboxLabel(mode)} <Symbol name="chevron.down" size={10} strokeWidth={2.5} /></>}
           items={[
             { label: L("Write workspace only, network on"), onSelect: () => set("workspaceWrite"), checked: mode === "workspaceWrite" },
             { label: L("Write workspace only, offline"), onSelect: () => set("workspaceWriteOffline"), checked: mode === "workspaceWriteOffline" },
@@ -288,7 +289,7 @@ export function StatsLine() {
       </>}
       {running > 0 && <>
         <i />
-        <button type="button" className="plain c-accent" title={L("Background jobs stream live; the agent is notified when they finish or report errors")} onClick={() => A.setMainTab("jobs")}>
+        <button type="button" className="plain c-accent" title={L("Background jobs stream live; the agent is notified when they finish or report errors")} onClick={() => A.show("jobs")}>
           <Symbol name="waveform" size={11} /> {L10n.f("%d jobs", running)}
         </button>
       </>}

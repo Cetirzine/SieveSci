@@ -36,6 +36,9 @@ import Testing
         #expect(h[4].str("receipt") == "r2" && h[4].str("output") == "done")
         let card = h[5]
         #expect(card.str("id") == "worker-abc123" && card.str("role") == "worker" && card.str("purpose") == "Build S2")
-        #expect(card["steps"]?.arrayValue?.first?.str("name") == "bash" && card["steps"]?.arrayValue?.first?.str("receipt") == "r9")
+        // Its steps come when the card is opened (history.agent), not with the task.
+        #expect(card["stepCount"]?.intValue == 1 && card["steps"] == nil)
+        let steps = ServeServer.agentSteps(taskDir: dir, agent: "worker-abc123")
+        #expect(steps.first?.str("name") == "bash" && steps.first?.str("receipt") == "r9" && steps.first?.str("output") == "built")
     }
 }

@@ -13,7 +13,11 @@ export interface ToolCallView {
   id: string; name: string; summary: string; input: JsonObject; output: string; isError: boolean; receipt?: string;
   started: number; ended?: number; live: string[]; diff?: FileDiff;
 }
-export interface AgentCard { id: string; role: Role; parent: string; purpose: string; started: number; ended?: number; result?: string }
+export interface AgentCard {
+  id: string; role: Role; parent: string; purpose: string; started: number; ended?: number; result?: string;
+  /** A reopened task's card: how many steps it took; they are fetched when the card is opened. */
+  stepCount?: number; lazy?: boolean;
+}
 export interface JobNotification { job: string; agentId: string; kind: string; text: string; at: string }
 
 export type ItemKind =
@@ -140,6 +144,11 @@ export interface AppState {
   /** Every question of the open task waiting for an answer, oldest first; `pendingAsk` is the first.
    *  Agents may ask at once: the next one shows when the first is answered or dismissed. */
   askQueue: AskRequest[];
+  /** A task being opened (its id, "" for a new one): the sidebar shows it selected and the chat dims
+   *  at once, before the engine's answer arrives. */
+  openingTask: string | null;
+  /** The job the Jobs panel shows, when chosen from elsewhere (a job notification's "Log"). */
+  selectedJob: string | null;
   plan: ResearchPlan;
   claims: Claim[];
   contested: Contested[];
@@ -201,7 +210,7 @@ export const initialState: AppState = {
   streams: { main: [] }, cards: {},
   meter: { model: "", contextWindow: 0, lastPromptTokens: 0, lastOutputTokens: 0, fill: 0, cacheHitRate: 0, session: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 } },
   running: false, runStarted: Date.now(), spinnerVerb: "Sieving",
-  pendingPermission: null, demoAsk: null, pendingAsk: null, askQueue: [],
+  pendingPermission: null, demoAsk: null, pendingAsk: null, askQueue: [], openingTask: null, selectedJob: null,
   plan: { goal: "", stage: "scoping", hypotheses: [], steps: [] }, claims: [], contested: [],
   jobs: {}, jobOrder: [], changedFiles: [], figures: [], queued: [],
   mainTab: "chat", inspectorTab: "files", showInspector: false, showSettingsPage: false, sidebarVisible: true,

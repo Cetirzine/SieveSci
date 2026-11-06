@@ -53,7 +53,7 @@ extension ServeServer {
 
         // Subagents, from the audit: each card goes after the lead agent's call that was running when it
         // started (the call that delegated, reviewed or verified), with the steps it took inside.
-        struct Sub { var id: String; var role: String; var first: Int; var last: Int; var firstAt: Date; var lastAt: Date; var brief: String?; var title: String?; var parent: String; var steps: [JSON] }
+        struct Sub { var id: String; var role: String; var first: Int; var last: Int; var firstAt: Date; var lastAt: Date; var brief: String?; var title: String?; var parent: String; var steps: Int }
         var subs: [String: Sub] = [:], order: [String] = []
         var mainCalls: [(seq: Int, receipt: String?, tool: String, input: JSON)] = []
         for e in audit {
@@ -65,21 +65,14 @@ extension ServeServer {
             guard !agent.isEmpty, agent != "main", ["worker", "checker", "verifier", "host"].contains(e.actor) || e.kind == "agent_start" else { continue }
             if subs[agent] == nil {
                 let role = String(agent.split(separator: "-").first ?? "worker")
-                subs[agent] = Sub(id: agent, role: role, first: e.seq, last: e.seq, firstAt: e.time, lastAt: e.time, brief: nil, title: nil, parent: "main", steps: [])
+                subs[agent] = Sub(id: agent, role: role, first: e.seq, last: e.seq, firstAt: e.time, lastAt: e.time, brief: nil, title: nil, parent: "main", steps: 0)
                 order.append(agent)
             }
             subs[agent]!.last = e.seq
             subs[agent]!.lastAt = e.time
             if e.kind == "user_turn", subs[agent]!.brief == nil { subs[agent]!.brief = e.data.str("text") }
             if e.kind == "agent_start" { subs[agent]!.title = e.data.str("purpose"); subs[agent]!.parent = e.data.str("parent") ?? "main" }
-            if e.kind == "tool_call" {
-                let id = e.data.str("receipt") ?? "a\(e.seq)"
-                var item = toolItem(id: id, name: e.data.str("tool") ?? "tool", input: e.data["input"] ?? [:])
-                item["output"] = .string(e.data.str("output_excerpt") ?? "")
-                item["isError"] = .bool(e.data["success"]?.boolValue == false || (e.data["exit_code"]?.intValue).map { $0 != 0 } == true)
-                if let r = e.data.str("receipt") { item["receipt"] = .string(r) }
-                subs[agent]!.steps.append(.object(item))
-            }
+            if e.kind == "tool_call" { subs[agent]!.steps += 1 }
         }
         var after: [Int: [JSON]] = [:], trailing: [JSON] = []
         for id in order {
@@ -87,10 +80,10 @@ extension ServeServer {
             let host = mainCalls.first { $0.seq > s.first }
             // No call of the lead agent finished after this one started: it was delegated by the call still open.
             let open = host == nil && !unfinished.isEmpty ? unfinished.removeLast() : nil
-            var card: [String: JSON] = ["kind": "agent", "id": .string(s.id), "role": .string(s.role), "parent": .string(s.parent),
+            let card: [String: JSON] = ["kind": "agent", "id": .string(s.id), "role": .string(s.role), "parent": .string(s.parent),
                                         "purpose": .string(s.title ?? purpose(brief: s.brief, delegatedBy: host.map { ($0.tool, $0.input) } ?? open.map { ("task", $0.input) })),
-                                        "seconds": .double(s.lastAt.timeIntervalSince(s.firstAt)), "steps": .array(s.steps)]
-            if s.steps.isEmpty { card["steps"] = .array([]) }
+                                        // The steps themselves come with `history.agent` when the card is opened.
+                                        "seconds": .double(s.lastAt.timeIntervalSince(s.firstAt)), "stepCount": .int(s.steps)]
             if let r = host?.receipt, let at = toolAt[r] { after[at, default: []].append(.object(card)) }
             else if let open { after[open.at, default: []].append(.object(card)) }
             else { trailing.append(.object(card)) }
@@ -101,6 +94,19 @@ extension ServeServer {
             merged += after[i] ?? []
         }
         return merged + trailing
+    }
+
+    /// One subagent's steps, from the audit (its transcript is not kept): tool rows as the card showed them.
+    static func agentSteps(taskDir: URL, agent: String) -> [JSON] {
+        let audit = (try? AuditLog.read(taskDir.appendingPathComponent("audit.jsonl"), kinds: ["tool_call"])) ?? []
+        return audit.filter { $0.data.str("agent") == agent }.map { e in
+            let id = e.data.str("receipt") ?? "a\(e.seq)"
+            var item = toolItem(id: id, name: e.data.str("tool") ?? "tool", input: e.data["input"] ?? [:])
+            item["output"] = .string(e.data.str("output_excerpt") ?? "")
+            item["isError"] = .bool(e.data["success"]?.boolValue == false || (e.data["exit_code"]?.intValue).map { $0 != 0 } == true)
+            if let r = e.data.str("receipt") { item["receipt"] = .string(r) }
+            return .object(item)
+        }
     }
 
     /// A tool row: name, input, and the diff a file edit made (as `fileChanged` gives it live).

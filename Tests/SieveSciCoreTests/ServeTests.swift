@@ -316,10 +316,16 @@ private final class SlowProvider: LLMProvider, @unchecked Sendable {
         async let b = c.call("task.open", ["id": .string(id)])
         let (ra, rb) = try await (a, b)
         #expect(ra.str("task") == id && rb.str("task") == id)
+        // The session starts in the background after task.open answers: wait for the starts to be logged.
         let audit = ws.appendingPathComponent(".sievesci/tasks/\(id)/audit.jsonl")
-        let kinds = try String(contentsOf: audit, encoding: .utf8).split(separator: "\n")
-            .compactMap { try? JSONDecoder().decode(JSON.self, from: Data($0.utf8)).str("kind") }
-        #expect(kinds.filter { $0 == "session_start" }.count == 2, "started when first opened and once when reopened: \(kinds)")
+        func starts() -> [String] {
+            ((try? String(contentsOf: audit, encoding: .utf8)) ?? "").split(separator: "\n")
+                .compactMap { try? JSONDecoder().decode(JSON.self, from: Data($0.utf8)).str("kind") }.filter { $0 == "session_start" }
+        }
+        let t0 = Date()
+        while starts().count < 2, Date().timeIntervalSince(t0) < 10 { try await Task.sleep(nanoseconds: 50_000_000) }
+        try await Task.sleep(nanoseconds: 500_000_000)   // a third, duplicate start would have been logged by now
+        #expect(starts().count == 2, "started when first opened and once when reopened: \(starts().count)")
         try await c.call("shutdown")
     }
 

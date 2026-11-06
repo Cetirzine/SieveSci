@@ -43,6 +43,8 @@ export function ChatView() {
 
 function Conversation({ items }: { items: TranscriptItem[] }) {
   const task = useApp((s) => s.taskId);
+  // Another task is being opened: this one dims until it is replaced (no dead click).
+  const opening = useApp((s) => s.openingTask !== null && s.openingTask !== s.taskId);
   const showThinking = useApp((s) => s.config.showThinking);
   const running = useApp((s) => s.running);
   const planMode = useApp((s) => s.config.permissionMode === "plan" && s.plan.steps.length > 0 && !s.running);
@@ -58,6 +60,8 @@ function Conversation({ items }: { items: TranscriptItem[] }) {
   const [hiddenTick, setHiddenTick] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
   const atEnd = useRef(true);
+  /** A jump from the step strip is under way: earlier rows are not paged in under it. */
+  const jumping = useRef(false);
 
   const hidden = (() => { void hiddenTick; const h = hiddenMemory[task]; return h !== undefined && h <= items.length ? h : Math.max(0, items.length - PAGE); })();
   const visible = searching && query ? items.filter((it) => searchable(it).toLowerCase().includes(query.toLowerCase())) : items.slice(hidden);
@@ -82,13 +86,30 @@ function Conversation({ items }: { items: TranscriptItem[] }) {
     const fromEnd = el.scrollHeight - el.scrollTop - el.clientHeight;
     atEnd.current = fromEnd < 24;
     scrollMemory[task] = atEnd.current ? null : fromEnd;
-    if (el.scrollTop < 200 && hidden > 0 && !searching) {
+    if (el.scrollTop < 200 && hidden > 0 && !searching && !jumping.current) {
       const before = el.scrollHeight;
       hiddenMemory[task] = Math.max(0, hidden - PAGE);
       setHiddenTick((t) => t + 1);
       requestAnimationFrame(() => { el.scrollTop += el.scrollHeight - before; });
     }
   };
+  // The step strip: jump to a message, loading the earlier rows it needs first.
+  const reveal = useCallback((index: number) => {
+    const id = items[index]?.id;
+    if (!id) return;
+    if (index < hidden) hiddenMemory[task] = Math.max(0, index - 2);
+    jumping.current = true;
+    atEnd.current = false;
+    setJumpTo(id);   // done after the rows it needs are drawn (below)
+  }, [items, hidden, task]);
+  const [jumpTo, setJumpTo] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    if (!jumpTo) return;
+    const el = scroller.current, row = el?.querySelector<HTMLElement>(`[data-row="${jumpTo}"]`);
+    setJumpTo(null);
+    if (el && row) el.scrollTo({ top: el.scrollTop + row.getBoundingClientRect().top - el.getBoundingClientRect().top - 12, behavior: "smooth" });
+    window.setTimeout(() => { jumping.current = false; }, 800);
+  }, [jumpTo]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key === "f") { e.preventDefault(); setSearching((v) => !v); } };
     window.addEventListener("keydown", onKey);
@@ -96,7 +117,7 @@ function Conversation({ items }: { items: TranscriptItem[] }) {
   }, []);
 
   return (
-    <div className="chat">
+    <div className={`chat ${opening ? "chat-opening" : ""}`}>
       {searching && (
         <div className="chat-search">
           <Symbol name="magnifyingglass" size={13} className="secondary" />
@@ -105,6 +126,7 @@ function Conversation({ items }: { items: TranscriptItem[] }) {
           <IconButton symbol="xmark" label={L("Close")} onClick={() => { setSearching(false); setQuery(""); }} />
         </div>
       )}
+      {!(searching && query) && <StepRail items={items} scroller={scroller} reveal={reveal} />}
       <div className="chat-scroll" ref={scroller} onScroll={onScroll}>
         <div className="transcript-column">
           {hidden > 0 && !(searching && query) && <EarlierRowsLabel count={hidden} />}
@@ -132,6 +154,48 @@ function Conversation({ items }: { items: TranscriptItem[] }) {
         <StatsLine />
       </div>
     </div>
+  );
+}
+
+/** The step strip on the chat's right edge: a tick per message (the user's a little longer), the one
+ *  being read long and bright; hover shows its start, a click goes there. Hidden while the research
+ *  panel is open, as the panel takes that edge. */
+function StepRail({ items, scroller, reveal }: { items: TranscriptItem[]; scroller: React.RefObject<HTMLDivElement | null>; reveal: (index: number) => void }) {
+  const inspector = useApp((s) => s.showInspector);
+  const marks = useMemo(() => items.map((it, i) => ({ it, i })).filter(({ it }) => it.kind.type === "user" || it.kind.type === "assistant"), [items]);
+  const [active, setActive] = useState<string | null>(null);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || inspector) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      // The message being read: the last one whose top has reached the upper part of the view (where a jump puts it).
+      const line = el.getBoundingClientRect().top + Math.min(120, el.clientHeight * 0.2);
+      let current: string | null = null, first: string | null = null;
+      for (const { it } of marks) {
+        const row = el.querySelector(`[data-row="${it.id}"]`);
+        if (!row) continue;
+        first ??= it.id;
+        if (row.getBoundingClientRect().top <= line) current = it.id; else break;
+      }
+      setActive(current ?? first);
+    };
+    const later = () => { if (!frame) frame = requestAnimationFrame(update); };
+    update();
+    el.addEventListener("scroll", later, { passive: true });
+    window.addEventListener("resize", later);
+    return () => { el.removeEventListener("scroll", later); window.removeEventListener("resize", later); if (frame) cancelAnimationFrame(frame); };
+  }, [marks, scroller, inspector]);
+  if (inspector || marks.length < 3) return null;
+  const snippet = (it: TranscriptItem) => (it.kind.type === "user" || it.kind.type === "assistant" ? it.kind.text : "").replace(/\s+/g, " ").trim().slice(0, 90);
+  return (
+    <nav className="step-rail" aria-label={L("Conversation outline")}>
+      {marks.map(({ it, i }) => (
+        <button key={it.id} type="button" className={`step-mark ${it.kind.type} ${active === it.id ? "on" : ""}`}
+                title={snippet(it)} aria-label={snippet(it)} aria-current={active === it.id ? "step" : undefined} onClick={() => reveal(i)} />
+      ))}
+    </nav>
   );
 }
 
@@ -200,7 +264,7 @@ export const TranscriptRow = memo(function TranscriptRow({ item, stream, showThi
   const user = item.kind.type === "user";
   const items = rowActions(item, stream);
   return (
-    <div className={`row ${compactKinds.has(item.kind.type) ? "roomy" : "compact"} ${user ? "row-user" : "row-agent"}`}
+    <div data-row={item.id} className={`row ${compactKinds.has(item.kind.type) ? "roomy" : "compact"} ${user ? "row-user" : "row-agent"}`}
          onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)}
          onContextMenu={(e) => { if (items.length === 0 || window.getSelection()?.toString()) return; e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}>
       <RowContent item={item} stream={stream} showThinking={showThinking} hovering={hovering} />
@@ -302,7 +366,7 @@ function RowContent({ item, stream, showThinking, hovering }: { item: Transcript
     case "fileChange": return <DiffSummaryRow path={k.path} diff={k.diff} />;
     case "commit":
       return (
-        <button type="button" className="line-row plain-row" onClick={() => A.setMainTab("history")}>
+        <button type="button" className="line-row plain-row" onClick={() => A.show("history")}>
           <span className="gutter secondary"><Symbol name="arrow.triangle.branch" size={11} /></span>
           <span className="t-mono-tiny c-accent">{k.hash.slice(0, 8)}</span>
           <span className="t-meta clip">{k.subject}</span>
@@ -319,7 +383,7 @@ function RowContent({ item, stream, showThinking, hovering }: { item: Transcript
             <div className="t-meta-strong">{n.text.split("\n")[0]}</div>
             {expanded && <pre className="code-block t-mono-tiny secondary">{n.text}</pre>}
           </div>
-          <button type="button" className="link-button t-meta" onClick={(e) => { e.stopPropagation(); A.setMainTab("jobs"); }}>{L("Log")}</button>
+          <button type="button" className="link-button t-meta" onClick={(e) => { e.stopPropagation(); A.showJob(String(n.job ?? "")); }}>{L("Log")}</button>
         </div>
       );
     }
@@ -383,13 +447,34 @@ function useTicker(active: boolean) {
   return now;
 }
 
+/** An expanded row (reasoning, a terminal's output, a diff, a subagent's steps) scrolls into view as
+ *  far as it can without pushing its own header off the top: no scrolling by hand to see what opened.
+ *  `content` changes when what is shown arrives later (a reopened card's steps). */
+function useReveal<T extends HTMLElement>(open: boolean, content?: unknown) {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    if (!open) return;
+    const frame = requestAnimationFrame(() => {
+      const el = ref.current, box = el?.closest(".chat-scroll") as HTMLElement | null;
+      if (!el || !box) return;
+      const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+      const hidden = r.bottom - (b.bottom - 16);
+      if (hidden <= 0) return;
+      box.scrollBy({ top: Math.min(hidden, Math.max(0, r.top - (b.top + 8))), behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, content]);
+  return ref;
+}
+
 function ThinkingRow({ text, started, ended, untimed }: { text: string; started: number; ended?: number; untimed?: boolean }) {
   const [expanded, setExpanded] = useState(false);
+  const reveal = useReveal<HTMLDivElement>(expanded);
   const now = useTicker(ended === undefined);
   const secs = Math.floor(((ended ?? now) - started) / 1000);
   const last = text.split("\n").filter(Boolean).pop() ?? "";
   return (
-    <div className="thinking-row">
+    <div className="thinking-row" ref={reveal}>
       <button type="button" className="line-row plain-row" onClick={() => setExpanded(!expanded)}>
         <span className="gutter secondary"><Symbol name="brain" size={12} /></span>
         <span className="t-body thinking-label">{ended === undefined ? L10n.f("Thinking… %ds", secs) : untimed ? L("Thought") : L10n.f("Thought for %ds", Math.max(1, secs))}</span>
@@ -403,12 +488,13 @@ function ThinkingRow({ text, started, ended, untimed }: { text: string; started:
 
 function ToolRow({ call }: { call: ToolCallView }) {
   const [expanded, setExpanded] = useState(false);
+  const reveal = useReveal<HTMLDivElement>(expanded);
   const running = call.ended === undefined;
   const now = useTicker(running);
   const hasOutput = !call.diff && call.output !== "";
   const secs = ((call.ended ?? now) - call.started) / 1000;
   return (
-    <div className="tool-row">
+    <div className="tool-row" ref={reveal}>
       <button type="button" className="hover-row tool-row-button" title={hasOutput ? (expanded ? L("Hide output") : L("Show output")) : ""}
               onClick={() => hasOutput && setExpanded(!expanded)}>
         <span className="gutter">
@@ -438,8 +524,9 @@ function ToolOutputView({ call, expanded }: { call: ToolCallView; expanded: bool
 
 function DiffSummaryRow({ path, diff }: { path: string; diff: FileDiff }) {
   const [open, setOpen] = useState(false);
+  const reveal = useReveal<HTMLDivElement>(open);
   return (
-    <div className="diff-summary">
+    <div className="diff-summary" ref={reveal}>
       <div className="line-row">
         <span className="gutter secondary"><Symbol name={diff.isNewFile ? "plus.square.on.square" : "pencil"} size={11} /></span>
         <span className="t-mono-small clip-middle">{path}</span>
@@ -447,7 +534,7 @@ function DiffSummaryRow({ path, diff }: { path: string; diff: FileDiff }) {
         <span className="t-mono-tiny c-bad">−{diff.removed}</span>
         <span style={{ flex: 1 }} />
         <button type="button" className="link-button t-meta" onClick={() => setOpen(!open)}>{open ? L("hide") : L("show diff")}</button>
-        <button type="button" className="link-button t-meta" onClick={() => A.setMainTab("changes")}>{L("Changes")}</button>
+        <button type="button" className="link-button t-meta" onClick={() => A.show("changes")}>{L("Changes")}</button>
       </div>
       {open && <DiffView diff={diff} maxLines={400} />}
     </div>
@@ -479,14 +566,15 @@ function AgentCardView({ id }: { id: string }) {
   const items = useApp((s) => s.streams[id] ?? []);
   const showThinking = useApp((s) => s.config.showThinking);
   const [expanded, setExpanded] = useState(false);
+  const reveal = useReveal<HTMLDivElement>(expanded, items.length);
   const now = useTicker(!!card && card.ended === undefined);
   if (!card) return null;
   const tools = items.filter((it) => it.kind.type === "tool");
   const last = [...tools].reverse()[0]?.kind;
   const tint = roleVar[card.role as Role];
   return (
-    <div className="agent-card" style={{ ["--thread" as string]: `color-mix(in srgb, ${tint} ${card.ended === undefined ? 90 : 35}%, transparent)` }}>
-      <button type="button" className="hover-row agent-card-head" onClick={() => setExpanded(!expanded)}>
+    <div className="agent-card" ref={reveal} style={{ ["--thread" as string]: `color-mix(in srgb, ${tint} ${card.ended === undefined ? 90 : 35}%, transparent)` }}>
+      <button type="button" className="hover-row agent-card-head" onClick={() => { if (!expanded && card.lazy) void A.loadAgentSteps(id); setExpanded(!expanded); }}>
         <RoleGhostBadge role={card.role as Role} working={card.ended === undefined} size={30} />
         <span className="agent-card-text">
           <span className="agent-card-name"><span className="t-body-strong">{agentName(id)}</span><span className="t-caption tertiary">← {agentName(card.parent)}</span></span>
@@ -494,7 +582,7 @@ function AgentCardView({ id }: { id: string }) {
         </span>
         <span style={{ flex: 1, minWidth: 8 }} />
         <span className="t-caption tertiary tabular">{`${(((card.ended ?? now) - card.started) / 1000).toFixed(0)}s`}</span>
-        <span className="t-caption tertiary">{L10n.f("%d steps", tools.length)}</span>
+        <span className="t-caption tertiary">{L10n.f("%d steps", tools.length || card.stepCount || 0)}</span>
         <span className={`chev ${expanded ? "open" : ""}`}><Symbol name="chevron.right" size={9} strokeWidth={3} /></span>
       </button>
       {expanded ? items.map((it) => <TranscriptRow key={it.id} item={it} stream={id} showThinking={showThinking} />)

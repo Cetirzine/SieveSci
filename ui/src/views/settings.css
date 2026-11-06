@@ -1,11 +1,12 @@
 /* Settings page (SettingsView.swift): navigation on the left, the pane's grouped form on the right.
-   The form imitates SwiftUI's `.formStyle(.grouped)` as the app shows it: a centred column of boxed
-   sections, rows split by inset hairlines, monospaced section labels above each box. */
+   The form follows SwiftUI's `.formStyle(.grouped)` (boxed sections, rows split by inset hairlines,
+   monospaced section labels), squared like the rest of the app and laid out from the pane title's left
+   edge across a wide column, so the page is used rather than a narrow strip in its middle. */
 
 .settings-page { display: flex; height: 100vh; background: var(--canvas); color: var(--text); }
 .settings-nav { width: 240px; flex: none; display: flex; flex-direction: column; padding: 0 var(--s-s); background: var(--sidebar); border-right: 1px solid var(--separator); }
 .settings-back { display: flex; align-items: center; gap: 6px; height: var(--c-row); margin-top: 44px; padding: 0 var(--s-s); border: 0; background: transparent;
-                 color: var(--text); font: 13px var(--sans); text-align: left; border-radius: 4px; cursor: pointer; }
+                 color: var(--text); font: 13px var(--sans); text-align: left; cursor: pointer; }
 .settings-back:hover { background: var(--selection); }
 .settings-title { padding: var(--s-l) var(--s-s) var(--s-m); font: 600 20px/1.2 var(--sans); }
 .settings-nav-item { position: relative; display: flex; align-items: center; gap: 10px; height: var(--c-row); padding: 0 var(--s-s); border: 0; background: transparent;
@@ -17,32 +18,45 @@
 .settings-nav-item.selected .nav-icon { color: var(--accent); }
 
 .settings-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.settings-pane-title { padding: 44px var(--s-xl) var(--s-xs); font: 600 26px/1.2 var(--sans); letter-spacing: -0.6px; }
+.settings-pane-title { position: relative; padding: 40px 40px 14px; overflow: hidden; }
+.settings-title-field { position: absolute; inset: 0; opacity: 0.9;
+                        -webkit-mask-image: linear-gradient(90deg, #000 0%, rgba(0, 0, 0, 0.45) 40%, transparent 78%);
+                        mask-image: linear-gradient(90deg, #000 0%, rgba(0, 0, 0, 0.45) 40%, transparent 78%); }
+/* A pane's body fills the rest of the page; its sections rise in one after another when it opens. */
+.settings-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.settings-pane .form > * { animation: settings-rise 0.36s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+.settings-pane .form > :nth-child(2) { animation-delay: 0.04s; } .settings-pane .form > :nth-child(3) { animation-delay: 0.08s; }
+.settings-pane .form > :nth-child(4) { animation-delay: 0.12s; } .settings-pane .form > :nth-child(5) { animation-delay: 0.16s; }
+.settings-pane .form > :nth-child(n+6) { animation-delay: 0.2s; }
+@keyframes settings-rise { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .settings-pane .form > * { animation: none; } }
+.settings-pane-title h1 { position: relative; margin: 0; font: 600 26px/1.2 var(--sans); letter-spacing: -0.6px; }
+.form-box { position: relative; }
 
 /* Grouped form */
 .form-scroll { flex: 1; min-height: 0; overflow-y: auto; }
-.form { max-width: 704px; margin: 0 auto; padding: 20px var(--s-l) 40px; }
+.form { max-width: 1060px; margin: 0; padding: 20px 40px 48px; }
 .form-section { margin-bottom: 28px; }
-.form-header { display: flex; align-items: center; justify-content: space-between; padding: 0 10px; margin-bottom: 8px; min-height: 14px; }
+.form-header { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; margin-bottom: 8px; min-height: 14px; }
 .form-header .hint { display: block; margin-top: 3px; font: 11px/1.35 var(--sans); color: var(--secondary); text-transform: none; letter-spacing: 0; }
-.form-box { background: color-mix(in srgb, var(--ink) 2.4%, var(--canvas)); border: 1px solid color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 5px; padding: 0 10px; }
-.form-row { padding: 9px 0; font: 13px/18px var(--sans); }
+.form-box { background: color-mix(in srgb, var(--ink) 2.4%, var(--canvas)); border: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); padding: 0 16px; }
+.form-row { padding: 11px 0; font: 13px/18px var(--sans); }
 .form-row + .form-row { border-top: 1px solid var(--hairline); }
 .form-caption { margin: 0; font: 11px/1.45 var(--sans); color: var(--secondary); }
-.form-row:has(> .form-caption) { padding: 10px 0 11px; }
-.form-trailing-caption { max-width: 704px; margin: -16px auto 0; padding: 0 26px 40px; font: 11px var(--sans); color: var(--secondary); }
+.form-row:has(> .form-caption) { padding: 11px 0 12px; }
+.form-trailing-caption { max-width: 1060px; margin: -24px 0 0; padding: 0 56px 48px; font: 11px var(--sans); color: var(--secondary); }
 
 .lc { display: flex; align-items: center; justify-content: space-between; gap: var(--s-m); min-height: 18px; }
 .lc-label { min-width: 0; }
 .lc-value { display: inline-flex; align-items: center; gap: var(--s-s); flex: none; }
 
 /* Switch (NSSwitch at the size SwiftUI forms draw it) */
-.switch { position: relative; width: 26px; height: 15px; flex: none; padding: 0; border: 0; border-radius: 8px; background: color-mix(in srgb, var(--ink) 16%, transparent);
+.switch { position: relative; width: 28px; height: 15px; flex: none; padding: 0; border: 0; background: color-mix(in srgb, var(--ink) 16%, transparent);
           cursor: pointer; transition: background var(--hover); }
-.switch::after { content: ""; position: absolute; top: 1px; left: 1px; width: 13px; height: 13px; border-radius: 50%; background: #fff;
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; background: #fff;
                  box-shadow: 0 0.5px 1.5px rgba(0, 0, 0, 0.35); transition: transform 0.18s var(--ease); }
 .switch.on { background: color-mix(in srgb, var(--accent) 80%, #000); }
-.switch.on::after { transform: translateX(11px); }
+.switch.on::after { transform: translateX(13px); }
 .switch:disabled { opacity: 0.45; cursor: default; }
 .toggle-row { cursor: pointer; }
 .toggle-row.disabled { color: var(--tertiary); cursor: default; }
@@ -52,13 +66,13 @@
 .popup select { appearance: none; -webkit-appearance: none; border: 0; background: transparent; color: var(--text); font: 13px var(--sans);
                 text-align: right; text-align-last: right; padding: 0 22px 0 0; cursor: pointer; outline: none; max-width: 340px; }
 .popup .popup-arrows { position: absolute; right: 0; top: 50%; width: 16px; height: 18px; margin-top: -9px; display: inline-flex; align-items: center; justify-content: center;
-                       border-radius: 4px; background: color-mix(in srgb, var(--ink) 7%, transparent); pointer-events: none; }
-.popup select:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 4px; }
+                       background: color-mix(in srgb, var(--ink) 7%, transparent); pointer-events: none; }
+.popup select:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
 .popup select:disabled { color: var(--tertiary); }
 
 
 /* Stepper */
-.stepper { display: inline-flex; flex-direction: column; width: 15px; height: 22px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.stepper { display: inline-flex; flex-direction: column; width: 15px; height: 22px; overflow: hidden; background: color-mix(in srgb, var(--ink) 7%, transparent); }
 .stepper button { flex: 1; display: flex; align-items: center; justify-content: center; border: 0; padding: 0; background: transparent; color: var(--text); cursor: pointer; }
 .stepper button:hover:not(:disabled) { background: var(--selection); }
 .stepper button:disabled { color: var(--tertiary); cursor: default; }
@@ -83,10 +97,10 @@
 .link-button.quiet { color: var(--secondary); }
 .link-button:disabled { opacity: 0.5; cursor: default; }
 .check-line { display: flex; align-items: flex-start; gap: 5px; font: 11px/1.45 var(--sans); user-select: text; }
-.code-box { padding: var(--s-s); background: var(--surface); border-radius: 2px; font: 11px/1.5 var(--mono); user-select: text; white-space: pre-wrap; }
+.code-box { padding: var(--s-s); background: var(--surface); font: 11px/1.5 var(--mono); user-select: text; white-space: pre-wrap; }
 .usage-meter { display: flex; flex-direction: column; gap: 4px; }
-.progress { height: 4px; background: color-mix(in srgb, var(--ink) 9%, transparent); border-radius: 2px; overflow: hidden; }
-.progress i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+.progress { height: 4px; background: color-mix(in srgb, var(--ink) 9%, transparent); overflow: hidden; }
+.progress i { display: block; height: 100%; background: var(--accent); }
 .stack { display: flex; flex-direction: column; gap: var(--s-s); }
 .hstack { display: flex; align-items: center; gap: var(--s-s); }
 .hstack > .grow { flex: 1; min-width: 0; }
@@ -113,11 +127,10 @@
 .provider-row.selected .name { font-weight: 600; }
 .providers-bar { display: flex; gap: 2px; padding: 6px; border-top: 1px solid var(--hairline); }
 .providers-detail { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.providers-detail .form { max-width: 720px; }
-.overview { max-width: 440px; padding: var(--s-xl); display: flex; flex-direction: column; gap: var(--s-m); }
+.providers-detail .form { max-width: 1060px; }
+.overview { max-width: 720px; padding: 40px; display: flex; flex-direction: column; gap: var(--s-m); }
 .overview h2 { margin: 0; font: 600 17px var(--sans); }
-.quick-row { display: flex; align-items: center; gap: var(--s-s); height: 38px; padding: 0 var(--s-m); border: 1px solid var(--separator); border-radius: 2px;
-             background: var(--raised); color: var(--text); font: 13px var(--sans); cursor: pointer; text-align: left; }
+.quick-row { display: flex; align-items: center; gap: var(--s-s); height: 38px; padding: 0 var(--s-m); border: 1px solid var(--separator); background: var(--raised); color: var(--text); font: 13px var(--sans); cursor: pointer; text-align: left; }
 .quick-row:hover { border-color: var(--rule); }
 
 /* Add provider sheet */

@@ -30,7 +30,10 @@
 
 /* Inspector */
 .inspector { display: flex; flex-direction: column; height: 100%; background: var(--canvas); }
-.inspector-tabs { display: flex; gap: var(--s-xxs); padding: 6px var(--s-s); border-bottom: 1px solid var(--hairline); padding-top: calc(var(--titlebar, 0px) + 6px); }
+/* As tall as the main header (--top-bar-height, measured), so its rule lines up with the header's; the
+   tab icons spread evenly across the panel and sit level with the main tabs. */
+.inspector-tabs { display: flex; align-items: flex-end; justify-content: space-evenly; gap: var(--s-xxs); box-sizing: border-box;
+                  min-height: var(--top-bar-height, auto); padding: calc(var(--titlebar, 0px) + 6px) var(--s-s) 2px; border-bottom: 1px solid var(--hairline); flex: none; }
 .inspector-tab { position: relative; width: var(--c-icon); height: var(--c-icon); display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--r-s);
                  background: transparent; color: var(--secondary); cursor: pointer; }
 .inspector-tab:hover { background: var(--hairline); color: var(--text); }
@@ -72,3 +75,15 @@
 .preview-image img { max-width: 100%; }
 .preview-pdf { flex: 1; width: 100%; border: 0; }
 .preview-text { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; }
+
+/* Jobs: the selected job's toolbar (status, line count, Follow / Stop / Open log). */
+.job-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+.job-meta { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.job-actions { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; white-space: nowrap; }
+.job-tool { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; box-sizing: border-box;
+            border: 1px solid var(--rule); background: transparent; color: var(--secondary); font: 12px/1 var(--sans);
+            white-space: nowrap; cursor: pointer; transition: background var(--hover), color var(--hover), border-color var(--hover); }
+.job-tool:hover { background: var(--surface); color: var(--text); }
+.job-tool.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.job-tool.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.job-tool.danger:hover { background: color-mix(in srgb, var(--bad) 10%, transparent); }

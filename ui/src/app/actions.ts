@@ -3,7 +3,7 @@
 import { inTauri, type ServeClient, type JsonObject } from "../serve";
 import { L, L10n, loadLanguage, type Language } from "../i18n";
 import { notify } from "./notify";
-import { deliver, getState, setState, resetTranscriptIndex, summary, titleOf, type AgentCard, type FileDiff, type Role, type TranscriptItem, type AppState, type MainTab, type AskRequest, type Config, type ContextMeter, type PermissionAsk, type ProviderInfo, type ProviderProfile, type Quota, type TaskEntry } from "./model";
+import { deliver, getState, setState, resetTranscriptIndex, summary, titleOf, mainTabs, type InspectorTab, type AgentCard, type FileDiff, type Role, type TranscriptItem, type AppState, type MainTab, type AskRequest, type Config, type ContextMeter, type PermissionAsk, type ProviderInfo, type ProviderProfile, type Quota, type TaskEntry } from "./model";
 
 let client: ServeClient | null = null;
 export function attach(c: ServeClient | null) { client = c; }
@@ -211,7 +211,23 @@ interface RawTask { id: string; title: string | null; modified: string; running?
 /** One entry of `task.open`'s history (ServeServer.timeline): what the chat showed live. */
 interface HistoryItem {
   kind: string; text?: string; id?: string; name?: string; input?: JsonObject; output?: string; isError?: boolean; receipt?: string;
-  diff?: FileDiff; seconds?: number | null; role?: string; parent?: string; purpose?: string; steps?: HistoryItem[];
+  diff?: FileDiff; seconds?: number | null; role?: string; parent?: string; purpose?: string; stepCount?: number;
+}
+
+/** A tool row of a saved task, as the live view drew it (its summary from the input). */
+function historyTool(h: HistoryItem, id: string, now: number): TranscriptItem {
+  const input = h.input ?? {};
+  return { id, at: now, kind: { type: "tool", call: { id: h.id ?? id, name: h.name ?? "tool", summary: summary(input), input, output: h.output ?? "",
+    isError: h.isError === true, receipt: h.receipt, started: now, ended: now, live: [], ...(h.diff ? { diff: h.diff } : {}) } } };
+}
+
+/** A reopened task's subagent card, opened: its steps, fetched now (they are not sent with task.open). */
+export async function loadAgentSteps(agent: string) {
+  const r = await request<{ steps: HistoryItem[] }>("history.agent", { id: agent });
+  if (!r.ok) { setState({ lastError: r.error }); return; }
+  const now = Date.now();
+  const items = r.value.steps.map((h, i) => historyTool(h, `${agent}-s${i}`, now));
+  setState((s) => ({ streams: { ...s.streams, [agent]: items }, cards: s.cards[agent] ? { ...s.cards, [agent]: { ...s.cards[agent], lazy: false } } : s.cards }));
 }
 
 function entries(list: RawTask[]): TaskEntry[] { return list.map((t) => ({ id: t.id, modified: Date.parse(t.modified) })); }
@@ -264,9 +280,10 @@ export async function startSession(task?: string) {
   if (!client) { setState({ taskId: task ?? `new-${Date.now()}`, streams: { main: [] }, cards: {}, running: false }); return; }
   if (opening !== null && opening === (task ?? "")) return;
   opening = task ?? "";
+  setState({ openingTask: opening });
   let r: JsonObject | null;
   try { r = await call<JsonObject>("task.open", task ? { id: task } : {}); }
-  finally { opening = null; }
+  finally { opening = null; setState({ openingTask: null }); }
   if (!r) { setState({ live: false }); return; }
   resetTranscriptIndex();
   const now = Date.now();
@@ -284,15 +301,12 @@ export async function startSession(task?: string) {
         const timed = typeof h.seconds === "number";
         return { id, at: now, kind: { type: "thinking", text: h.text ?? "", started: now - (timed ? (h.seconds as number) * 1000 : 0), ended: now, untimed: !timed } };
       }
-      case "tool": {
-        const input = h.input ?? {};
-        return { id, at: now, kind: { type: "tool", call: { id: h.id ?? id, name: h.name ?? "tool", summary: summary(input), input, output: h.output ?? "",
-          isError: h.isError === true, receipt: h.receipt, started: now, ended: now, live: [], ...(h.diff ? { diff: h.diff } : {}) } } };
-      }
+      case "tool": return historyTool(h, id, now);
       case "agent": {
         const aid = h.id ?? id;
-        cards[aid] = { id: aid, role: (h.role ?? "worker") as Role, parent: h.parent ?? "main", purpose: h.purpose ?? "", started: now - (h.seconds ?? 0) * 1000, ended: now };
-        subStreams[aid] = (h.steps ?? []).map(toItem).filter((x): x is TranscriptItem => x !== null);
+        cards[aid] = { id: aid, role: (h.role ?? "worker") as Role, parent: h.parent ?? "main", purpose: h.purpose ?? "", started: now - (h.seconds ?? 0) * 1000, ended: now,
+          stepCount: h.stepCount ?? 0, lazy: (h.stepCount ?? 0) > 0 };
+        subStreams[aid] = [];
         return { id, at: now, kind: { type: "agent", id: aid } };
       }
       default: return null;
@@ -385,6 +399,20 @@ export async function openAttention(id: string) {
 // MARK: Window
 
 export function setMainTab(t: MainTab) { setState({ mainTab: t, showSettingsPage: false }); }
+
+/** AppModel.show(_:): a panel where it lives. Trace, Plan, Claims, Library and Notebook are tabs of the
+ *  main area; Changes, Files, Figures, Jobs, History and Learning open in the research panel (Jobs
+ *  marked read). Passing one of those to `setMainTab` showed another panel under the Chat tab. */
+export function show(tab: InspectorTab) {
+  if ((mainTabs as string[]).includes(tab)) { setMainTab(tab); return; }
+  setState((s) => ({
+    inspectorTab: tab, showInspector: true, showSettingsPage: false,
+    ...(tab === "jobs" ? { jobs: Object.fromEntries(Object.entries(s.jobs).map(([k, j]) => [k, { ...j, unread: 0 }])) } : {}),
+  }));
+}
+
+/** A job's log: the Jobs panel with that job selected (ChatView's job notification "Log"). */
+export function showJob(id: string) { setState({ selectedJob: id }); show("jobs"); }
 export function setSidebarVisible(v: boolean) { setState({ sidebarVisible: v }); try { localStorage.setItem("sidebarVisible", v ? "1" : "0"); } catch { /* unavailable */ } }
 export function toggleInspector() { setState((s) => ({ showInspector: !s.showInspector })); }
 export type SettingsPane = "general" | "providers" | "models" | "search" | "research" | "memory" | "schedules";

@@ -192,3 +192,19 @@ span.sandbox-menu.t-meta { display: inline-flex; align-items: center; gap: 4px; 
 .usage-grid { display: grid; grid-template-columns: max-content max-content; column-gap: 14px; row-gap: 3px; }
 .stats-line { display: flex; align-items: center; justify-content: center; gap: var(--s-s); }
 .stats-line > i { width: 1px; height: 10px; background: var(--separator); }
+
+/* A task being opened: the previous conversation fades while the next one loads. */
+.chat .chat-scroll { transition: opacity 0.12s ease-out; }
+.chat.chat-opening .chat-scroll { opacity: 0.45; pointer-events: none; }
+
+/* The step strip (StepRail): ticks on the chat's right edge, the one being read long and bright. */
+.chat { position: relative; }
+.step-rail { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); max-height: 62%; z-index: 4;
+             display: flex; flex-direction: column; align-items: flex-end; }
+.step-mark { position: relative; display: block; flex: 1 1 8px; min-height: 3px; max-height: 9px; width: 26px; padding: 0; border: 0;
+             background: transparent; cursor: pointer; }
+.step-mark::before { content: ""; position: absolute; right: 4px; top: 50%; width: 10px; height: 1.5px; transform: translateY(-50%);
+                     background: var(--tertiary); opacity: 0.75; transition: width 0.16s ease-out, background 0.16s, opacity 0.16s; }
+.step-mark.user::before { width: 14px; }
+.step-mark:hover::before { width: 18px; opacity: 1; background: var(--secondary); }
+.step-mark.on::before { width: 22px; height: 2px; opacity: 1; background: var(--text); }

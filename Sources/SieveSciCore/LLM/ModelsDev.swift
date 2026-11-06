@@ -35,7 +35,10 @@ public final class ModelsDevCatalog: @unchecked Sendable {
     public static let shared = ModelsDevCatalog()
     public static let url = URL(string: "https://models.dev/api.json")!
     private let lock = NSLock()
-    public private(set) var providers: [String: ModelsDevProvider] = [:]
+    public private(set) var providers: [String: ModelsDevProvider] = [:] { didSet { hostIndex = nil } }
+    /// API host → provider id, built once per catalog: every model lookup needs it, and parsing each
+    /// provider's URL per lookup made Settings slow (47 models × ~100 providers on every config change).
+    private var hostIndex: [String: String]?
     public private(set) var loadedAt: Date?
 
     static var cacheFile: URL {
@@ -117,8 +120,15 @@ public final class ModelsDevCatalog: @unchecked Sendable {
     /// Maps a configured endpoint to its models.dev provider id (by API host, then known hosts).
     private func providerIdUnlocked(_ profile: ProviderProfile) -> String? {
         let host = URL(string: profile.baseURL)?.host?.lowercased() ?? ""
-        return providers.values.first(where: { $0.api.flatMap { URL(string: $0)?.host?.lowercased() } == host })?.id
-            ?? Self.knownHosts.first { host.hasSuffix($0.key) }?.value
+        if hostIndex == nil {
+            var index: [String: String] = [:]
+            // Sorted, so a host several providers share maps to the same one every time.
+            for p in providers.values.sorted(by: { $0.id < $1.id }) {
+                if let h = p.api.flatMap({ URL(string: $0)?.host?.lowercased() }), index[h] == nil { index[h] = p.id }
+            }
+            hostIndex = index
+        }
+        return hostIndex?[host] ?? Self.knownHosts.first { host.hasSuffix($0.key) }?.value
     }
 
     /// USD cost of one request's usage, when prices are known.

@@ -9,6 +9,7 @@ import { DotProgress } from "../theme/dots";
 import { banner, dismissBanner, download, onUpdate, restart, updateState, type UpdateState } from "../app/updates";
 import { BrandLogo, RoleGhostBadge } from "../theme/brand";
 import { Symbol } from "../theme/theme";
+import { GlitchLabel } from "../theme/effort";
 
 export function RootView({ chat, panel, settings, welcome, inspector }: { chat: ReactNode; panel: (t: MainTab) => ReactNode; settings: ReactNode; welcome: ReactNode; inspector: ReactNode }) {
   const showSettings = useApp((s) => s.showSettingsPage);
@@ -161,7 +162,8 @@ function TaskRow({ id, modified, folder }: { id: string; modified: number; folde
   const [hovering, setHovering] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [renaming, setRenaming] = useState(false);
-  const selected = useApp((s) => folder === undefined && id === s.taskId);
+  // A clicked task shows selected at once, while it opens.
+  const selected = useApp((s) => folder === undefined && id === (s.openingTask || s.taskId));
   const title = useApp((s) => titleOf(s, id, L("New task")));
   const running = useApp((s) => (selected && s.running) || s.backgroundTasks.includes(id));
   const attention = useApp((s) => s.attention[id]);
@@ -289,8 +291,11 @@ function TopBar() {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    // Its height is the research panel's tab bar height too, so the two rules under them meet.
+    const measure = () => { setWidth(el.clientWidth); document.documentElement.style.setProperty("--top-bar-height", `${el.offsetHeight}px`); };
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
+    measure();
     return () => ro.disconnect();
   }, []);
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -343,7 +348,9 @@ function ModeMenu() {
   const m = modeStyle(mode);
   const modes = (["ask", "acceptEdits", "auto", "yolo", "plan"] as const).filter((x) => x !== "yolo" || sandbox || mode === "yolo");
   return (
-    <Menu className={`mode-menu ${mode === "yolo" ? "c-bad" : ""}`} title={L("(⇧⇥ to cycle)")} label={<><Symbol name={m.icon} size={12} /> {m.text}</>}
+    <Menu className={`mode-menu ${mode === "yolo" ? "c-bad" : ""}`} title={L("(⇧⇥ to cycle)")}
+          // YOLO glitches like maximum effort does: nothing is sandboxed and nothing is asked.
+          label={mode === "yolo" ? <><Symbol name={m.icon} size={12} /> <GlitchLabel text={m.text} font="600 12px var(--mono)" /></> : <><Symbol name={m.icon} size={12} /> {m.text}</>}
           items={modes.map((x) => ({ label: <><Symbol name={modeStyle(x).icon} size={12} /> {modeStyle(x).text}</>, onSelect: () => void A.setPermissionMode(x), checked: x === mode }))} />
   );
 }
@@ -356,7 +363,7 @@ function JobsMenu() {
           items={running.map((j) => ({ label: `${j.id} · ${j.label}`, onSelect: () => setTimeoutJobs() }))} />
   );
 }
-const setTimeoutJobs = () => A.setMainTab("jobs");
+const setTimeoutJobs = () => A.show("jobs");
 
 function ResearchStatus() {
   const plan = useApp((s) => s.plan);

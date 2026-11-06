@@ -26,6 +26,10 @@ public final class ServeServer: @unchecked Sendable {
         /// The request on screen, sent again when the task is reopened (a front end that switched away
         /// dropped it, and the agent waits for it).
         var pendingRequest: PermissionRequest?
+        /// The session's start (tools and MCP servers, the workspace's baseline commit, the saved
+        /// transcript): `task.open` answers before it ends, as the app shows a task at once; a message
+        /// waits for it.
+        var ready: Task<Void, Never>?
         var lastError: String?
         var stage: TaskStage?
         init(id: String, workspace: URL, bench: Workbench) { self.id = id; self.workspace = workspace; self.bench = bench }
@@ -39,6 +43,9 @@ public final class ServeServer: @unchecked Sendable {
     /// Tasks being started: a second `task.open` of the same task waits for the first instead of
     /// starting the same task twice (two sessions writing one transcript).
     var opening: [String: Task<Live, Error>] = [:]
+    /// Tasks still shutting down after a switch away (`close(background:)`): reopening one waits for that,
+    /// so two sessions never write one task's audit log and transcript at once.
+    var closing: [String: Task<Void, Never>] = [:]
     var currentKey: String?
     /// Permission request id → the live task asking.
     private var askers: [String: String] = [:]
@@ -170,6 +177,8 @@ public final class ServeServer: @unchecked Sendable {
             var dir: ObjCBool = false
             guard FileManager.default.fileExists(atPath: url.path, isDirectory: &dir), dir.boolValue else { throw RPCError(code: -32602, message: "no such folder: \(path)") }
             lock.withLock { workspace = url }
+            // The first task opened here scans the installed skills; start that now, while the list shows.
+            Task.detached(priority: .userInitiated) { _ = SkillRegistry(workspace: url) }
             try updateConfig(["recentWorkspaces": .array(([url.path] + config.recentWorkspaces.filter { $0 != url.path }).prefix(12).map { .string($0) })])
             return ["workspace": .string(url.path), "tasks": .array(taskList(url))]
         case "tasks.list":
@@ -184,7 +193,9 @@ public final class ServeServer: @unchecked Sendable {
             let text = p.str("text") ?? ""
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !files.isEmpty else { throw RPCError(code: -32602, message: "text is required") }
             let atts = files.map { Attachment.file(URL(fileURLWithPath: $0)) }
-            Task.detached { await l.bench.submit(text, attachments: atts) }   // the turn runs on; its progress arrives as events
+            // The turn runs on; its progress arrives as events. A message sent right after the task opened
+            // waits until its session has started.
+            Task.detached { await l.ready?.value; await l.bench.submit(text, attachments: atts) }
             return ["accepted": true]
         case "task.stop":
             // Stop also answers the request on screen: an agent waiting for it would keep the turn alive.
@@ -212,6 +223,11 @@ public final class ServeServer: @unchecked Sendable {
             await l.bench.answerAsk(id, o)
             refreshStage(l)
             return .object([:])
+        case "history.agent":
+            // A reopened task's subagent card, expanded: the steps it took (left out of task.open).
+            let l = try current(p)
+            guard let agent = p.str("id") else { throw RPCError(code: -32602, message: "id is required") }
+            return ["steps": .array(Self.agentSteps(taskDir: l.bench.services.taskDir, agent: agent))]
         case "brainstorm.wrapUp":
             try current(p).bench.wrapUpBrainstorm()
             return .object([:])
@@ -321,6 +337,7 @@ public final class ServeServer: @unchecked Sendable {
     /// The task's live session: the one being started, the open one, or a new one. Opening a task
     /// twice at once (a double click, a restart racing a switch) starts it once.
     func liveTask(_ k: String, id: String, ws: URL) async throws -> Live {
+        if let shuttingDown = lock.withLock({ closing[k] }) { await shuttingDown.value }
         let pending: Task<Live, Error> = lock.withLock {
             if let t = opening[k] { return t }
             if let l = live[k] { return Task { l } }
@@ -337,7 +354,7 @@ public final class ServeServer: @unchecked Sendable {
                     services.requestPermission = { [weak self] req in await self?.waitForPermission(req.id) ?? .deny("front end gone") }
                     b.onOutput = { [weak self] text in self?.notify("output", ["task": .string(id), "workspace": .string(ws.path), "text": .string(text)]) }
                     lock.withLock { live[k] = made }
-                    await b.start()
+                    made.ready = Task { await b.start() }
                     lock.withLock { opening[k] = nil }
                     return made
                 } catch {
@@ -367,19 +384,19 @@ public final class ServeServer: @unchecked Sendable {
         let k = Self.key(ws, id)
         // The task left open keeps running in the background when it is busy or waits for the user.
         let prev = lock.withLock { currentKey.flatMap { live[$0] } }.flatMap { Self.key($0.workspace, $0.id) != k ? $0 : nil }
-        if let prev, !prev.bench.isRunning && prev.stage?.needsPerson != true { await close(prev) }
+        if let prev, !prev.bench.isRunning && prev.stage?.needsPerson != true { await close(prev, background: true) }
         // A restart (a model switch) stops the task's turn and starts it again on the new configuration.
         if p["restart"]?.boolValue == true, let old = lock.withLock({ live[k] }) {
             old.bench.interrupt()
             for _ in 0..<60 where old.bench.isRunning { try? await Task.sleep(nanoseconds: 50_000_000) }
-            await close(old)
+            await close(old, background: true)
         }
         let l = try await liveTask(k, id: id, ws: ws)
         lock.withLock { currentKey = k; workspace = ws }
         // Starting this one took a moment: the previous task may have finished meanwhile, while it was
         // still the open one (so its own release skipped it).
         if let prev, lock.withLock({ live[Self.key(prev.workspace, prev.id)] === prev }), !prev.bench.isRunning, prev.stage?.needsPerson != true {
-            await close(prev)
+            await close(prev, background: true)
         }
         let s = l.bench.services
         return [
@@ -513,7 +530,9 @@ public final class ServeServer: @unchecked Sendable {
 
     // MARK: Closing
 
-    func close(_ l: Live) async {
+    /// Closes a task. In the background (a switch to another task) its kernels and MCP servers stop
+    /// after the call returns, so opening the next one does not wait for them.
+    func close(_ l: Live, background: Bool = false) async {
         let k = Self.key(l.workspace, l.id)
         l.bench.interrupt()
         let pending: [CheckedContinuation<PermissionDecision, Never>] = lock.withLock {
@@ -524,9 +543,14 @@ public final class ServeServer: @unchecked Sendable {
             return mine.compactMap { waiters.removeValue(forKey: $0) }
         }
         for c in pending { c.resume(returning: .deny("task closed")) }
-        l.bench.services.kernel.shutdownAll()
-        await l.bench.services.mcp.shutdown()
         notify("taskStatus", ["task": .string(l.id), "workspace": .string(l.workspace.path), "running": false, "stage": .null])
+        let services = l.bench.services, ready = l.ready
+        let stop = { await ready?.value; services.kernel.shutdownAll(); await services.mcp.shutdown() }
+        if background {
+            let t = Task.detached { await stop() }
+            lock.withLock { closing[k] = t }
+            Task.detached { [weak self] in await t.value; self?.lock.withLock { if self?.closing[k] == t { self?.closing[k] = nil } } }
+        } else { await stop() }
     }
 
     /// Stops every live task and refuses further work.

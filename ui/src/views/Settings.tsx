@@ -7,9 +7,10 @@ import { useApp, getState, onPlatform, type Config, type ModelInfo, type ModelRe
 import * as A from "../app/actions";
 import type { SettingsPane } from "../app/actions";
 import type { JsonObject } from "../serve";
-import { ActionButton, ActionRow, Chip, IconButton, SectionLabel, Segmented, SpecField } from "../theme/primitives";
+import { ActionButton, ActionRow, Chip, CropMarks, IconButton, SectionLabel, Segmented, SpecField } from "../theme/primitives";
 import { Symbol, roleName } from "../theme/theme";
 import { RoleGhostIcon } from "../theme/brand";
+import { SieveField } from "../theme/dots";
 import { EffortSlider } from "../theme/effort";
 import { checkForUpdates, download, onUpdate, restart, updateState, type UpdateState } from "../app/updates";
 import "./settings.css";
@@ -44,7 +45,13 @@ export function SettingsPage() {
         ))}
       </nav>
       <div className="settings-main">
-        <div className="settings-pane-title">{current.title()}</div>
+        {/* The pane's name over the app's slowly sifting dot field (as behind the welcome screen), fading out
+            to the right and downward. */}
+        <div className="settings-pane-title">
+          <div className="settings-title-field" aria-hidden><SieveField pitch={8} fadeMid={0.55} /></div>
+          <h1>{current.title()}</h1>
+        </div>
+        <div key={current.id} className="settings-pane">
         {current.id === "general" && <GeneralSettings />}
         {current.id === "providers" && <ProvidersSettings />}
         {current.id === "models" && <ModelsSettings />}
@@ -52,6 +59,7 @@ export function SettingsPage() {
         {current.id === "research" && <ResearchSettings />}
         {current.id === "memory" && <MemorySettings />}
         {current.id === "schedules" && <ScheduleSettings />}
+        </div>
       </div>
     </div>
   );
@@ -60,6 +68,7 @@ export function SettingsPage() {
 // MARK: Form parts (SwiftUI grouped Form)
 
 function Form({ children, trailing }: { children: ReactNode; trailing?: ReactNode }) {
+  // Sections rise in one after another when a pane opens (settings.css `.form > *`).
   return <div className="form-scroll"><div className="form">{children}</div>{trailing}</div>;
 }
 
@@ -68,7 +77,8 @@ function Section({ label, header, children }: { label?: string; header?: ReactNo
   return (
     <section className="form-section">
       {(label || header) && <div className="form-header">{header ?? <SectionLabel>{label}</SectionLabel>}</div>}
-      <div className="form-box">{rows.map((r, i) => <div className="form-row" key={i}>{r}</div>)}</div>
+      {/* Nothing to list (e.g. no connectors yet): the heading alone, not an empty frame. */}
+      {rows.length > 0 && <div className="form-box"><CropMarks length={6} inset={-4} />{rows.map((r, i) => <div className="form-row" key={i}>{r}</div>)}</div>}
     </section>
   );
 }
@@ -946,7 +956,7 @@ function MemorySettings() {
         </ActionRow>
         {(data?.pendingProposals ?? 0) > 0 && (
           <ActionRow title={L10n.f("%d proposals await approval", data!.pendingProposals)}>
-            <ActionButton kind="primary" width="column" onClick={() => A.setMainTab("learning")}>{L("Review")}</ActionButton>
+            <ActionButton kind="primary" width="column" onClick={() => A.show("learning")}>{L("Review")}</ActionButton>
           </ActionRow>
         )}
       </Section>
