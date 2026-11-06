@@ -1066,3 +1066,12 @@
 "Max output" = "最大輸出";
 "Detected: %@" = "偵測值：%@";
 "Set by hand when the provider reports different limits than the model really has. These values win over the catalogs, the provider's listing and what its API reports." = "當服務商回報的限制與模型實際不符時手動設定。這些值優先於目錄、服務商的模型列表與其介面回傳的數值。";
+"No installer for %@." = "沒有 %@ 的安裝程式。";
+"Gemini CLI needs Node.js 20 or newer (there is no standalone build). Install Node.js from nodejs.org, then click Install again." = "Gemini CLI 需要 Node.js 20 或更新版本（官方沒有獨立安裝包）。請先從 nodejs.org 安裝 Node.js，再按一次「安裝」。";
+"Installed %@." = "已安裝 %@。";
+"The installer did not finish:" = "安裝程式未能完成：";
+"A terminal opened for signing in. Finish there, then come back." = "已開啟終端機以登入。在那裡完成後回到這裡。";
+"Could not open a terminal. Run the sign-in command yourself:" = "無法開啟終端機。請自行執行登入指令：";
+"Sign in…" = "登入…";
+"Installs the official build from %@ — no npm or Node.js needed." = "從 %@ 安裝官方版本——不需要 npm 或 Node.js。";
+"Or in a terminal:" = "或在終端機中執行：";

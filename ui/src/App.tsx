@@ -54,6 +54,7 @@ export default function App() {
           c.onNotification((method, p) => { w.__notes!.push({ method, ...p }); });
         }
         c.onNotification((method, p) => {
+          if (method === "agentInstall") { A.agentInstallListeners.forEach((f) => f(String(p.id), (p.lines ?? []) as string[])); return; }
           if (method !== "taskStatus") return;
           taskStatus(p);
           // A background task was released: its row shows its new time (AppModel+Events).

@@ -1066,3 +1066,12 @@
 "Max output" = "Salida máxima";
 "Detected: %@" = "Detectado: %@";
 "Set by hand when the provider reports different limits than the model really has. These values win over the catalogs, the provider's listing and what its API reports." = "Fíjalos a mano cuando el proveedor informe límites distintos de los reales del modelo. Estos valores prevalecen sobre los catálogos, la lista del proveedor y lo que devuelve su API.";
+"No installer for %@." = "No hay instalador para %@.";
+"Gemini CLI needs Node.js 20 or newer (there is no standalone build). Install Node.js from nodejs.org, then click Install again." = "Gemini CLI necesita Node.js 20 o posterior (no hay una versión independiente). Instala Node.js desde nodejs.org y vuelve a pulsar Instalar.";
+"Installed %@." = "Instalado: %@.";
+"The installer did not finish:" = "El instalador no terminó:";
+"A terminal opened for signing in. Finish there, then come back." = "Se abrió una terminal para iniciar sesión. Termina allí y vuelve.";
+"Could not open a terminal. Run the sign-in command yourself:" = "No se pudo abrir una terminal. Ejecuta tú el comando de inicio de sesión:";
+"Sign in…" = "Iniciar sesión…";
+"Installs the official build from %@ — no npm or Node.js needed." = "Instala la versión oficial desde %@, sin npm ni Node.js.";
+"Or in a terminal:" = "O en una terminal:";

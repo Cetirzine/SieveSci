@@ -390,3 +390,6 @@ export async function switchMainModel(providerId: string, model: string) {
   const opened = await call<JsonObject>("task.open", { ...(id ? { id } : {}), restart: true });
   if (opened) { setState({ live: false }); await startSession(String(opened.task)); }
 }
+
+/** Output of a CLI agent's installer (serve's `agentInstall` notifications), by provider id. */
+export const agentInstallListeners = new Set<(id: string, lines: string[]) => void>();

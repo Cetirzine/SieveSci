@@ -135,3 +135,6 @@
 .model-spec { margin: 2px 0 4px 21px; padding: var(--s-s) var(--s-m); border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); background: var(--surface-subtle); }
 .model-spec .lc + .lc, .model-spec .lc + .toggle-row, .model-spec .toggle-row + .toggle-row, .model-spec .toggle-row + .lc { padding-top: 6px; }
 .icon-button.on { color: var(--accent); background: var(--selection); }
+.install-log { max-height: 120px; overflow: hidden; color: var(--secondary); }
+/* In a form, a labelled switch sits like every other control: label left, track at the right edge. */
+.form-row > .seg-row { display: flex; width: 100%; justify-content: space-between; }

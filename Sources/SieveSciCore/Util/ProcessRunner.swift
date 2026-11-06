@@ -137,7 +137,9 @@ public enum ProcessRunner {
         if name.hasPrefix("/") { return runnable(name) ? [name] : [] }
         #endif
         var out: [String] = []
-        for dir in searchPath.split(separator: Platform.pathSeparator) where !dir.isEmpty {
+        // PATH first, then the folders the agents' own installers use (see AgentInstaller).
+        let dirs = searchPath.split(separator: Platform.pathSeparator).map(String.init) + AgentInstaller.installFolders
+        for dir in dirs where !dir.isEmpty {
             let base = URL(fileURLWithPath: String(dir)).appendingPathComponent(name).path
             if let hit = exts.map({ base + $0 }).first(where: runnable), !out.contains(hit) { out.append(hit) }
         }

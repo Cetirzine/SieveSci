@@ -266,10 +266,12 @@ const keyPages: Record<string, string> = {
   "glm-coding-intl": "https://z.ai/manage-apikey/apikey-list", openrouter: "https://openrouter.ai/keys",
   closeai: "https://platform.closeai-asia.com/dashboard", "closeai-anthropic": "https://platform.closeai-asia.com/dashboard",
 };
-/** How to install and sign in to a subscription CLI (ProviderStatus.cliHelp). */
-const cliHelp: Record<string, { install: string; signIn: string }> = {
-  claude: { install: "npm install -g @anthropic-ai/claude-code", signIn: "claude" }, codex: { install: "npm install -g @openai/codex", signIn: "codex login" },
-  gemini: { install: "npm install -g @google/gemini-cli", signIn: "gemini" }, agy: { install: "curl -fsSL https://antigravity.google/cli/install.sh | bash", signIn: "agy" },
+/** The vendors' own installers (AgentInstaller.swift) and sign-in commands, shown for running by hand. */
+const cliHelp: Record<string, { unix: string; windows: string; signIn: string; source?: string }> = {
+  claude: { unix: "curl -fsSL https://claude.ai/install.sh | bash", windows: "irm https://claude.ai/install.ps1 | iex", signIn: "claude", source: "claude.ai" },
+  codex: { unix: "curl -fsSL https://chatgpt.com/codex/install.sh | sh", windows: "irm https://chatgpt.com/codex/install.ps1 | iex", signIn: "codex login", source: "chatgpt.com" },
+  agy: { unix: "curl -fsSL https://antigravity.google/cli/install.sh | bash", windows: "irm https://antigravity.google/cli/install.ps1 | iex", signIn: "agy", source: "antigravity.google" },
+  gemini: { unix: "npm install -g @google/gemini-cli", windows: "npm install -g @google/gemini-cli", signIn: "gemini" },
 };
 /** A second key some relays need just to read the balance (CloseAI management keys). */
 function adminKeyRef(p: ProviderProfile): string | null {
@@ -438,7 +440,6 @@ function ProviderDetail({ profile: p }: { profile: ProviderProfile }) {
     explicitPromptCacheMode: boolean; streamUsage: boolean; sessionAffinity: string; headers: Record<string, string> };
   const setOpt = (change: Partial<typeof opts>, typing = false) => update({ options: { ...p.options, ...change } as JsonObject }, typing);
   const exe = p.executable ?? "";
-  const help = cliHelp[exe];
 
   const keySection = (
     <div className="stack">
@@ -459,18 +460,7 @@ function ProviderDetail({ profile: p }: { profile: ProviderProfile }) {
     </div>
   );
 
-  const cliSection = (
-    <div className="stack">
-      {st?.cliPath
-        ? <span className="check-line c-ok"><Symbol name="checkmark.circle.fill" size={12} />{L10n.f("Found %@ — SieveSci drives it with your existing sign-in, so usage counts against your plan. Your login token is never read.", st.cliPath)}</span>
-        : <span className="check-line secondary"><Symbol name="xmark.circle" size={12} />{L10n.f(onPlatform(platform, "%@ is not installed on this Mac.", "%@ is not installed on this computer."), exe)}</span>}
-      {help && <>
-        <Caption>{st?.cliPath ? L(onPlatform(platform, "Not signed in yet? Run this once in Terminal:", "Not signed in yet? Run this once in a terminal:"))
-                               : L(onPlatform(platform, "Install it in Terminal, then sign in once:", "Install it in a terminal, then sign in once:"))}</Caption>
-        <div className="code-box">{st?.cliPath ? help.signIn : `${help.install}\n${help.signIn}`}</div>
-      </>}
-    </div>
-  );
+  const cliSection = <CLISection profile={p} />;
 
   const usageSection = (
     <Section header={<><SectionLabel>{L("Usage & limits")}</SectionLabel><IconButton symbol="arrow.clockwise" label={L("Refresh")} disabled={refreshingUsage} onClick={() => void refreshUsage()} /></>}>
@@ -588,6 +578,56 @@ function ProviderDetail({ profile: p }: { profile: ProviderProfile }) {
         </Disclosure>
       </Section>
     </Form>
+  );
+}
+
+/** A subscription CLI agent: one click installs the vendor's own build (no npm where one exists) and
+ *  another opens a terminal on its sign-in; the commands stay visible for doing it by hand. */
+function CLISection({ profile: p }: { profile: ProviderProfile }) {
+  const st = useApp((s) => s.providerInfo[p.id]);
+  const platform = useApp((s) => s.platform);
+  const exe = p.executable ?? "";
+  const help = cliHelp[exe];
+  const [busy, setBusy] = useState(false);
+  const [lines, setLines] = useState<string[]>([]);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => {
+    const f = (id: string, more: string[]) => { if (id === p.id) setLines((l) => [...l, ...more].slice(-8)); };
+    A.agentInstallListeners.add(f);
+    return () => { A.agentInstallListeners.delete(f); };
+  }, [p.id]);
+  const install = async () => {
+    setBusy(true); setLines([]); setMessage(null);
+    const r = await A.request<JsonObject>("agents.install", { id: p.id });
+    setBusy(false);
+    if (r.ok) { A.applyConfigPayload(r.value); setMessage({ ok: r.value.ok === true, text: String(r.value.message ?? "") }); }
+    else setMessage({ ok: false, text: r.error });
+  };
+  const signIn = async () => {
+    const r = await A.request<{ message: string }>("agents.signIn", { id: p.id });
+    setMessage({ ok: r.ok, text: r.ok ? r.value.message : r.error });
+  };
+  const command = help ? (platform === "windows" ? help.windows : help.unix) : "";
+  return (
+    <div className="stack">
+      {st?.cliPath
+        ? <span className="check-line c-ok"><Symbol name="checkmark.circle.fill" size={12} />{L10n.f(onPlatform(platform, "Found %@ — SieveSci drives it with your existing sign-in, so usage counts against your plan. Your login token is never read.", "Found %@ — SieveSci drives it with your existing sign-in, so usage counts against your plan. Your login token is never read."), st.cliPath)}</span>
+        : <span className="check-line secondary"><Symbol name="xmark.circle" size={12} />{L10n.f(onPlatform(platform, "%@ is not installed on this Mac.", "%@ is not installed on this computer."), exe)}</span>}
+      {help && (
+        <div className="hstack">
+          {st?.cliPath
+            ? <ActionButton kind="primary" width="column" onClick={() => void signIn()}>{L("Sign in…")}</ActionButton>
+            : <ActionButton kind="primary" width="column" disabled={busy} onClick={() => void install()}>{busy ? L("Installing…") : L("Install")}</ActionButton>}
+          {!st?.cliPath && help.source && <span className="t-caption secondary">{L10n.f("Installs the official build from %@ — no npm or Node.js needed.", help.source)}</span>}
+        </div>
+      )}
+      {lines.length > 0 && <div className="code-box install-log">{lines.join("\n")}</div>}
+      {message && <span className={`check-line ${message.ok ? "c-ok" : "c-warn"}`}><Symbol name={message.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"} size={12} />{message.text}</span>}
+      {help && <>
+        <Caption>{L("Or in a terminal:")}</Caption>
+        <div className="code-box">{st?.cliPath ? help.signIn : `${command}\n${help.signIn}`}</div>
+      </>}
+    </div>
   );
 }
 

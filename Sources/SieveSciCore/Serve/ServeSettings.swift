@@ -138,6 +138,21 @@ extension ServeServer {
             #endif
             return .object([:])
 
+        case "agents.install":
+            // The provider's CLI agent, from its vendor's own installer; output streams as `agentInstall`.
+            let prof = try provider(p)
+            guard prof.family == .cliAgent, let exe = prof.executable else { throw RPCError(code: -32602, message: "not a CLI agent") }
+            let id = prof.id
+            let r = await AgentInstaller.install(exe) { [weak self] lines in
+                self?.notify("agentInstall", ["id": .string(id), "lines": .array(lines.map { .string($0) })])
+            }
+            var out = configPayload().objectValue ?? [:]
+            out["ok"] = .bool(r.ok); out["message"] = .string(r.message)
+            return .object(out)
+        case "agents.signIn":
+            let prof = try provider(p)
+            guard let exe = prof.executable else { throw RPCError(code: -32602, message: "not a CLI agent") }
+            return ["message": .string(await AgentInstaller.openSignIn(exe))]
         case "cli.install":
             return ["message": .string(Self.installCLI())]
 
