@@ -136,6 +136,9 @@ export interface AppState {
   pendingPermission: PermissionAsk | null;
   demoAsk: PermissionAsk | null;
   pendingAsk: AskRequest | null;
+  /** Every question of the open task waiting for an answer, oldest first; `pendingAsk` is the first.
+   *  Agents may ask at once: the next one shows when the first is answered or dismissed. */
+  askQueue: AskRequest[];
   plan: ResearchPlan;
   claims: Claim[];
   contested: Contested[];
@@ -197,7 +200,7 @@ export const initialState: AppState = {
   streams: { main: [] }, cards: {},
   meter: { model: "", contextWindow: 0, lastPromptTokens: 0, lastOutputTokens: 0, fill: 0, cacheHitRate: 0, session: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 } },
   running: false, runStarted: Date.now(), spinnerVerb: "Sieving",
-  pendingPermission: null, demoAsk: null, pendingAsk: null,
+  pendingPermission: null, demoAsk: null, pendingAsk: null, askQueue: [],
   plan: { goal: "", stage: "scoping", hypotheses: [], steps: [] }, claims: [], contested: [],
   jobs: {}, jobOrder: [], changedFiles: [], figures: [], queued: [],
   mainTab: "chat", inspectorTab: "files", showInspector: false, showSettingsPage: false, sidebarVisible: true,
@@ -431,8 +434,14 @@ function handle(s: AppState, e: JsonObject) {
       if (agent === "main") s.running = false;
       break;
     case "permissionRequested": s.pendingPermission = s.pendingPermission ?? (e.request as unknown as PermissionAsk); break;
-    case "askRequested": { const r = e.request as unknown as AskRequest; if (!s.pendingAsk || s.pendingAsk.id === r.id) s.pendingAsk = r; break; }
-    case "askResolved": if (s.pendingAsk?.id === str("id")) s.pendingAsk = null; break;
+    case "askRequested": {
+      const r = e.request as unknown as AskRequest;
+      s.askQueue = s.askQueue.some((q) => q.id === r.id) ? s.askQueue.map((q) => (q.id === r.id ? r : q)) : [...s.askQueue, r];
+      s.pendingAsk = s.askQueue[0];
+      break;
+    }
+    case "permissionResolved": if (s.pendingPermission?.id === str("id")) s.pendingPermission = null; break;
+    case "askResolved": s.askQueue = s.askQueue.filter((q) => q.id !== str("id")); s.pendingAsk = s.askQueue[0] ?? null; break;
     case "brainstormChanged": showBrainstorm(s, e.state as unknown as BrainstormState); break;
     case "ideasChanged": s.ideas = e.ideas as unknown as Idea[]; break;
     // A generated title replaces the row's text in place (names given by hand were skipped by the core).

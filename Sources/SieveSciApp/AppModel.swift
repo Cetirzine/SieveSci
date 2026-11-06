@@ -561,6 +561,11 @@ final class AppModel: ObservableObject {
         if m == .yolo, config.permissionMode != .yolo, !Self.confirmYolo() { return }
         config.permissionMode = m
         bench?.services.permissions.mode = m
+        // The call on screen goes through when the new mode allows it (auto, YOLO, accept edits for an edit).
+        if let r = pendingPermission, let p = bench?.services.permissions,
+           p.evaluate(tool: r.tool, input: r.input, effect: r.effect) == .allow {
+            answerPermission(.allowOnce)
+        }
     }
 
     static func confirmYolo() -> Bool {

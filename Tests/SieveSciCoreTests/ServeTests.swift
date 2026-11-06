@@ -7,16 +7,18 @@ private final class ToolThenTextProvider: LLMProvider, @unchecked Sendable {
     let profile = ProviderProfile(id: "fake", displayName: "fake", family: .openaiChat, baseURL: "http://localhost", auth: .none, apiKeyRef: "", models: ["m"])
     private let calls = LockedBox(0)
     let command: String
-    init(command: String) { self.command = command }
+    /// Every turn starts with the tool call (odd calls), not only the first.
+    let everyTurn: Bool
+    init(command: String, everyTurn: Bool = false) { self.command = command; self.everyTurn = everyTurn }
 
     func stream(_ request: LLMRequest) -> AsyncThrowingStream<StreamEvent, Error> {
         var n = 0
         calls.mutate { $0 += 1; n = $0 }
-        let first = n == 1
+        let first = everyTurn ? n % 2 == 1 : n == 1
         let command = self.command
         return AsyncThrowingStream { c in
             if first {
-                let use = ToolUse(id: "call_1", name: "bash", input: ["command": .string(command)], echo: nil)
+                let use = ToolUse(id: "call_\(n)", name: "bash", input: ["command": .string(command)], echo: nil)
                 c.yield(.completed(LLMResponse(message: Message(role: .assistant, blocks: [.toolUse(use)]), stopReason: .toolUse, usage: Usage(input: 10, output: 5))))
             } else {
                 c.yield(.textDelta("done"))
@@ -253,6 +255,39 @@ private final class SlowProvider: LLMProvider, @unchecked Sendable {
         // Stop answers it, so the turn ends instead of waiting for a prompt no one sees.
         _ = try await c.call("task.stop")
         #expect(await c.waitFor { $0.str("type") == "turnFinished" && $0.str("task") == first && $0.str("agentId") == "main" } != nil)
+        try await c.call("shutdown")
+    }
+
+    @Test func aRequestNamingItsTaskNeverReachesAnother() async throws {
+        let ws = try workspace()
+        let c = Client(workspace: ws) { ScriptedProvider(replies: ["one", "two"]) }
+        let first = try #require(try await c.call("task.open").str("task"))
+        let second = try #require(try await c.call("task.open").str("task"))   // the first, idle, is released
+        let path = ws.standardizedFileURL.path
+        // The window still shows the first: its message must not land in the second.
+        await #expect(throws: ServeTestError.self) { try await c.call("task.send", ["text": "hello", "task": .string(first), "workspace": .string(path)]) }
+        #expect(try await c.call("task.send", ["text": "hello", "task": .string(second), "workspace": .string(path)])["accepted"]?.boolValue == true)
+        #expect(await c.waitFor { $0.str("type") == "turnFinished" && $0.str("task") == second && $0.str("agentId") == "main" } != nil)
+        try await c.call("shutdown")
+    }
+
+    @Test func switchingToAutoReachesTheLiveTask() async throws {
+        let ws = try workspace()
+        let c = Client(workspace: ws) { ToolThenTextProvider(command: "echo mode-ok", everyTurn: true) }
+        let task = try #require(try await c.call("task.open").str("task"))
+        _ = try await c.call("task.send", ["text": "run it"])
+        let ask = try #require(await c.waitFor { $0.str("type") == "permissionRequested" })
+        // Switched to auto while the prompt is on screen: the call goes through and the prompt is withdrawn.
+        _ = try await c.call("config.set", ["patch": ["permissionMode": "auto"]])
+        #expect(await c.waitFor { $0.str("type") == "permissionResolved" && $0.str("id") == ask["request"]?.str("id") } != nil)
+        #expect(await c.waitFor { $0.str("type") == "turnFinished" && $0.str("task") == task && $0.str("agentId") == "main" } != nil)
+        // The next turn of the same task, after Stop or not, does not ask again.
+        let before = c.events.filter { $0.str("type") == "permissionRequested" }.count
+        _ = try await c.call("task.stop")
+        _ = try await c.call("task.send", ["text": "run it again"])
+        let t0 = Date()
+        while c.events.filter({ $0.str("type") == "turnFinished" && $0.str("agentId") == "main" }).count < 2, Date().timeIntervalSince(t0) < 10 { try await Task.sleep(nanoseconds: 50_000_000) }
+        #expect(c.events.filter { $0.str("type") == "permissionRequested" }.count == before)
         try await c.call("shutdown")
     }
 

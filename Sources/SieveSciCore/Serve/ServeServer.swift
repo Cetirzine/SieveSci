@@ -287,6 +287,12 @@ public final class ServeServer: @unchecked Sendable {
             l.bench.services.permissions.mode = next.permissionMode
             l.bench.autoTitle = next.autoTitles
             l.bench.autoWake = next.autoWake
+            // Switching to a mode that allows the call on screen (auto, YOLO, accept edits for an edit)
+            // lets it through, as if it had been asked under the new mode.
+            if let r = lock.withLock({ l.pendingRequest }),
+               l.bench.services.permissions.evaluate(tool: r.tool, input: r.input, effect: r.effect) == .allow {
+                resolvePermission(r.id, .allowOnce)
+            }
         }
     }
 
@@ -524,7 +530,11 @@ public final class ServeServer: @unchecked Sendable {
             return (nil, l)
         }
         c?.resume(returning: d)
-        if let asker { refreshStage(asker) }
+        if let asker {
+            // Answered here (a mode switch, Stop) or by another window: the prompt goes away.
+            notify("event", ["type": "permissionResolved", "id": .string(id), "task": .string(asker.id), "workspace": .string(asker.workspace.path)])
+            refreshStage(asker)
+        }
     }
 
     // MARK: Closing

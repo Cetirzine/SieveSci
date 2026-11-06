@@ -8,9 +8,19 @@ let client: ServeClient | null = null;
 export function attach(c: ServeClient | null) { client = c; }
 export const connected = () => client !== null;
 
+/** Requests about the open task name the task this window shows. Without it serve acts on the task it
+ *  has open, which during a switch (a slow open, another folder) may be a different one: a message,
+ *  a Stop or an answer would land in the wrong conversation. Naming it, they fail instead. */
+const taskScoped = /^(task\.send|task\.stop|ask\.respond|brainstorm\.|panels\.|library\.links|learning\.|changes\.|history\.|jobs\.stop)/;
+function scoped(method: string, params: JsonObject): JsonObject {
+  if (!taskScoped.test(method) || params.task !== undefined) return params;
+  const s = getState();
+  return s.taskId && !s.taskId.startsWith("new-") && s.workspace ? { ...params, task: s.taskId, workspace: s.workspace } : params;
+}
+
 async function call<T = JsonObject>(method: string, params: JsonObject = {}): Promise<T | null> {
   if (!client) return null;
-  try { return await client.call<T>(method, params); }
+  try { return await client.call<T>(method, scoped(method, params)); }
   catch (e) { setState({ lastError: e instanceof Error ? e.message : String(e) }); return null; }
 }
 
@@ -68,7 +78,7 @@ export async function setKey(ref: string, value: string) {
 /** Any settings request; failures come back as the message (shown where the button is). */
 export async function request<T = JsonObject>(method: string, params: JsonObject = {}): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
   if (!client) return { ok: false, error: L("Open a workspace first.") };
-  try { return { ok: true, value: await client.call<T>(method, params) }; }
+  try { return { ok: true, value: await client.call<T>(method, scoped(method, params)) }; }
   catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
 
@@ -178,7 +188,7 @@ export async function openWorkspace(path: string, task?: string, newTask = false
   const moved = other && leaving.running && leaving.taskId && leaving.workspace
     ? { backgroundTasks: [...leaving.backgroundTasks.filter((t) => t !== leaving.taskId), leaving.taskId],
         backgroundWorkspaces: { ...leaving.backgroundWorkspaces, [leaving.taskId]: leaving.workspace } } : {};
-  setState((st) => ({ ...(other ? { ...moved, taskId: "", live: false, streams: { main: [] }, cards: {}, running: false, pendingPermission: null, pendingAsk: null } : {}), workspace: r.workspace, config: { ...st.config, recentWorkspaces: [r.workspace, ...st.config.recentWorkspaces.filter((p) => p !== r.workspace)].slice(0, 12) } }));
+  setState((st) => ({ ...(other ? { ...moved, taskId: "", live: false, streams: { main: [] }, cards: {}, running: false, pendingPermission: null, pendingAsk: null, askQueue: [] } : {}), workspace: r.workspace, config: { ...st.config, recentWorkspaces: [r.workspace, ...st.config.recentWorkspaces.filter((p) => p !== r.workspace)].slice(0, 12) } }));
   applyTasks(r.tasks);
   await startSession(newTask ? undefined : (task ?? r.tasks[0]?.id));
   void loadCommands();
@@ -264,6 +274,7 @@ export async function startSession(task?: string) {
     return {
       taskId: id, live: true, lastError: null, streams: { main }, cards: {}, jobs: {}, jobOrder: [], changedFiles: [], figures: [], queued: [],
       running: r.running === true, runStarted: Date.now(), backgroundTasks, backgroundWorkspaces, taskTitles: title,
+      askQueue: (r.asks ?? []) as unknown as AskRequest[],
       pendingAsk: ((r.asks ?? []) as unknown as AskRequest[])[0] ?? null,
       // An agent of this task may be waiting for an approval asked while another task was shown.
       pendingPermission: (r.permission as unknown as PermissionAsk) ?? null,
@@ -408,7 +419,8 @@ export async function answerPermission(id: string | undefined, decision: "allow"
 }
 
 export async function answerAsk(id: string, outcome: JsonObject) {
-  setState({ pendingAsk: null });
+  // The next question, if another agent asked one meanwhile, takes its place.
+  setState((s) => { const askQueue = s.askQueue.filter((q) => q.id !== id); return { askQueue, pendingAsk: askQueue[0] ?? null }; });
   await call("ask.respond", { id, outcome });
 }
 

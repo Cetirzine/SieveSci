@@ -150,6 +150,7 @@ routes them to the open task or marks a background one in its sidebar.
   `usage {agentId, meter: {model, contextWindow, lastPromptTokens, lastOutputTokens, fill, cacheHitRate, session}}`,
   `permissionRequested {request: {id, tool, summary, input, effect, rememberPattern}}` (sent when the request is put to
   the user: agents asking at once are asked one after another, each announced when its turn comes),
+  `permissionResolved {id}` (answered without the prompt: Stop, a switch to a mode that allows the call, another window),
   `integrity {signals}`, `supervisorStarted {kind, reason}`, `supervisorReview {kind, verdict, body}`,
   `planChanged {plan}`, `claimsChanged {claims}`, `notice {text}`, `error {text}`,
   `turnFinished {agentId, stop}`, `agentStarted {id, role, parent, purpose}`, `agentFinished {id, role, result}`,
