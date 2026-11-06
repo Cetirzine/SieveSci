@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// The Settings pages' requests (docs/SERVE_PROTOCOL.md, "Settings"): what the SwiftUI settings
 /// views compute with the core directly — provider status and models, key checks, quotas, catalogs,
