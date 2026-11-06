@@ -163,11 +163,7 @@ public final class SessionStore: @unchecked Sendable {
     public static func trash(task: String, in workspace: URL) throws {
         let dir = workspace.appendingPathComponent(".sievesci/tasks").appendingPathComponent(task)
         guard !task.isEmpty, !task.contains("/"), FileManager.default.fileExists(atPath: dir.path) else { return }
-        #if os(macOS)
-        try FileManager.default.trashItem(at: dir, resultingItemURL: nil)
-        #else
-        try FileManager.default.removeItem(at: dir)
-        #endif
+        try Platform.moveToTrash(dir)
     }
 
     // MARK: Reading other conversations

@@ -38,7 +38,9 @@ var targets: [Target] = [
         ],
         path: "Sources/SieveSciCore",
         resources: [.copy("Resources"), .process("Localization")],
-        swiftSettings: swift5Mode
+        swiftSettings: swift5Mode,
+        // Windows: Recycle Bin (Platform.moveToTrash) and Credential Manager (PlatformSecretStore).
+        linkerSettings: [.linkedLibrary("Shell32", .when(platforms: [.windows])), .linkedLibrary("Advapi32", .when(platforms: [.windows]))]
     ),
     .executableTarget(name: "sievesci-cli", dependencies: ["SieveSciCore"], path: "Sources/sievesci-cli", swiftSettings: swift5Mode),
     .testTarget(name: "SieveSciCoreTests", dependencies: ["SieveSciCore"], path: "Tests/SieveSciCoreTests", swiftSettings: swift5Mode),

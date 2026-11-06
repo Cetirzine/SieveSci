@@ -34,8 +34,9 @@ private final class Client: @unchecked Sendable {
     private var next = 0
 
     init(workspace: URL, provider: @escaping @Sendable () -> LLMProvider) {
-        server = ServeServer(workspace: workspace, info: ["provider": "fake", "model": "m", "mode": "ask"], makeServices: { id in
-            let s = try SessionServices(taskId: id, workspace: workspace, models: RoleModels(main: (provider(), "m")), secrets: EnvironmentSecretStore())
+        server = ServeServer(workspace: workspace, info: ["provider": "fake", "model": "m", "mode": "ask"], config: AppConfig(), saveConfig: false,
+                             secrets: EnvironmentSecretStore(), keyStore: nil, makeServices: { id, ws, _ in
+            let s = try SessionServices(taskId: id, workspace: ws, models: RoleModels(main: (provider(), "m")), secrets: EnvironmentSecretStore())
             s.research.groundingRequired = false
             s.delegation.auto = false
             return s
@@ -56,6 +57,7 @@ private final class Client: @unchecked Sendable {
     }
 
     var events: [JSON] { lines.value.filter { $0.str("method") == "event" }.compactMap { $0["params"] } }
+    var statuses: [JSON] { lines.value.filter { $0.str("method") == "taskStatus" }.compactMap { $0["params"] } }
 
     func waitFor(_ timeout: TimeInterval = 20, _ match: (JSON) -> Bool) async -> JSON? {
         let t0 = Date()
@@ -69,6 +71,21 @@ private final class Client: @unchecked Sendable {
 
 private struct ServeTestError: Error { var message: String }
 
+/// Answers after a second, so a turn is still running when the client moves on.
+private final class SlowProvider: LLMProvider, @unchecked Sendable {
+    let profile = ProviderProfile(id: "fake", displayName: "fake", family: .openaiChat, baseURL: "http://localhost", auth: .none, apiKeyRef: "", models: ["m"])
+    func stream(_ request: LLMRequest) -> AsyncThrowingStream<StreamEvent, Error> {
+        AsyncThrowingStream { c in
+            Task {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                c.yield(.textDelta("slow"))
+                c.yield(.completed(LLMResponse(message: Message(role: .assistant, blocks: [.text("slow")]), stopReason: .endTurn, usage: Usage(input: 1, output: 1))))
+                c.finish()
+            }
+        }
+    }
+}
+
 @Suite(.serialized) struct Serve {
     func workspace() throws -> URL {
         let ws = FileManager.default.temporaryDirectory.appendingPathComponent("serve-\(UUID().uuidString)")
@@ -80,7 +97,7 @@ private struct ServeTestError: Error { var message: String }
         let ws = try workspace()
         let c = Client(workspace: ws) { ScriptedProvider(replies: ["Hello from the model.", "again"]) }
         let info = try await c.call("initialize", ["client": "test"])
-        #expect(info["protocol"]?.intValue == 1 && info.str("name") == "sievesci" && info.str("workspace") == ws.path)
+        #expect(info["protocol"]?.intValue == 2 && info.str("name") == "sievesci" && info.str("workspace") == ws.path)
 
         let opened = try await c.call("task.open")
         let task = try #require(opened.str("task"))
@@ -132,5 +149,65 @@ private struct ServeTestError: Error { var message: String }
         #expect(Wire.askOutcome(["kind": "answered", "answers": [["questionId": "q1", "selected": ["A"]]]]) == .answered([AskAnswer(questionId: "q1", selected: ["A"])]))
         #expect(Wire.askOutcome(["kind": "dismissed"]) == .dismissed(nil))
         #expect(Wire.ask(.dismissed("later")).str("kind") == "dismissed")
+    }
+
+    @Test func configurationAndWorkspaces() async throws {
+        let ws = try workspace(), other = try workspace()
+        let c = Client(workspace: ws) { ScriptedProvider(replies: []) }
+        let got = try await c.call("config.get")
+        #expect(got["config"]?.str("permissionMode") == "ask" && got["status"]?["models"]?["ready"]?.boolValue == false)
+        let set = try await c.call("config.set", ["patch": ["permissionMode": "plan", "showThinking": false]])
+        #expect(set["config"]?.str("permissionMode") == "plan" && set["config"]?["showThinking"]?.boolValue == false)
+        await #expect(throws: ServeTestError.self) { try await c.call("config.set", ["patch": ["permissionMode": "sideways"]]) }
+        let opened = try await c.call("workspace.open", ["path": .string(other.path)])
+        #expect(opened.str("workspace") == other.standardizedFileURL.path && opened["tasks"]?.arrayValue?.isEmpty == true)
+        #expect(try await c.call("config.get")["config"]?["recentWorkspaces"]?.arrayValue?.first?.stringValue == other.standardizedFileURL.path)
+        await #expect(throws: ServeTestError.self) { try await c.call("workspace.open", ["path": "/no/such/folder"]) }
+        await #expect(throws: ServeTestError.self) { try await c.call("secrets.set", ["ref": "X_KEY", "value": "v"]) }
+    }
+
+    @Test func renameForkAndMarkdown() async throws {
+        let ws = try workspace()
+        let c = Client(workspace: ws) { ScriptedProvider(replies: ["Reply one."]) }
+        let task = try #require(try await c.call("task.open").str("task"))
+        _ = try await c.call("task.send", ["text": "First question"])
+        #expect(await c.waitFor { $0.str("type") == "turnFinished" && $0.str("agentId") == "main" } != nil)
+        #expect(try await c.call("task.rename", ["id": .string(task), "title": "My name"]).str("title") == "My name")
+        #expect(try await c.call("tasks.list")["tasks"]?.arrayValue?.first { $0.str("id") == task }?.str("title") == "My name")
+        let fork = try #require(try await c.call("task.fork", ["id": .string(task)]).str("task"))
+        let md = try await c.call("task.markdown", ["id": .string(fork)]).str("markdown") ?? ""
+        #expect(md.contains("First question") && md.contains("Reply one."), "\(md)")
+        try await c.call("shutdown")
+    }
+
+    @Test func stagesFollowAPermissionRequest() async throws {
+        let ws = try workspace()
+        let c = Client(workspace: ws) { ToolThenTextProvider(command: "echo stage-ok") }
+        _ = try await c.call("task.open")
+        _ = try await c.call("task.send", ["text": "run it"])
+        let ask = try #require(await c.waitFor { $0.str("type") == "permissionRequested" })
+        let t0 = Date()
+        while !c.statuses.contains(where: { $0["stage"]?.str("kind") == "answer" }), Date().timeIntervalSince(t0) < 10 { try await Task.sleep(nanoseconds: 50_000_000) }
+        #expect(c.statuses.contains { $0["stage"]?.str("kind") == "answer" && $0["stage"]?["needsPerson"]?.boolValue == true }, "\(c.statuses)")
+        #expect(ask.str("task") != nil && ask.str("workspace") == ws.standardizedFileURL.path)
+        _ = try await c.call("permission.respond", ["id": .string(ask["request"]?.str("id") ?? ""), "decision": "allow"])
+        #expect(await c.waitFor { $0.str("type") == "turnFinished" && $0.str("agentId") == "main" } != nil)
+        try await c.call("shutdown")
+    }
+
+    @Test func aRunningTaskContinuesInTheBackground() async throws {
+        let ws = try workspace()
+        let c = Client(workspace: ws) { SlowProvider() }
+        let first = try #require(try await c.call("task.open").str("task"))
+        _ = try await c.call("task.send", ["text": "take your time"])
+        #expect(await c.waitFor { $0.str("type") == "turnStarted" && $0.str("task") == first } != nil)
+        let second = try #require(try await c.call("task.open").str("task"))
+        #expect(second != first)
+        // The first finishes on its own, then is released (a closing status with no stage).
+        #expect(await c.waitFor(10) { $0.str("type") == "turnFinished" && $0.str("task") == first && $0.str("agentId") == "main" } != nil)
+        let t0 = Date()
+        while !c.statuses.contains(where: { $0.str("task") == first && $0["stage"]?.isNull == true }), Date().timeIntervalSince(t0) < 5 { try await Task.sleep(nanoseconds: 50_000_000) }
+        #expect(c.statuses.contains { $0.str("task") == first && $0["stage"]?.isNull == true }, "\(c.statuses)")
+        try await c.call("shutdown")
     }
 }

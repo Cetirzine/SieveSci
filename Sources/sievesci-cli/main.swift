@@ -37,6 +37,9 @@ struct Options {
     var maxWorkers: Int?
     var prompt: String?
     var effort: Effort?
+    /// Set when the flags name a provider or a workspace (serve otherwise uses the saved configuration).
+    var providerGiven = false
+    var workspaceGiven = false
 }
 
 func parse(_ args: [String] = Array(CommandLine.arguments.dropFirst())) -> Options {
@@ -46,8 +49,8 @@ func parse(_ args: [String] = Array(CommandLine.arguments.dropFirst())) -> Optio
         let k = a.removeFirst()
         func v() -> String { a.isEmpty ? "" : a.removeFirst() }
         switch k {
-        case "--workspace", "-w": o.workspace = v()
-        case "--provider": o.provider = v()
+        case "--workspace", "-w": o.workspace = v(); o.workspaceGiven = true
+        case "--provider": o.provider = v(); o.providerGiven = true
         case "--model", "-m": o.model = v()
         case "--task": o.task = v()
         case "--mode": o.mode = PermissionMode(rawValue: v()) ?? .ask
@@ -117,19 +120,31 @@ func buildServices(_ o: Options, task: String) throws -> (SessionServices, (LLMP
     return (services, mainModel)
 }
 
-/// `sievesci serve [options]`: JSON-RPC over stdio for a front end (docs/SERVE_PROTOCOL.md).
+/// `sievesci serve [options]`: JSON-RPC over stdio for a front end (docs/SERVE_PROTOCOL.md). Models,
+/// keys and settings come from the saved configuration (shared with the macOS app) unless `--provider`
+/// names them on the command line.
 func serve(_ args: [String]) async {
     let o = parse(args)
-    let model: String
-    do { model = try makeProvider(o.provider, o.model).1 } catch {
-        FileHandle.standardError.writeSafely(Data("sievesci serve: \(error.localizedDescription)\n".utf8))
-        exit(1)
+    let flags = o.providerGiven
+    var info: [String: JSON] = [:]
+    if flags {
+        do {
+            let model = try makeProvider(o.provider, o.model).1
+            info = ["provider": .string(o.provider), "model": .string(model), "mode": .string(o.mode.rawValue)]
+        } catch {
+            FileHandle.standardError.writeSafely(Data("sievesci serve: \(error.localizedDescription)\n".utf8))
+            exit(1)
+        }
     }
     let out = NSLock()
-    let server = ServeServer(workspace: URL(fileURLWithPath: o.workspace),
-                             info: ["provider": .string(o.provider), "model": .string(model), "mode": .string(o.mode.rawValue)],
-                             makeServices: { id in try buildServices(o, task: id).0 },
-                             write: { line in out.withLock { _ = FileHandle.standardOutput.writeSafely(Data((line + "\n").utf8)) } })
+    let server = ServeServer(
+        workspace: o.workspaceGiven ? URL(fileURLWithPath: o.workspace) : nil, info: info,
+        secrets: flags ? cliSecrets : PlatformSecretStore.shared,
+        makeServices: { id, ws, config in
+            if flags { var f = o; f.workspace = ws.path; return try buildServices(f, task: id).0 }
+            return try ConfiguredModels.services(task: id, workspace: ws, config: config, secrets: PlatformSecretStore.shared)
+        },
+        write: { line in out.withLock { _ = FileHandle.standardOutput.writeSafely(Data((line + "\n").utf8)) } })
     // Each request is handled on its own, so an answer to a permission request never waits behind
     // a slow one. A `shutdown` ends the process once it has answered.
     await withTaskGroup(of: Void.self) { group in

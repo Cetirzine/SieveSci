@@ -194,36 +194,12 @@ final class AppModel: ObservableObject {
 
     // MARK: Providers & roles
 
-    func isUsable(_ p: ProviderProfile) -> Bool {
-        p.enabled && (p.family == .cliAgent ? ProcessRunner.which(p.executable ?? "") != nil : secrets.secret(for: p.apiKeyRef) != nil)
-    }
-
-    var usableProviders: [ProviderProfile] { config.providers.filter(isUsable) }
-
-    var candidates: [RoleModelAdvisor.Candidate] {
-        usableProviders.flatMap { p in p.models.map { (p, $0, nil as String?) } }
-    }
-
-    func provider(_ ref: ModelRef) -> (LLMProvider, String)? {
-        guard let p = config.providers.first(where: { $0.id == ref.providerId }),
-              let llm = try? ProviderFactory.make(p, secrets: secrets) else { return nil }
-        return (llm, ref.model)
-    }
-
-    func roleModels() throws -> RoleModels {
-        let resolved = RoleModelAdvisor.resolve(config.roles, candidates: candidates)
-        guard let mainRef = resolved[.main], let main = provider(mainRef) else {
-            throw ProviderError.missingAPIKey(L("Add a provider with an API key (Settings → Providers), or sign in to Claude Code / Codex / Gemini CLI."))
-        }
-        func pick(_ r: AgentRole) -> (LLMProvider, String)? { resolved[r].flatMap(provider) }
-        var rm = RoleModels(main: main, checker: pick(.checker), verifier: pick(.verifier), worker: pick(.worker))
-        // Pool for a second reviewer when one declines or fails (different vendor preferred).
-        rm.alternates = usableProviders.compactMap { p in
-            let m = p.defaultModel.isEmpty ? p.models.first : p.defaultModel
-            return m.flatMap { provider(ModelRef(providerId: p.id, model: $0)) }
-        }
-        return rm
-    }
+    // The rules live in the core (`ConfiguredModels`), shared with `sievesci serve`.
+    func isUsable(_ p: ProviderProfile) -> Bool { ConfiguredModels.isUsable(p, secrets: secrets) }
+    var usableProviders: [ProviderProfile] { ConfiguredModels.usable(config, secrets: secrets) }
+    var candidates: [RoleModelAdvisor.Candidate] { ConfiguredModels.candidates(config, secrets: secrets) }
+    func provider(_ ref: ModelRef) -> (LLMProvider, String)? { ConfiguredModels.provider(ref, config: config, secrets: secrets) }
+    func roleModels() throws -> RoleModels { try ConfiguredModels.roleModels(config, secrets: secrets) }
 
     /// Switches the main model and resumes the same task (the transcript is kept; the provider's
     /// prompt cache starts cold for the new model).
@@ -336,15 +312,7 @@ final class AppModel: ObservableObject {
             let services = try SessionServices(taskId: id, workspace: ws, models: try roleModels(), secrets: secrets,
                                                webSearch: config.webSearch, permissionMode: config.permissionMode,
                                                contactEmail: config.contactEmail, retention: config.retention)
-            services.research.groundingRequired = config.groundingRequired
-            services.library.downloadPDFs = config.downloadOAPDFs
-            services.effort = config.effort
-            services.sandboxMode = config.sandboxMode
-            services.supervisorPolicy.maxReviewsPerSession = config.maxReviewsPerSession
-            services.deliberation.policy.maxExchanges = config.maxDeliberationExchanges
-            services.delegation.auto = config.autoDelegate
-            services.delegation.maxParallel = max(1, config.maxParallelWorkers)
-            services.ideas.autoAllowed = config.autoBrainstorm
+            ConfiguredModels.apply(config, to: services, secrets: secrets)
             services.asks.interactive = true
             // Ideas a background dream left: said once, when a task of this workspace opens.
             let unseen = DreamInbox.unseen(ws).count
@@ -353,7 +321,6 @@ final class AppModel: ObservableObject {
                 notifier.post(title: L("SieveSci dreamed"), body: L10n.f("%d new idea(s) from dreaming. Type /ideas dream to read them.", unseen), id: "dream-\(ws.path.hashValue)")
                 if task != nil { append(.notice(L10n.f("%d new idea(s) from dreaming. Type /ideas dream to read them.", unseen)), to: "main") }
             }
-            if let v = config.visionHelper { services.vision.helper = provider(v) }
             services.emit = { [weak self] ev in Task { @MainActor in self?.route(ev, task: id) } }
             services.requestPermission = { [weak self] req in
                 await withCheckedContinuation { cont in
@@ -661,31 +628,9 @@ final class AppModel: ObservableObject {
         startSession(task: taskId.isEmpty ? SessionStore.tasks(in: ws).first?.id : taskId)
     }
 
-    /// Welcome checklist: which models are ready, in plain words.
-    var modelStatus: (ready: Bool, text: String) {
-        let ready = usableProviders
-        guard !ready.isEmpty else {
-            return (false, L("An API key (DeepSeek, Anthropic, OpenAI, Gemini, GLM …), a relay, or a signed-in Claude Code / Codex / Gemini CLI."))
-        }
-        let names = ready.prefix(3).map { $0.family == .cliAgent ? L10n.f("%@ — found on this Mac", $0.displayName) : $0.displayName }
-        return (true, L10n.f("Ready: %@", names.joined(separator: ", ") + (ready.count > 3 ? " …" : "")))
-    }
-
-    /// Welcome checklist: how web search will work right now.
-    var searchStatus: (ready: Bool, text: String) {
-        for p in usableProviders {
-            let m = p.defaultModel.isEmpty ? (p.models.first ?? "") : p.defaultModel
-            if NativeWebSearch.forProfile(p, model: m, secrets: secrets) != nil { return (true, L10n.f("Built into %@.", p.displayName)) }
-        }
-        let client = WebSearchClient(config: config.webSearch, secrets: secrets)
-        switch client.effectiveBackend {
-        case .duckduckgo where config.webSearch.backend != .duckduckgo:
-            return (false, L("Works now with DuckDuckGo (best effort, may be rate-limited). Add a Brave, Tavily or Exa key for reliable results."))
-        case .duckduckgo: return (true, L("DuckDuckGo (best effort, may be rate-limited)."))
-        case .searxng: return (true, L10n.f("SearXNG at %@.", config.webSearch.searxngURL))
-        case let b: return (true, L10n.f("%@ search API.", b.rawValue.capitalized))
-        }
-    }
+    /// Welcome checklist: which models are ready, and how web search will work right now.
+    var modelStatus: (ready: Bool, text: String) { ConfiguredModels.modelStatus(config, secrets: secrets) }
+    var searchStatus: (ready: Bool, text: String) { ConfiguredModels.searchStatus(config, secrets: secrets) }
 
     /// No usable model yet: the composer shows a setup card instead of failing silently.
     var needsModelSetup: Bool { workspace != nil && bench == nil && usableProviders.isEmpty }
