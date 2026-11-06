@@ -1061,3 +1061,8 @@
 "Could not build the scheduled task." = "無法建立排程工作。";
 "Task Scheduler refused the schedule: %@" = "工作排程器拒絕了該排程：%@";
 "Could not add the schedule to your crontab (%@). Add this line with `crontab -e`:" = "無法將該排程加入你的 crontab（%@）。請用 `crontab -e` 加入這一行：";
+"Edit model specs" = "編輯模型參數";
+"Context window" = "上下文視窗";
+"Max output" = "最大輸出";
+"Detected: %@" = "偵測值：%@";
+"Set by hand when the provider reports different limits than the model really has. These values win over the catalogs, the provider's listing and what its API reports." = "當服務商回報的限制與模型實際不符時手動設定。這些值優先於目錄、服務商的模型列表與其介面回傳的數值。";

@@ -74,7 +74,8 @@ export interface ProviderProfile {
 export interface RoleAssignment { mode: "same" | "auto" | "custom" | string; same?: ModelRef; custom: Record<string, ModelRef> }
 export interface WebSearchConfig { backend: string; apiKeyRef: string; excludedDomains: string[]; googleCX: string; searxngURL: string }
 
-export interface ModelInfo { contextWindow: number; supportsImages: boolean; supportsReasoning: boolean }
+export interface ModelSpec { id?: string; contextWindow: number; maxOutput: number; supportsImages: boolean; supportsReasoning: boolean }
+export interface ModelInfo extends ModelSpec { custom?: boolean; detected?: ModelSpec }
 export interface ProviderInfo { ready: boolean; short: string; cliPath: string | null; hasKey: boolean; models: Record<string, ModelInfo> }
 export interface QuotaMeter { title: string; value: string; usedFraction: number | null; exhausted: boolean; resetsAt: string | null }
 export interface Quota { plan: string | null; note: string | null; summary: string | null; meters: QuotaMeter[] }

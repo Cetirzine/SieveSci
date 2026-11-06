@@ -177,7 +177,13 @@ extension ServeServer {
             var models: [String: JSON] = [:]
             for m in prof.models {
                 let st = ModelDiscovery.effectiveSettings(model: m, profile: prof, discovered: nil)
-                models[m] = ["contextWindow": .int(st.contextWindow), "supportsImages": .bool(st.supportsImages), "supportsReasoning": .bool(st.supportsReasoning)]
+                // What the catalogs and the provider's listing say, for "Reset" next to the user's own values.
+                var plain = prof
+                plain.modelSettings.removeAll { $0.id == m }
+                let detected = ModelDiscovery.effectiveSettings(model: m, profile: plain, discovered: nil)
+                models[m] = ["contextWindow": .int(st.contextWindow), "maxOutput": .int(st.maxOutput), "supportsImages": .bool(st.supportsImages),
+                             "supportsReasoning": .bool(st.supportsReasoning), "custom": .bool(prof.modelSettings.contains { $0.id == m }),
+                             "detected": Wire.value(detected)]
             }
             out[prof.id] = ["ready": .bool(ready), "short": .string(short), "cliPath": path.map { .string($0) } ?? .null,
                             "hasKey": .bool(secrets.secret(for: prof.apiKeyRef) != nil), "models": .object(models)]

@@ -1061,3 +1061,8 @@
 "Could not build the scheduled task." = "Impossible de créer la tâche planifiée.";
 "Task Scheduler refused the schedule: %@" = "Le Planificateur de tâches a refusé la planification : %@";
 "Could not add the schedule to your crontab (%@). Add this line with `crontab -e`:" = "Impossible d’ajouter la planification à votre crontab (%@). Ajoutez cette ligne avec `crontab -e` :";
+"Edit model specs" = "Modifier les caractéristiques du modèle";
+"Context window" = "Fenêtre de contexte";
+"Max output" = "Sortie maximale";
+"Detected: %@" = "Détecté : %@";
+"Set by hand when the provider reports different limits than the model really has. These values win over the catalogs, the provider's listing and what its API reports." = "À régler à la main quand le fournisseur annonce d’autres limites que celles du modèle. Ces valeurs l’emportent sur les catalogues, la liste du fournisseur et ce que renvoie son API.";

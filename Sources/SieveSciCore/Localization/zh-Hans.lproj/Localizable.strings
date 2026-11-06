@@ -1061,3 +1061,8 @@
 "Could not build the scheduled task." = "无法创建计划任务。";
 "Task Scheduler refused the schedule: %@" = "Windows 计划任务拒绝了该计划：%@";
 "Could not add the schedule to your crontab (%@). Add this line with `crontab -e`:" = "无法将该计划加入你的 crontab（%@）。请用 `crontab -e` 添加这一行：";
+"Edit model specs" = "编辑模型参数";
+"Context window" = "上下文窗口";
+"Max output" = "最大输出";
+"Detected: %@" = "检测值：%@";
+"Set by hand when the provider reports different limits than the model really has. These values win over the catalogs, the provider's listing and what its API reports." = "当服务商报告的限制与模型实际不符时手动设置。这些值优先于目录、服务商的模型列表和其接口返回的数值。";

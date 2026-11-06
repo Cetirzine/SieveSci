@@ -137,3 +137,6 @@
 .sheet-list .sheet-row .grow > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sheet-custom { display: flex; flex-direction: column; gap: 10px; padding: 10px; }
 .sheet-foot { display: flex; justify-content: flex-end; }
+.model-spec { margin: 2px 0 4px 21px; padding: var(--s-s) var(--s-m); border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); background: var(--surface-subtle); }
+.model-spec .lc + .lc, .model-spec .lc + .toggle-row, .model-spec .toggle-row + .toggle-row, .model-spec .toggle-row + .lc { padding-top: 6px; }
+.icon-button.on { color: var(--accent); background: var(--selection); }

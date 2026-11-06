@@ -1061,3 +1061,8 @@
 "Could not build the scheduled task." = "Could not build the scheduled task.";
 "Task Scheduler refused the schedule: %@" = "Task Scheduler refused the schedule: %@";
 "Could not add the schedule to your crontab (%@). Add this line with `crontab -e`:" = "Could not add the schedule to your crontab (%@). Add this line with `crontab -e`:";
+"Edit model specs" = "Edit model specs";
+"Context window" = "Context window";
+"Max output" = "Max output";
+"Detected: %@" = "Detected: %@";
+"Set by hand when the provider reports different limits than the model really has. These values win over the catalogs, the provider's listing and what its API reports." = "Set by hand when the provider reports different limits than the model really has. These values win over the catalogs, the provider's listing and what its API reports.";

@@ -238,6 +238,7 @@ public final class AgentSession: @unchecked Sendable {
         defer { self.draft = nil }
         let resp: LLMResponse
         let meterAtStart = meter
+        let userWindow = windowSetByUser
         do {
             resp = try await provider.complete(req) { ev in
                 draft?.add(ev)
@@ -247,7 +248,7 @@ public final class AgentSession: @unchecked Sendable {
                 case .contextUsage(let tokens, let window):
                     var m = meterAtStart
                     m.lastPromptTokens = tokens
-                    if let window, window > 0 { m.contextWindow = window }
+                    if let window, window > 0, !userWindow { m.contextWindow = window }
                     emit(.usage(agentId: id, m))
                 default: break
                 }
@@ -272,7 +273,7 @@ public final class AgentSession: @unchecked Sendable {
         }
         lastRequestAt = Date()
         meter.lastPromptTokens = resp.contextTokens ?? resp.usage.promptTotal
-        if let w = resp.contextWindow, w > 0 { meter.contextWindow = w }
+        if let w = resp.contextWindow, w > 0, !windowSetByUser { meter.contextWindow = w }
         meter.lastOutputTokens = resp.usage.output
         meter.session = meter.session + resp.usage
         SpendTracker.shared.record(resp.usage, model: resp.servedModel ?? model, profile: provider.profile)
@@ -487,6 +488,10 @@ public final class AgentSession: @unchecked Sendable {
     }
 
     // MARK: Compaction
+
+    /// The user set this model's specs by hand (Settings → Providers): a window the provider reports
+    /// does not override theirs.
+    var windowSetByUser: Bool { provider.profile.modelSettings.contains { $0.id == model } }
 
     /// Compacts when the window is getting full. When the vendor's prefix cache has already expired
     /// (idle longer than its TTL), compaction costs no cache, so it happens at a lower threshold.

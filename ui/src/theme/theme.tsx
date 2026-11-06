@@ -103,7 +103,7 @@ export const symbols: Record<string, LucideIcon> = {
   "exclamationmark.circle.fill": I.CircleAlert, "doc.on.doc": I.Copy, "arrow.triangle.branch": I.GitBranch, "clock": I.Clock,
   "chart.xyaxis.line": I.ChartLine, "flask": I.FlaskConical, "text.book.closed": I.BookText, "globe.americas": I.Globe2,
   "arrow.uturn.backward": I.Undo2, "photo": I.Image, "trash": I.Trash2, "paperclip": I.Paperclip, "bell": I.Bell,
-  "chevron.left": I.ChevronLeft, "chevron.up": I.ChevronUp, "star": I.Star, "star.fill": I.Star, "calendar.badge.clock": I.CalendarClock, "xmark.circle": I.CircleX,
+  "chevron.left": I.ChevronLeft, "slider.horizontal.3": I.SlidersHorizontal, "chevron.up": I.ChevronUp, "star": I.Star, "star.fill": I.Star, "calendar.badge.clock": I.CalendarClock, "xmark.circle": I.CircleX,
   "exclamationmark.triangle.fill": I.TriangleAlert, "link": I.Link, "key": I.KeyRound,
   "cpu": I.Cpu, "server.rack": I.Server, "testtube.2": I.TestTubes, "calendar": I.Calendar, "arrow.clockwise": I.RotateCw,
   "hand.raised": I.Hand, "bolt": I.Zap, "pause.circle": I.CirclePause, "exclamationmark.bubble.fill": I.MessageSquareWarning,

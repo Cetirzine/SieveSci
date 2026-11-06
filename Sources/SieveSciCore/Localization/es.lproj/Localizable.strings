@@ -1061,3 +1061,8 @@
 "Could not build the scheduled task." = "No se pudo crear la tarea programada.";
 "Task Scheduler refused the schedule: %@" = "El Programador de tareas rechazó la programación: %@";
 "Could not add the schedule to your crontab (%@). Add this line with `crontab -e`:" = "No se pudo añadir la programación a tu crontab (%@). Añade esta línea con `crontab -e`:";
+"Edit model specs" = "Editar especificaciones del modelo";
+"Context window" = "Ventana de contexto";
+"Max output" = "Salida máxima";
+"Detected: %@" = "Detectado: %@";
+"Set by hand when the provider reports different limits than the model really has. These values win over the catalogs, the provider's listing and what its API reports." = "Fíjalos a mano cuando el proveedor informe límites distintos de los reales del modelo. Estos valores prevalecen sobre los catálogos, la lista del proveedor y lo que devuelve su API.";

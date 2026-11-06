@@ -3,7 +3,7 @@
 // from `sievesci serve` (providers.*, models.*, connectors.*, memory.*, schedules.*).
 import { Children, useEffect, useMemo, useState, type ReactNode } from "react";
 import { L, L10n, languageNames, resolvedLanguage, type Language } from "../i18n";
-import { useApp, getState, onPlatform, type Config, type ModelRef, type ProviderProfile, type Quota } from "../app/model";
+import { useApp, getState, onPlatform, type Config, type ModelInfo, type ModelRef, type ModelSpec, type ProviderProfile, type Quota } from "../app/model";
 import * as A from "../app/actions";
 import type { SettingsPane } from "../app/actions";
 import type { JsonObject } from "../serve";
@@ -377,6 +377,7 @@ function ProviderDetail({ profile: p }: { profile: ProviderProfile }) {
   const [newModel, setNewModel] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showDiscovered, setShowDiscovered] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
   const [adminKey, setAdminKey] = useState("");
   const [refreshingUsage, setRefreshingUsage] = useState(false);
   const [header, setHeader] = useState({ name: "", value: "" });
@@ -516,8 +517,8 @@ function ProviderDetail({ profile: p }: { profile: ProviderProfile }) {
         {p.models.map((m) => {
           const d = discovered.find((x) => x.id === m);
           const ms = st?.models[m];
-          const ctx = d?.contextWindow ?? ms?.contextWindow ?? 200_000;
-          return (
+          const ctx = ms?.custom ? ms.contextWindow : (d?.contextWindow ?? ms?.contextWindow ?? 200_000);
+          return [
             <div key={m} className="model-line">
               <button type="button" className="plain-icon" title={L("Default model")} aria-label={L("Default model")} onClick={() => update({ defaultModel: m })}>
                 <Symbol name="star" size={13} style={p.defaultModel === m ? { fill: "currentColor" } : undefined} />
@@ -525,11 +526,13 @@ function ProviderDetail({ profile: p }: { profile: ProviderProfile }) {
               <span className="mono-small">{m}</span>
               <span style={{ flex: 1 }} />
               <span className="t-caption secondary">{L10n.f("%@ ctx", tokens(ctx))}</span>
-              {(d?.supportsImages ?? ms?.supportsImages) && <span className="secondary" title={L("Accepts images")}><Symbol name="photo" size={12} /></span>}
-              {(d?.supportsReasoning ?? ms?.supportsReasoning) && <span className="secondary" title={L("Reasoning model")}><Symbol name="brain" size={12} /></span>}
-              <IconButton symbol="xmark" label={L("Remove")} onClick={() => update({ models: p.models.filter((x) => x !== m) })} />
+              {(ms?.custom ? ms.supportsImages : (d?.supportsImages ?? ms?.supportsImages)) && <span className="secondary" title={L("Accepts images")}><Symbol name="photo" size={12} /></span>}
+              {(ms?.custom ? ms.supportsReasoning : (d?.supportsReasoning ?? ms?.supportsReasoning)) && <span className="secondary" title={L("Reasoning model")}><Symbol name="brain" size={12} /></span>}
+              {ms?.custom && <Chip text={L("Custom")} tint="var(--accent)" />}
+              <IconButton symbol="slider.horizontal.3" label={L("Edit model specs")} className={editing === m ? "on" : ""} onClick={() => setEditing(editing === m ? null : m)} />
+              <IconButton symbol="xmark" label={L("Remove")} onClick={() => update({ models: p.models.filter((x) => x !== m), modelSettings: (p.modelSettings as unknown as ModelSpec[]).filter((x) => x.id !== m) as never })} />
             </div>
-          );
+          ].concat(editing === m && ms ? [<ModelSpecEditor key={m + "-spec"} model={m} info={ms} profile={p} onChange={(change) => update(change)} />] : []);
         })}
         {discovered.length > 0 && (
           <Disclosure title={L10n.f("%d models available", discovered.length)} open={showDiscovered} onToggle={() => setShowDiscovered(!showDiscovered)}>
@@ -593,6 +596,46 @@ function ProviderDetail({ profile: p }: { profile: ProviderProfile }) {
       </Section>
     </Form>
   );
+}
+
+/** A model's specs set by hand, for providers whose limits differ from what the catalogs or the API say.
+ *  Saved as the profile's `modelSettings` entry, which wins everywhere (ModelDiscovery.effectiveSettings). */
+function ModelSpecEditor({ model, info, profile, onChange }: { model: string; info: ModelInfo; profile: ProviderProfile; onChange: (c: Partial<ProviderProfile>) => void }) {
+  const det = info.detected ?? info;
+  const others = (profile.modelSettings as unknown as ModelSpec[]).filter((x) => x.id !== model);
+  const save = (change: Partial<ModelSpec>) => {
+    const spec: ModelSpec = { id: model, contextWindow: info.contextWindow, maxOutput: info.maxOutput, supportsImages: info.supportsImages, supportsReasoning: info.supportsReasoning, ...change };
+    onChange({ modelSettings: [...others, spec] as never });
+  };
+  const num = (label: string, key: "contextWindow" | "maxOutput") => (
+    <div className="lc">
+      <span className="stack" style={{ gap: 1 }}><span>{label}</span><span className="t-caption tertiary">{L10n.f("Detected: %@", det[key].toLocaleString())}</span></span>
+      <span className="lc-value"><NumberField value={info[key]} onCommit={(v) => save({ [key]: v })} /> <span className="t-caption secondary">{L("tokens")}</span></span>
+    </div>
+  );
+  return (
+    <div className="model-spec stack">
+      {num(L("Context window"), "contextWindow")}
+      {num(L("Max output"), "maxOutput")}
+      <Toggle label={L("Accepts images")} on={info.supportsImages} onChange={(v) => save({ supportsImages: v })} />
+      <Toggle label={L("Reasoning model")} on={info.supportsReasoning} onChange={(v) => save({ supportsReasoning: v })} />
+      <div className="lc">
+        <Caption>{L("Set by hand when the provider reports different limits than the model really has. These values win over the catalogs, the provider's listing and what its API reports.")}</Caption>
+        <ActionButton width="column" disabled={!info.custom} onClick={() => onChange({ modelSettings: others as never })}>{L("Reset")}</ActionButton>
+      </div>
+    </div>
+  );
+}
+
+/** A token count field that saves on Enter or when it loses focus (whole numbers, at least 1k). */
+function NumberField({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  const commit = () => {
+    const v = Math.round(Number(text.replace(/[,_\s]/g, "")));
+    if (Number.isFinite(v) && v >= 1000 && v !== value) onCommit(v); else setText(String(value));
+  };
+  return <span style={{ width: 120 }}><SpecField mono value={text} onChange={setText} inputMode="numeric" onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") commit(); }} /></span>;
 }
 
 /** Plan limits (5-hour / weekly windows) and balances, with when they reset. */

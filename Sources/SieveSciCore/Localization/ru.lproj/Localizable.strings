@@ -1061,3 +1061,8 @@
 "Could not build the scheduled task." = "Не удалось создать задание.";
 "Task Scheduler refused the schedule: %@" = "Планировщик заданий отклонил расписание: %@";
 "Could not add the schedule to your crontab (%@). Add this line with `crontab -e`:" = "Не удалось добавить расписание в crontab (%@). Добавьте эту строку через `crontab -e`:";
+"Edit model specs" = "Изменить параметры модели";
+"Context window" = "Контекстное окно";
+"Max output" = "Макс. вывод";
+"Detected: %@" = "Определено: %@";
+"Set by hand when the provider reports different limits than the model really has. These values win over the catalogs, the provider's listing and what its API reports." = "Задайте вручную, если провайдер сообщает не те пределы, что у модели на самом деле. Эти значения важнее каталогов, списка моделей провайдера и того, что сообщает его API.";
