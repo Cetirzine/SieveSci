@@ -94,12 +94,17 @@ struct CurlTransportTests {
         let c = CurlTransport.config(r, bodyFile: URL(fileURLWithPath: "/tmp/b"), maxTime: nil)
         #expect(c.contains("header = \"Expect:\""))
         #expect(!c.contains("100-continue"))
-        #expect(c.contains("header = \"x-api-key: k\""))
-        #expect(c.contains("data-binary = \"@/tmp/b\""))
+        #expect(c.lowercased().contains("header = \"x-api-key: k\""))   // corelibs capitalises header names
+        #expect(c.contains(Platform.isWindows ? #"data-binary = "@\\tmp\\b""# : "data-binary = \"@/tmp/b\""))
         #expect(c.contains("request = \"POST\""))
         #expect(CurlTransport.parseHead(Data("HTTP/2 200\r\ncontent-type: text/event-stream".utf8))?.0 == 200)
         #expect(CurlTransport.parseHead(Data("HTTP/1.1 100 Continue".utf8))?.0 == 100)
         #expect(CurlTransport.parseHead(Data("HTTP/1.1 503 Busy\r\nRetry-After: 3".utf8))?.1["retry-after"] == "3")
         #expect(CurlTransport.parseHead(Data("garbage".utf8)) == nil)
+        let h = CurlTransport.parseHead(Data("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nX-Request-Id: a:b".utf8))
+        #expect(h?.0 == 200)
+        #expect(h?.1["content-type"] == "text/event-stream")
+        #expect(h?.1["x-request-id"] == "a:b")
+        #expect(h?.1.count == 2)
     }
 }

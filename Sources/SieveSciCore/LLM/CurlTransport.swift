@@ -132,7 +132,9 @@ enum CurlTransport {
     /// The status and headers of a response as curl prints them (`--include`); informational (1xx)
     /// blocks are skipped by the caller. nil until a status line is found.
     static func parseHead(_ block: Data) -> (Int, [String: String])? {
-        let lines = String(decoding: block, as: UTF8.self).components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        // Split on bytes: off Apple platforms "\r\n" is one Character and `components(separatedBy: "\n")` misses it.
+        let lines = block.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false)
+            .map { String(decoding: $0, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines) }
         guard let first = lines.first, first.hasPrefix("HTTP/") else { return nil }
         let parts = first.split(separator: " ", omittingEmptySubsequences: true)
         guard parts.count >= 2, let status = Int(parts[1]) else { return nil }
