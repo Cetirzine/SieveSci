@@ -66,6 +66,9 @@ public final class Supervisor: @unchecked Sendable {
             return r
         }
 
+        // A chat reply (a greeting, "what can you do?") is not research output: nothing to review.
+        let scale = services.research.turnScale
+        if scale == .chat { return nil }
         var signals = NarrativeDetector.scan(text: text, recentReceipts: recent)
         let grounding = Grounding.check(text: text, library: services.library, evidenceCorpus: services.ledger.corpus())
         if !grounding.isClean {
@@ -74,7 +77,7 @@ public final class Supervisor: @unchecked Sendable {
         }
         let g = services.research.hasGrounding()
         let substantive = text.count > 600 || grounding.citationCount > 0
-        if services.research.groundingRequired && substantive && !(g.web && g.literature) {
+        if services.research.groundingRequired && scale == .research && substantive && !(g.web && g.literature) {
             signals.append(IntegritySignal(kind: .ungrounded, severity: 3,
                                            detail: "substantive answer given before web and literature searches were run", location: nil))
         }

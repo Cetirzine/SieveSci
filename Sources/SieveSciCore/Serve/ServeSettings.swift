@@ -159,7 +159,10 @@ extension ServeServer {
             #if os(macOS)
             _ = try await ProcessRunner.run("/usr/bin/open", reveal ? ["-R", target] : [target], timeout: 10)
             #elseif os(Windows)
-            _ = try await ProcessRunner.run("explorer.exe", reveal ? ["/select,", target] : [target], timeout: 10)
+            // Explorer reads anything starting with "/" as a switch, so "D:/…/paper.pdf" (paths the UI
+            // joins with "/") opened a default folder instead of the PDF: always hand it C:\… paths.
+            let native = p.str("url") != nil ? target : Platform.windowsPath(target)
+            _ = try await ProcessRunner.run("explorer.exe", reveal ? ["/select,\(native)"] : [native], timeout: 10)
             #else
             _ = try await ProcessRunner.run("xdg-open", [reveal ? URL(fileURLWithPath: target).deletingLastPathComponent().path : target], timeout: 10)
             #endif

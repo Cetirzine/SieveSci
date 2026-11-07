@@ -1,5 +1,6 @@
 // Shared building blocks, one per SwiftUI primitive in Sources/SieveSciApp/Theme.swift.
 import { forwardRef, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes } from "react";
+import { createPortal } from "react-dom";
 import { Symbol } from "./theme";
 
 /** BoxStyle: framed block; dashed when provisional, a leading colour rule, a label tab on the top edge. */
@@ -177,27 +178,52 @@ export function Menu({ label, items, className = "", align = "left", title }:
   { label: ReactNode; items: { label: ReactNode; onSelect?: () => void; checked?: boolean; destructive?: boolean; divider?: boolean; section?: boolean }[]; className?: string; align?: "left" | "right"; title?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
+  const list = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node) && !list.current?.contains(e.target as Node)) setOpen(false); };
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    // The list floats over the page; when what it hangs from scrolls away, it closes rather than drift.
+    const scrolled = (e: Event) => { if (!list.current?.contains(e.target as Node)) setOpen(false); };
     document.addEventListener("mousedown", close);
     document.addEventListener("keydown", esc);
-    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); };
+    window.addEventListener("scroll", scrolled, true);
+    window.addEventListener("resize", scrolled);
+    return () => {
+      document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc);
+      window.removeEventListener("scroll", scrolled, true); window.removeEventListener("resize", scrolled);
+    };
   }, [open]);
+  // Placed on the page itself (a portal), at the button: inside the page's sections it would sit under
+  // the sections after it (each animated section is a layer of its own) and be cut off.
+  useLayoutEffect(() => {
+    const el = list.current, anchor = ref.current;
+    if (!open || !el || !anchor) return;
+    const a = anchor.getBoundingClientRect(), margin = 8, vw = window.innerWidth, vh = window.innerHeight;
+    const st = el.style;
+    st.maxHeight = ""; st.overflowY = "";
+    const w = el.offsetWidth;
+    let h = el.offsetHeight;
+    const below = vh - margin - (a.bottom + 4), above = a.top - 4 - margin;
+    const up = h > below && above > below;
+    const room = up ? above : below;
+    if (h > room) { st.maxHeight = `${Math.max(80, room)}px`; st.overflowY = "auto"; h = Math.min(h, Math.max(80, room)); }
+    const left = align === "right" ? a.right - w : a.left;
+    st.left = `${Math.round(Math.max(margin, Math.min(left, vw - margin - w)))}px`;
+    st.top = `${Math.round(up ? a.top - 4 - h : a.bottom + 4)}px`;
+  }, [open, align, items.length]);
   return (
     <span ref={ref} className={`menu ${className}`}>
       <button type="button" className="menu-label" onClick={() => setOpen(!open)} title={title} aria-haspopup="menu" aria-expanded={open}>{label}</button>
-      {open && (
-        <Popup className={`menu-list ${align}`} role="menu">
+      {open && createPortal(
+        <div ref={list} className={`menu-list floating ${className ? className + "-list" : ""}`} role="menu">
           {items.map((it, i) => it.divider ? <div key={i} className="menu-divider" />
             : it.section ? <div key={i} className="menu-section">{it.label}</div> : (
             <button key={i} type="button" role="menuitem" className={`menu-item ${it.destructive ? "c-bad" : ""}`} onClick={() => { setOpen(false); it.onSelect?.(); }}>
               <span className="menu-check">{it.checked ? "✓" : ""}</span>{it.label}
             </button>
           ))}
-        </Popup>
-      )}
+        </div>, document.body)}
     </span>
   );
 }

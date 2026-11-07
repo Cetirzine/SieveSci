@@ -381,7 +381,13 @@ public enum ProviderError: Error, LocalizedError, Sendable {
         case .http(let s, let b): return "HTTP \(s): \(b.truncated(800))"
         case .protocolError(let m): return "Provider protocol error: \(m)"
         case .refused(let m): return "Model declined: \(m)"
-        case .cliNotFound(let m): return "CLI not found: \(m)"
+        case .cliNotFound(let m):
+            // Windows without Git for Windows has no bash: say what to do, not just what is missing.
+            if Platform.isWindows, m == "bash" || m.hasSuffix("bash.exe") {
+                return "bash is not available on this computer (Git for Windows is not installed). Use the `python` tool "
+                    + "instead (subprocess.run for programs), or ask the user to install Git for Windows from https://git-scm.com/download/win."
+            }
+            return "CLI not found: \(m)"
         case .stalled(let s): return "The model sent nothing for \(s) s; the request was stopped."
         }
     }

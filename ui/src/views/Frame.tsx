@@ -44,6 +44,17 @@ function SidebarView() {
   const backgroundWorkspaces = useApp((s) => s.backgroundWorkspaces);
   const state = useApp((s) => s);
   const others = recent.filter((p) => p !== workspace);
+  const platform = useApp((s) => s.platform);
+  // Right-click on a workspace: open, new task, show the folder, or take it off the list (files stay).
+  const [folderMenu, setFolderMenu] = useState<{ x: number; y: number; path: string } | null>(null);
+  const folderMenuAt = (path: string) => (e: React.MouseEvent) => { e.preventDefault(); setFolderMenu({ x: e.clientX, y: e.clientY, path }); };
+  const folderItems = (path: string): ({ label: string; run: () => void; destructive?: boolean } | null)[] => [
+    ...(path === workspace ? [] : [{ label: L("Open"), run: () => void A.openWorkspace(path) }]),
+    { label: L("New conversation in this folder"), run: () => void (path === workspace ? A.startSession() : A.openWorkspace(path, undefined, true)) },
+    { label: L(onPlatform(platform, "Show in Finder", "Show in Explorer", "Show in file manager")), run: () => A.systemOpen({ path, reveal: true }) },
+    null,
+    { label: L("Remove from SieveSci (the folder stays)"), run: () => void A.removeWorkspace(path) },
+  ];
   const noTasks = <div className="no-tasks t-meta tertiary">{L("No tasks yet")}</div>;
   const disclosure = (path: string) => {
     const open = isFolderOpen(state, path);
@@ -82,7 +93,7 @@ function SidebarView() {
       <div className="sidebar-scroll">
         {workspace && (
           <>
-            <div className="folder-line" title={workspace}>
+            <div className="folder-line" title={workspace} onContextMenu={folderMenuAt(workspace)}>
               {row("folder.fill", basename(workspace), true)}
               {disclosure(workspace)}
               {newTaskButton(() => void A.startSession())}
@@ -92,7 +103,7 @@ function SidebarView() {
         )}
         {others.map((path) => (
           <div key={path}>
-            <div className="folder-line">
+            <div className="folder-line" onContextMenu={folderMenuAt(path)}>
               <button type="button" className="hover-row folder-button" title={path} onClick={() => void A.openWorkspace(path)}>
                 {row("folder", basename(path), false)}
                 {Object.values(backgroundWorkspaces).includes(path) && <RoleGhostBadge role="main" working size={18} />}
@@ -105,6 +116,7 @@ function SidebarView() {
           </div>
         ))}
       </div>
+      {folderMenu && <ContextMenu at={folderMenu} items={folderItems(folderMenu.path)} close={() => setFolderMenu(null)} />}
       <UpdateBanner />
       <button type="button" className="hover-row settings-row" onClick={() => A.openSettings()}>
         <Symbol name="gearshape" size={14} /> <span className="t-body">{L("Settings")}</span>

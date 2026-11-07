@@ -73,7 +73,6 @@
                        background: color-mix(in srgb, var(--ink) 7%, transparent); }
 .popup .menu-label:hover .popup-arrows { background: color-mix(in srgb, var(--ink) 14%, transparent); }
 .popup.disabled { color: var(--tertiary); }
-.popup .menu-list { max-height: 60vh; overflow-y: auto; }
 
 
 /* Stepper */

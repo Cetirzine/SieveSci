@@ -33,6 +33,9 @@ public final class Workbench: @unchecked Sendable {
     public var onOutput: @Sendable (String) -> Void = { _ in }
     private let stateLock = NSLock()
     private var busy = false
+    /// Set by Stop until the user sends something: background job events then wait instead of waking the
+    /// agent into a new turn (which could ask for permissions right after the user stopped it).
+    private var stoppedByUser = false
     private var queued: [(String, [Attachment])] = []
     /// Wake the main agent when a background job reports (exit, watched match, error, stall) while
     /// it is idle. On by default: agents get notified instead of sleeping and polling.
@@ -131,7 +134,7 @@ public final class Workbench: @unchecked Sendable {
 
     /// Starts a turn for pending job notifications if the agent is idle.
     func wakeIfIdle() async {
-        let idle = stateLock.withLock { !busy && autoWake && services.jobs.hasPendingAny }
+        let idle = stateLock.withLock { !busy && !stoppedByUser && autoWake && services.jobs.hasPendingAny }
         guard idle else { return }
         await runTurn(nil)
     }
@@ -162,6 +165,7 @@ public final class Workbench: @unchecked Sendable {
     }
 
     public func interrupt() {
+        stateLock.withLock { stoppedByUser = true }
         main.cancel()
         stateLock.withLock { running }?.cancel()
         if let s = services.ideas.end(summary: L("Stopped by the user."), stopped: true) {
@@ -205,6 +209,7 @@ public final class Workbench: @unchecked Sendable {
         case .handled(let msg):
             if !msg.isEmpty { onOutput(msg) }
         case .prompt(let p):
+            stateLock.withLock { stoppedByUser = false }
             services.goal.userReplied()
             await runTurn(p, attachments: attachments)
         }
@@ -274,7 +279,7 @@ public final class Workbench: @unchecked Sendable {
                 let missed = main.takeInserts()
                 if !missed.isEmpty { return .missed(missed) }
                 if !queued.isEmpty { return .queued(queued.removeFirst()) }
-                let notes = autoWake ? services.jobs.drain(for: "main", adoptOrphans: true) : []
+                let notes = autoWake && !stoppedByUser ? services.jobs.drain(for: "main", adoptOrphans: true) : []
                 if notes.isEmpty { busy = false; return .idle }
                 return .wake(notes)
             }

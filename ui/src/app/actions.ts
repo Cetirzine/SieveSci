@@ -621,6 +621,17 @@ export async function exportTaskMarkdown(id: string) {
 }
 
 /** The task's folder in Finder / Explorer (`folder`: a workspace other than the open one). */
+/** Takes a workspace off SieveSci's list; its folder and files stay as they are. The open workspace
+ *  hands over to the next one on the list (or to none). */
+export async function removeWorkspace(path: string) {
+  const s = getState();
+  const rest = s.config.recentWorkspaces.filter((p) => p !== path);
+  await updateConfig({ recentWorkspaces: rest });
+  if (s.workspace !== path) return;
+  if (rest.length > 0) { await openWorkspace(rest[0]); return; }
+  setState({ workspace: null, tasks: [], taskId: "", streams: { main: [] }, cards: {}, running: false, live: false, queued: [], inserting: [] });
+}
+
 export async function revealTask(id: string, folder?: string) {
   const r = await call<{ dir: string }>("task.markdown", folder ? { id, workspace: folder } : { id });
   if (r?.dir) systemOpen({ path: r.dir, reveal: true });

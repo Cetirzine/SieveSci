@@ -40,16 +40,38 @@ public struct URLSessionStreaming: HTTPStreaming {
 
     public func postSSE(_ request: URLRequest) async throws -> HTTPStreamResponse {
         #if canImport(FoundationNetworking)
-        // swift-corelibs-foundation has no URLSession.bytes(for:). Linux is only used for tests and
-        // the headless CLI, so buffer the body and run it through the same SSE parser.
-        let (data, resp) = try await session.data(for: request)
-        let http = resp as? HTTPURLResponse
-        let status = http?.statusCode ?? 0
+        // swift-corelibs-foundation (Windows, Linux) has no URLSession.bytes(for:): a data delegate streams
+        // the body as it arrives. (Buffering it whole showed nothing until a reply ended, so a long reply
+        // looked like a silent model to the stall watch and was sent again.)
+        var request = request
+        request.timeoutInterval = max(request.timeoutInterval, 3600)   // idleness is the stall watch's job
+        let stream = DelegateStream()
+        let session = URLSession(configuration: .default, delegate: stream, delegateQueue: nil)
+        let task = session.dataTask(with: request)
+        stream.task = task
+        task.resume()
+        let http: HTTPURLResponse
+        do { http = try await stream.response() } catch { session.invalidateAndCancel(); throw error }
+        let status = http.statusCode
         let headers = Self.headers(http)
         if status >= 400 {
-            throw ProviderError.http(status: status, body: String(decoding: data, as: UTF8.self))
+            var body = Data()
+            for try await b in stream.bytes { body.append(b); if body.count > 65536 { break } }
+            session.invalidateAndCancel()
+            throw ProviderError.http(status: status, body: String(decoding: body, as: UTF8.self))
         }
-        return HTTPStreamResponse(status: status, headers: headers, events: SSEDecoding.events(fromBytes: Array(data)))
+        let bytes = stream.bytes
+        let events = AsyncThrowingStream<SSEMessage, Error> { cont in
+            let t = Task {
+                do {
+                    for try await ev in bytes.events { cont.yield(SSEMessage(event: ev.event, data: ev.data)) }
+                    cont.finish()
+                } catch { cont.finish(throwing: error) }
+                session.finishTasksAndInvalidate()
+            }
+            cont.onTermination = { _ in t.cancel(); task.cancel(); session.invalidateAndCancel() }
+        }
+        return HTTPStreamResponse(status: status, headers: headers, events: events)
         #else
         let (bytes, resp) = try await session.bytes(for: request)
         let http = resp as? HTTPURLResponse
@@ -85,6 +107,68 @@ public struct URLSessionStreaming: HTTPStreaming {
         return out
     }
 }
+
+#if canImport(FoundationNetworking)
+/// Bridges URLSession's data delegate to async: the response as soon as headers arrive, then the body
+/// bytes as they come.
+final class DelegateStream: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var responseWaiter: CheckedContinuation<HTTPURLResponse, Error>?
+    private var gotResponse: Result<HTTPURLResponse, Error>?
+    weak var task: URLSessionDataTask?
+    let bytes: AsyncThrowingStream<UInt8, Error>
+    private let sink: AsyncThrowingStream<UInt8, Error>.Continuation
+
+    override init() {
+        var c: AsyncThrowingStream<UInt8, Error>.Continuation!
+        bytes = AsyncThrowingStream(bufferingPolicy: .unbounded) { c = $0 }
+        sink = c
+        super.init()
+    }
+
+    func response() async throws -> HTTPURLResponse {
+        try await withCheckedThrowingContinuation { (k: CheckedContinuation<HTTPURLResponse, Error>) in
+            let ready: Result<HTTPURLResponse, Error>? = lock.withLock {
+                if let r = gotResponse { return r }
+                responseWaiter = k
+                return nil
+            }
+            if let ready { k.resume(with: ready) }
+        }
+    }
+
+    private func settle(_ r: Result<HTTPURLResponse, Error>) {
+        let waiter: CheckedContinuation<HTTPURLResponse, Error>? = lock.withLock {
+            guard gotResponse == nil else { return nil }
+            gotResponse = r
+            defer { responseWaiter = nil }
+            return responseWaiter
+        }
+        waiter?.resume(with: r)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+                    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        if let http = response as? HTTPURLResponse { settle(.success(http)) }
+        else { settle(.failure(ProviderError.protocolError("not an HTTP response"))) }
+        completionHandler(.allow)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        for b in data { sink.yield(b) }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error {
+            settle(.failure(error))
+            sink.finish(throwing: error)
+        } else {
+            settle(.failure(ProviderError.protocolError("no response")))
+            sink.finish()
+        }
+    }
+}
+#endif
 
 public enum SSEDecoding {
     /// Parses a complete SSE body with the EventSource package's parser.

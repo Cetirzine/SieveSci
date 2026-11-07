@@ -55,6 +55,8 @@ public final class AgentSession: @unchecked Sendable {
     public var parentId = "main"
     public var purpose = ""
     private var announced = false
+    /// Host bookkeeping (e.g. reviewing a learning proposal): no card in the conversation, live or reopened.
+    public var quiet = false
 
     public init(id: String = UUID().uuidString, role: AgentRole, services: SessionServices, tools: [Tool],
                 lineageKey: String? = nil, writeRoot: URL? = nil, blindedPaths: [String] = [], readableRoots: [String]? = nil,
@@ -103,7 +105,7 @@ public final class AgentSession: @unchecked Sendable {
     /// intervention budget is spent). Returns the final assistant message.
     @discardableResult
     public func send(_ text: String, attachments: [ContentBlock] = []) async throws -> Message? {
-        if role != .main && !announced {
+        if role != .main && !announced && !quiet {
             announced = true
             let shown = purpose.isEmpty ? String(text.prefix(200)) : purpose
             services.emit(.agentStarted(id: id, role: role, parent: parentId, purpose: shown))
@@ -112,7 +114,7 @@ public final class AgentSession: @unchecked Sendable {
         }
         defer {
             if role != .main {
-                services.emit(.agentFinished(id: id, role: role, result: transcript.last?.plainText ?? ""))
+                if !quiet { services.emit(.agentFinished(id: id, role: role, result: transcript.last?.plainText ?? "")) }
                 if let c = cliConversation, provider is CLIAgentProvider { CLIAgentProvider.endProcess(conversation: c, profile: provider.profile) }
             }
         }
@@ -121,6 +123,8 @@ public final class AgentSession: @unchecked Sendable {
         cancelled = role == .main ? false : services.subagents.isStopped
         interventionsThisTurn = 0
         turnRequest = text
+        // How much protocol this message needs; a plan written during the turn turns research back on.
+        if role == .main { services.research.turnScale = TurnScale.classify(text) }
         turnToolCalls.mutate { $0 = 0 }
         delegationHinted.mutate { $0 = [] }
         turnDelegated = false
@@ -850,7 +854,8 @@ public enum TurnContext {
         let g = s.research.hasGrounding()
         var lines = ["<context>",
                      "date: \(f.string(from: Date()))",
-                     "workspace: \(s.workspace.path)"]
+                     "workspace: \(s.workspace.path)",
+                     "computer: \(Platform.description)"]
         let extra = s.readOnlyFolders
         if !extra.isEmpty { lines.append("read-only folders (read with SieveSci's tools; never write there): " + extra.map(\.path).joined(separator: ", ")) }
         lines += [
@@ -864,6 +869,7 @@ public enum TurnContext {
         let open = s.claims.snapshot.filter { $0.status != .verified && $0.status != .refuted }
         if !open.isEmpty { lines.append("open claims: " + open.map { "\($0.id) [\($0.status.rawValue)]" }.joined(separator: ", ")) }
         if let goal = s.goal.current, goal.phase == .active { lines.append("goal: \(goal.objective) (round \(goal.roundsStarted))") }
+        if plan.steps.isEmpty, let scale = s.research.turnScale.contextLine { lines.append(scale) }
         let contested = s.deliberation.contested
         if !contested.isEmpty {
             lines.append("contested (do not present as settled): " + contested.map { "\($0.thread) \($0.issue.truncated(80))" }.joined(separator: "; "))

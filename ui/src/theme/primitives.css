@@ -79,6 +79,8 @@
 .menu-list { position: absolute; top: calc(100% + 4px); z-index: 50; min-width: 200px; padding: 4px; background: var(--raised); border: 1px solid var(--rule);
              box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); font: 13px/1.4 var(--sans); color: var(--text); }
 .menu-list.left { left: 0; } .menu-list.right { right: 0; }
+/* A menu's list on the page itself (Menu's portal), placed at its button by script. */
+.menu-list.floating { position: fixed; top: 0; left: 0; right: auto; z-index: 1000; }
 .menu-item { display: flex; align-items: center; gap: 6px; width: 100%; padding: 4px 8px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: var(--r-s); white-space: nowrap; }
 .menu-item:hover { background: var(--accent); color: #fff; }
 .menu-check { width: 12px; flex: none; }
@@ -134,3 +136,14 @@
 
 /* Text for assistive technology only (a heading drawn as dot-matrix art keeps its words for screen readers). */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* Single-line labels centred on their letters rather than on the font's line box. On Windows Chinese
+   is drawn in Microsoft YaHei inside a Segoe UI line, and the two fonts' vertical metrics differ, so
+   text sat off-centre next to buttons and inside tags and menus. Engines without text-box ignore this. */
+@supports (text-box: trim-both cap alphabetic) {
+  .action-label, .chip, .menu-label, .menu-item, .popup-value, .seg button, .lc-label,
+  .hstack > span, .hstack-xs > span, .disclosure-row { text-box: trim-both cap alphabetic; }
+  /* The trimmed text is shorter than its line box was: the same outer size comes from padding. */
+  .chip { padding: 4px 5px; }
+  .menu-item { padding: 7px 8px; }
+}

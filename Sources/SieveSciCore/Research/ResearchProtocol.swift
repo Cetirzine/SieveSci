@@ -117,6 +117,13 @@ public final class ResearchProtocol: @unchecked Sendable {
     /// Grounding can be relaxed for non-research chores (e.g. "rename this file"); the agent may
     /// not change this itself — only the user via settings or `/grounding off`.
     public var groundingRequired = true
+    /// What the user's current message needs (`TurnScale`): a chat or quick task runs without the
+    /// pre-registration gate; a plan written during it switches the protocol back on.
+    private var _turnScale: TurnScale = .research
+    public var turnScale: TurnScale {
+        get { lock.withLock { _turnScale } }
+        set { lock.withLock { _turnScale = newValue } }
+    }
 
     public static let webSearchTools: Set<String> = ["web_search"]
     /// `library_search` reads papers fetched (with receipts) in this workspace's earlier tasks.
@@ -161,7 +168,7 @@ public final class ResearchProtocol: @unchecked Sendable {
     public static let gatedBeforePlan: Set<String> = analysisTools.union(["write_file", "edit_file"])
 
     public func requirePlan(tool: String, input: JSON) -> GateDecision {
-        guard groundingRequired, Self.gatedBeforePlan.contains(tool) else { return .allow }
+        guard groundingRequired, turnScale == .research, Self.gatedBeforePlan.contains(tool) else { return .allow }
         if !snapshot.steps.isEmpty { return .allow }
         if tool == "bash", let cmd = input.str("command") ?? input.str("cmd"), Self.isReadOnlyShell(cmd) { return .allow }
         let g = hasGrounding()
@@ -202,6 +209,7 @@ public final class ResearchProtocol: @unchecked Sendable {
         var steps = steps
         if !steps.isEmpty, !steps.contains(where: \.checkpoint) { steps[steps.count - 1].checkpoint = true }
         lock.lock(); defer { lock.unlock() }
+        _turnScale = .research   // a plan makes this research, whatever the message looked like
         let analysisDone = ledger.all.contains { Self.analysisTools.contains($0.tool) && $0.success }
         var changed: [String] = []
         for h in hypotheses {

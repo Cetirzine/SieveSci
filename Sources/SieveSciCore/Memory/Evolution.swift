@@ -182,7 +182,9 @@ public final class EvolutionGovernor: @unchecked Sendable {
     }
 
     func review(_ p: EvolutionProposal, services: SessionServices) async -> Verdict {
-        let reviewer = services.makeSubagent(role: .checker, purpose: "Evolution review of a \(p.role.rawValue) \(p.kind.rawValue) proposal (\(p.target))", parent: p.role.rawValue)
+        // Bookkeeping between agents, not part of the conversation: no card, no verdict JSON in the chat.
+        let reviewer = services.makeSubagent(role: .checker, purpose: "Evolution review of a \(p.role.rawValue) \(p.kind.rawValue) proposal (\(p.target))",
+                                             parent: p.role.rawValue, quiet: true)
         let prompt = """
         <evolution_review>
         An agent (role: \(p.role.rawValue)) proposes to change its long-term \(p.kind.rawValue) (\(p.target), \(p.operation)):
@@ -262,7 +264,11 @@ public final class EvolutionGovernor: @unchecked Sendable {
         services.log("evolution", actor: p.role.rawValue, ["id": .string(p.id), "kind": .string(p.kind.rawValue), "target": .string(p.target),
                                                            "op": .string(p.operation), "status": .string(p.status.rawValue), "reason": .string(p.reason),
                                                            "content_sha256": .string(Hashing.sha256Hex(p.content)), "provenance": .array(p.provenance.map { .string($0) })])
-        services.emit(.notice(L10n.s("Learning %@ (%@ · %@): %@", L(p.status.rawValue), L(p.role.rawValue), p.target, p.reason.truncated(200))))
+        // Only what needs the user reaches the chat: one line when a proposal waits for approval. Accepted,
+        // rejected and reverted proposals are in the audit log and in Settings → Memory & learning.
+        if p.status == .pending {
+            services.emit(.notice(L10n.s("A learning proposal from the %@ (%@) awaits your approval in Settings → Memory & learning.", L(p.role.rawValue), p.target)))
+        }
         return p
     }
 

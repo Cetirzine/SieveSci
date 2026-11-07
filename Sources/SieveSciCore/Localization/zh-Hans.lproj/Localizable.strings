@@ -1108,3 +1108,5 @@
 "%@ is already on your PATH. Open a new terminal and run sievesci." = "%@ 已经在 PATH 里。打开一个新的终端，运行 sievesci 即可。";
 "Could not change your PATH (%@). Add %@ to it yourself." = "无法修改 PATH（%@）。请手动把 %@ 加入 PATH。";
 "All %d models the provider lists are added." = "服务商列出的 %d 个模型都已添加。";
+"Remove from SieveSci (the folder stays)" = "从 SieveSci 中移除（文件夹保留）";
+"A learning proposal from the %@ (%@) awaits your approval in Settings → Memory & learning." = "%@提交了一条学习提案（%@），等待你在“设置 → 记忆与学习”中批准。";

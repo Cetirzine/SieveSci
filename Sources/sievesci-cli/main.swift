@@ -83,6 +83,8 @@ func makeProvider(_ id: String, _ model: String?) throws -> (LLMProvider, String
 }
 
 setvbuf(stdout, nil, _IONBF, 0)
+// The engine's own requests use the computer's proxy (Windows, Linux) unless the environment names one.
+SystemProxy.adoptForThisProcess()
 /// Keys: environment variables, then those saved by the SieveSci app — the macOS Keychain, Windows
 /// Credential Manager, or `secrets.json` elsewhere — so the app and the CLI share them.
 let cliSecrets: SecretStore = {

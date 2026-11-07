@@ -62,7 +62,8 @@ extension ServeServer {
                 mainCalls.append((e.seq, e.data.str("receipt"), e.data.str("tool") ?? "", e.data["input"] ?? [:]))
                 continue
             }
-            guard !agent.isEmpty, agent != "main", ["worker", "checker", "verifier", "host"].contains(e.actor) || e.kind == "agent_start" else { continue }
+            guard !agent.isEmpty, agent != "main", !agent.hasPrefix("quiet-"),
+                  ["worker", "checker", "verifier", "host"].contains(e.actor) || e.kind == "agent_start" else { continue }
             if subs[agent] == nil {
                 let role = String(agent.split(separator: "-").first ?? "worker")
                 subs[agent] = Sub(id: agent, role: role, first: e.seq, last: e.seq, firstAt: e.time, lastAt: e.time, brief: nil, title: nil, parent: "main", steps: 0)

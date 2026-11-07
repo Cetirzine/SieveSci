@@ -14,6 +14,21 @@ public enum Platform {
     public static let isWindows = false
     #endif
 
+    /// The computer, as the agent should describe it (it said "your Mac" on Windows), and whether a
+    /// shell is there for the `bash` tool.
+    public static var description: String {
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        #if os(macOS)
+        return "macOS \(v.majorVersion).\(v.minorVersion) · shell: bash"
+        #elseif os(Windows)
+        let shell = gitBash != nil ? "bash (Git for Windows)"
+            : "none — Git for Windows is not installed, so the `bash` tool cannot run; use the `python` tool (subprocess for programs) or ask the user to install Git for Windows"
+        return "Windows (build \(v.patchVersion)) · paths like C:\\… · shell: \(shell)"
+        #else
+        return "Linux · shell: bash"
+        #endif
+    }
+
     /// PATH entries are separated by `;` on Windows.
     public static let pathSeparator: Character = isWindows ? ";" : ":"
 

@@ -90,3 +90,33 @@ import Testing
         #expect(Date().timeIntervalSince(started) < 2)
     }
 }
+
+@Suite struct TurnScales {
+    @Test func messagesGetTheProcessTheyNeed() {
+        #expect(TurnScale.classify("hello 你能干啥") == .chat)
+        #expect(TurnScale.classify("你好") == .chat)
+        #expect(TurnScale.classify("hi") == .chat)
+        #expect(TurnScale.classify("which file is the biggest here?") == .quick)
+        #expect(TurnScale.classify("看看当前 Python 版本和装了哪些包") == .quick)
+        #expect(TurnScale.classify("分析一下这个报错") == .unclear, "short, but mentions analysis: ask")
+        #expect(TurnScale.classify("Brainstorm: 帮我设计一个深度学习小模型架构微调优化算法 使得模型在移动端设备端侧运行更加流畅高效") == .research)
+        #expect(TurnScale.classify(String(repeating: "请帮我整理一下这批样本的元数据表格并检查缺失值，", count: 6)) == .unclear)
+        #expect(TurnScale.classify("/brainstorm mobile inference") == .research)
+    }
+
+    @Test func aPlanMakesItResearch() throws {
+        let (s, _) = try makeServices()
+        s.research.groundingRequired = false
+        s.research.turnScale = .quick
+        _ = s.research.setPlan(goal: "g", background: "", hypotheses: [], steps: [], rationale: "")
+        #expect(s.research.turnScale == .research)
+    }
+
+    @Test func quickTasksSkipPreRegistration() throws {
+        let (s, _) = try makeServices()
+        s.research.turnScale = .quick
+        if case .refuse = s.research.requirePlan(tool: "python", input: ["code": "print(1)"]) { Issue.record("quick task was gated") }
+        s.research.turnScale = .research
+        if case .allow = s.research.requirePlan(tool: "python", input: ["code": "print(1)"]) { Issue.record("research was not gated") }
+    }
+}

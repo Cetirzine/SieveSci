@@ -1108,3 +1108,5 @@
 "%@ is already on your PATH. Open a new terminal and run sievesci." = "%@ уже есть в PATH. Откройте новый терминал и запустите sievesci.";
 "Could not change your PATH (%@). Add %@ to it yourself." = "Не удалось изменить PATH (%@). Добавьте %@ вручную.";
 "All %d models the provider lists are added." = "Все %d моделей из списка провайдера уже добавлены.";
+"Remove from SieveSci (the folder stays)" = "Убрать из SieveSci (папка останется)";
+"A learning proposal from the %@ (%@) awaits your approval in Settings → Memory & learning." = "Предложение об обучении от %@ (%@) ждёт вашего одобрения в «Настройки → Память и обучение».";

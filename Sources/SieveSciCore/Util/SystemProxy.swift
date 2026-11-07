@@ -1,4 +1,7 @@
 import Foundation
+#if os(Windows)
+import ucrt
+#endif
 
 /// The proxy the user set for the whole computer (macOS Network settings, Windows Internet Options),
 /// as the environment variables command-line tools read. The app's own requests already go through it,
@@ -8,6 +11,23 @@ import Foundation
 /// handshake cut off: "curl: (35) … unexpected eof while reading"), those tools fail without it.
 public enum SystemProxy {
     static let names = ["https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY", "all_proxy", "ALL_PROXY"]
+
+    /// Gives this process the computer's proxy when its environment has none. On Windows and Linux the
+    /// engine's own requests (URLSession over libcurl) read only `https_proxy` and friends, never the
+    /// system setting, so GitHub, arXiv and the vendors' APIs failed with "Connection was reset" where a
+    /// proxy is needed. (On macOS URLSession already follows the system proxy.) Called once at start.
+    public static func adoptForThisProcess() {
+        #if !os(macOS)
+        guard !hasProxy(ProcessInfo.processInfo.environment) else { return }
+        for (k, v) in current() {
+            #if os(Windows)
+            _ = _putenv_s(k, v)
+            #else
+            setenv(k, v, 1)
+            #endif
+        }
+        #endif
+    }
 
     /// True when the environment already names a proxy (a shell profile's export wins over the system).
     public static func hasProxy(_ env: [String: String]) -> Bool {

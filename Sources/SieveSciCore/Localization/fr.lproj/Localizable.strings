@@ -1108,3 +1108,5 @@
 "%@ is already on your PATH. Open a new terminal and run sievesci." = "%@ est déjà dans le PATH. Ouvrez un nouveau terminal et lancez sievesci.";
 "Could not change your PATH (%@). Add %@ to it yourself." = "Impossible de modifier le PATH (%@). Ajoutez %@ vous-même.";
 "All %d models the provider lists are added." = "Les %d modèles listés par le fournisseur sont tous ajoutés.";
+"Remove from SieveSci (the folder stays)" = "Retirer de SieveSci (le dossier reste)";
+"A learning proposal from the %@ (%@) awaits your approval in Settings → Memory & learning." = "Une proposition d’apprentissage du %@ (%@) attend votre approbation dans Réglages → Mémoire et apprentissage.";

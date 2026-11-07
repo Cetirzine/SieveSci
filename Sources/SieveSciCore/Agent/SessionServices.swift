@@ -214,16 +214,18 @@ public final class SessionServices: @unchecked Sendable {
     /// Creates a subagent sharing this task's ledger, library and audit trail. Subagents of one
     /// role share a lineage key, so repeated checker runs hit the same cached prefix.
     public func makeSubagent(role: AgentRole, writeRoot: URL? = nil, blinded: [String] = [], readable: [String]? = nil,
-                             purpose: String = "", parent: String = "main") -> AgentSession {
+                             purpose: String = "", parent: String = "main", quiet: Bool = false) -> AgentSession {
         let window = ModelDiscovery.effectiveSettings(model: models.pick(role).1, profile: models.pick(role).0.profile, discovered: nil).contextWindow
         // The checker is read-only, so it is offered only what it may use.
         let tools = role == .checker ? toolset.filter { $0.effect(for: [:]) == .readOnly } : toolset
-        let s = AgentSession(id: "\(role.rawValue)-" + String(UUID().uuidString.prefix(6)).lowercased(), role: role, services: self, tools: tools,
+        // Quiet subagents carry a "quiet-" id, so a reopened task's timeline leaves them out too.
+        let s = AgentSession(id: (quiet ? "quiet-" : "") + "\(role.rawValue)-" + String(UUID().uuidString.prefix(6)).lowercased(), role: role, services: self, tools: tools,
                              lineageKey: taskId + "-" + role.rawValue,
                              writeRoot: writeRoot ?? (role == .worker ? taskDir.appendingPathComponent("workers") : nil),
                              blindedPaths: blinded, readableRoots: readable, contextWindow: window)
         s.purpose = purpose
         s.parentId = parent
+        s.quiet = quiet
         subagents.add(s)
         // A review reads what exists and gives a verdict; a verifier reruns one claim. Bounded, so a
         // wandering reviewer cannot spend a main turn's worth of tokens.
