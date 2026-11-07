@@ -61,7 +61,8 @@ public struct ProviderOptions: Codable, Equatable, Sendable {
     public var cacheControlInChatParts: Bool = false
     /// Session-affinity headers so a relay pins the session to one replica (and its cache):
     /// "openai" → session_id + x-client-request-id; "openrouter" → x-session-id; "affinity" →
-    /// x-session-affinity (Fireworks-style); "" → none.
+    /// x-session-affinity (Fireworks-style); "x-session-id" → X-Session-Id as a UUID per session
+    /// (Naive AI); "" → none.
     public var sessionAffinity: String = ""
     /// Chat format: request `stream_options.include_usage` (needed for cache accounting).
     public var streamUsage: Bool = true
@@ -83,6 +84,8 @@ public struct ProviderOptions: Codable, Equatable, Sendable {
             o.sessionAffinity = "openai"
         } else if host.hasSuffix("fireworks.ai") {
             o.sessionAffinity = "affinity"
+        } else if host.hasSuffix("naive.ai") {
+            o.sessionAffinity = "x-session-id"
         }
         // Only first-party Anthropic/OpenAI/Google are known to honour long retention.
         o.supportsLongRetention = host.hasSuffix("anthropic.com") || isOpenAI || host.hasSuffix("googleapis.com")

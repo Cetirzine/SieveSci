@@ -105,6 +105,7 @@ public struct AnthropicProvider: LLMProvider {
         switch profile.options.sessionAffinity {
         case "openrouter": h["x-session-id"] = lineage
         case "affinity": h["x-session-affinity"] = lineage
+        case "x-session-id": h["X-Session-Id"] = KnownModels.sessionUUID(lineage)
         default: break
         }
         return h

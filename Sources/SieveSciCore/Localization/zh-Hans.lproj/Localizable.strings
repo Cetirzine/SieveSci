@@ -1069,6 +1069,7 @@
 "No installer for %@." = "没有 %@ 的安装程序。";
 "Gemini CLI needs Node.js 20 or newer (there is no standalone build). Install Node.js from nodejs.org, then click Install again." = "Gemini CLI 需要 Node.js 20 或更高版本（官方没有独立安装包）。请先从 nodejs.org 安装 Node.js，再点一次“安装”。";
 "Installed %@." = "已安装 %@。";
+"The download was cut off before it started — this network may need a proxy. Turn on your system proxy (or set HTTPS_PROXY) and click Install again." = "下载还没开始就被切断了——这个网络可能需要代理。请打开系统代理（或设置 HTTPS_PROXY），再点一次安装。";
 "The installer did not finish:" = "安装程序未能完成：";
 "A terminal opened for signing in. Finish there, then come back." = "已打开终端用于登录。在那里完成登录后回到这里。";
 "Could not open a terminal. Run the sign-in command yourself:" = "无法打开终端。请自行运行登录命令：";

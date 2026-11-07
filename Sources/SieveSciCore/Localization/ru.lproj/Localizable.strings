@@ -1069,6 +1069,7 @@
 "No installer for %@." = "Нет установщика для %@.";
 "Gemini CLI needs Node.js 20 or newer (there is no standalone build). Install Node.js from nodejs.org, then click Install again." = "Gemini CLI нужен Node.js 20 или новее (отдельной сборки нет). Установите Node.js с nodejs.org и снова нажмите «Установить».";
 "Installed %@." = "Установлено: %@.";
+"The download was cut off before it started — this network may need a proxy. Turn on your system proxy (or set HTTPS_PROXY) and click Install again." = "Загрузка прервалась, не начавшись: этой сети, возможно, нужен прокси. Включите системный прокси (или задайте HTTPS_PROXY) и снова нажмите «Установить».";
 "The installer did not finish:" = "Установщик не завершил работу:";
 "A terminal opened for signing in. Finish there, then come back." = "Открыт терминал для входа. Завершите вход там и вернитесь.";
 "Could not open a terminal. Run the sign-in command yourself:" = "Не удалось открыть терминал. Выполните команду входа сами:";

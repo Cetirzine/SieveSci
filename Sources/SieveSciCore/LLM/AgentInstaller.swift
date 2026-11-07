@@ -70,10 +70,20 @@ public enum AgentInstaller {
             let path = ProcessRunner.which(executable)
             if res.exitCode == 0, let path { return Result(ok: true, path: path, message: L10n.s("Installed %@.", path)) }
             let tail = (res.stderr.isEmpty ? res.stdout : res.stderr).split(separator: "\n").suffix(4).joined(separator: "\n")
-            return Result(ok: false, path: path, message: L("The installer did not finish:") + " " + tail)
+            var message = L("The installer did not finish:") + " " + tail
+            if networkFailure(tail) { message += "\n" + L("The download was cut off before it started — this network may need a proxy. Turn on your system proxy (or set HTTPS_PROXY) and click Install again.") }
+            return Result(ok: false, path: path, message: message)
         } catch {
             return Result(ok: false, path: nil, message: L("The installer did not finish:") + " " + error.localizedDescription)
         }
+    }
+
+    /// curl's connect/TLS/timeout failures, and PowerShell's: a blocked or proxied network, not a broken installer.
+    static func networkFailure(_ text: String) -> Bool {
+        let t = text.lowercased()
+        return ["curl: (6)", "curl: (7)", "curl: (28)", "curl: (35)", "curl: (56)", "could not resolve host",
+                "unable to connect to the remote server", "the remote name could not be resolved", "ssl connection could not be established"]
+            .contains { t.contains($0) }
     }
 
     /// Opens a terminal window on the agent's sign-in command (its own browser login).

@@ -101,6 +101,11 @@ extension AppConfig {
         let added = ProviderPresets.all.filter { !known.contains($0.id) }
         if !added.isEmpty { providers += added }
         for (i, p) in providers.enumerated() {
+            // Naive AI routes a session to its cache by X-Session-Id; providers added by hand before the
+            // preset existed get it too.
+            if p.options.sessionAffinity.isEmpty, URL(string: p.baseURL)?.host?.lowercased().hasSuffix("naive.ai") == true {
+                providers[i].options.sessionAffinity = "x-session-id"
+            }
             if let preset = ProviderPresets.profile(id: p.id), preset.notes != p.notes, p.family == preset.family {
                 providers[i].notes = preset.notes
                 if p.displayName.hasPrefix("Gemini CLI") { providers[i].displayName = preset.displayName }

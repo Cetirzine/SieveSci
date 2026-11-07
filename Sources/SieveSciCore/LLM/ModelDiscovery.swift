@@ -140,6 +140,10 @@ public enum ModelDiscovery {
     public static func effectiveSettings(model: String, profile: ProviderProfile, discovered: DiscoveredModel?,
                                          catalog: ProviderCatalog = .shared) -> ModelSettings {
         var s = catalog.modelRules.settings(modelId: model, family: profile.family, baseURL: profile.baseURL)
+        if let k = KnownModels.spec(for: model) {
+            s.contextWindow = k.contextWindow; s.maxOutput = k.maxOutput
+            s.supportsImages = k.supportsImages; s.supportsReasoning = k.supportsReasoning
+        }
         if let m = ModelsDevCatalog.shared.model(model, profile: profile) {
             if let c = m.context { s.contextWindow = c }
             if let o = m.output { s.maxOutput = o }

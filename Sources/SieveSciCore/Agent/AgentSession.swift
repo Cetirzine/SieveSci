@@ -24,6 +24,8 @@ public final class AgentSession: @unchecked Sendable {
     private var cancelled = false
     private var lastRequestAt: Date?
     var interventionsThisTurn = 0
+    /// What the user asked this turn, restated in long tool loops (`KnownModels.Spec.stateRefreshEvery`).
+    var turnRequest = ""
     /// Per-call bookkeeping, locked: read-only calls of one step run concurrently on this instance
     /// (`runTools`), and an unlocked dictionary here crashed 0.2.1 (two `respond_review` calls resized
     /// `repeatCounts` at once). Tool calls in the current user turn, and which delegation hints this
@@ -113,6 +115,7 @@ public final class AgentSession: @unchecked Sendable {
         }
         cancelled = false
         interventionsThisTurn = 0
+        turnRequest = text
         turnToolCalls.mutate { $0 = 0 }
         delegationHinted.mutate { $0 = [] }
         turnDelegated = false
@@ -176,6 +179,9 @@ public final class AgentSession: @unchecked Sendable {
                 let notes = services.jobs.drain(for: id)
                 if !notes.isEmpty { results.append(.text(notes.map(\.rendered).joined(separator: "\n"))) }
                 if role == .main, let wrap = services.ideas.drainWrapUp() { results.append(.text(wrap)) }
+                if role == .main, let every = KnownModels.spec(for: model)?.stateRefreshEvery, every > 0, steps % every == 0 {
+                    results.append(.text(TurnContext.refresh(services: services, request: turnRequest, steps: steps)))
+                }
                 if role != .main && steps >= maxSteps - 2 {
                     results.append(.text("<step_budget>This is your last step: do not call more tools. Give your final answer now, from what you have.</step_budget>"))
                 }
@@ -225,7 +231,7 @@ public final class AgentSession: @unchecked Sendable {
 
     func callModel() async throws -> LLMResponse {
         var req = LLMRequest(model: model, system: system, tools: tools.map(\.spec), messages: transcript,
-                             maxTokens: min(meter.contextWindow / 4, 64_000), effort: services.effort, cache: cache)
+                             maxTokens: min(meter.contextWindow / 4, KnownModels.spec(for: model)?.maxOutput ?? 64_000), effort: services.effort, cache: cache)
         req.host = cliHost
         if provider is CLIAgentProvider {
             req.host.mcp = await ToolBridge.shared.endpoint(for: self)
@@ -508,7 +514,7 @@ public final class AgentSession: @unchecked Sendable {
         guard meter.contextWindow > 0, transcript.count > 6 else { return }
         // Fill is measured against the window, capped at `contextBudget`: on a 1M-token model the context
         // would otherwise grow to ~800k tokens, all of it re-sent with every call.
-        let budget = Double(min(meter.contextWindow, Self.contextBudget))
+        let budget = Double(min(meter.contextWindow, KnownModels.spec(for: model)?.contextBudget ?? Self.contextBudget))
         let fill = Double(meter.lastPromptTokens) / budget
         let idle = lastRequestAt.map { Date().timeIntervalSince($0) } ?? 0
         let cold = idle > CachePolicy.ttl(for: provider.profile)
@@ -743,6 +749,25 @@ public enum CachePolicy {
 /// The per-turn context block. Lives at the tail of the user message, so it never disturbs the
 /// cached prefix. Day-granularity date only.
 public enum TurnContext {
+    /// A short restatement for models whose attention reaches far-back tokens only sparsely: what the
+    /// turn is for and where the plan stands, appended to a tool result (append-only, cache-safe).
+    public static func refresh(services s: SessionServices, request: String, steps: Int) -> String {
+        var lines = ["<state_refresh>", "tool rounds this turn: \(steps)"]
+        let ask = request.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !ask.isEmpty { lines.append("the user asked: " + ask.truncated(600)) }
+        let plan = s.research.snapshot
+        if !plan.steps.isEmpty {
+            let done = plan.steps.filter { $0.status == "done" }.count
+            let current = plan.steps.first { $0.status == "in_progress" }?.title ?? plan.steps.first { $0.status == "pending" }?.title ?? "-"
+            lines.append("plan: \(done)/\(plan.steps.count) steps done; current: \(current)")
+        }
+        if let goal = s.goal.current, goal.phase == .active { lines.append("goal: \(goal.objective)") }
+        if let b = s.ideas.live { lines.append("brainstorm running (stage \(b.stage)): no plan, workers or file writes until `brainstorm` end") }
+        lines.append("permission mode: \(s.permissions.mode.rawValue)")
+        lines.append("</state_refresh>")
+        return lines.joined(separator: "\n")
+    }
+
     public static func render(services s: SessionServices, model: String, turn: Int = 0) -> String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"

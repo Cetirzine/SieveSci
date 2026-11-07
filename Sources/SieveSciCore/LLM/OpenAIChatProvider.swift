@@ -148,6 +148,7 @@ public struct OpenAIChatProvider: LLMProvider {
         case "openai": h["session_id"] = lineage; h["x-client-request-id"] = lineage
         case "openrouter": h["x-session-id"] = lineage
         case "affinity": h["x-session-affinity"] = lineage
+        case "x-session-id": h["X-Session-Id"] = KnownModels.sessionUUID(lineage)
         default: break
         }
         for (k, v) in profile.options.headers { h[k] = v }

@@ -133,7 +133,9 @@ public final class ModelsDevCatalog: @unchecked Sendable {
 
     /// USD cost of one request's usage, when prices are known.
     public func cost(_ u: Usage, model: String, profile: ProviderProfile) -> Double? {
-        guard let m = self.model(model, profile: profile), let inp = m.cost.input, let out = m.cost.output else { return nil }
+        guard let m = self.model(model, profile: profile), let inp = m.cost.input, let out = m.cost.output else {
+            return KnownModels.cost(u, model: model)
+        }
         let read = m.cost.cacheRead ?? inp, write = m.cost.cacheWrite ?? inp
         return (Double(u.input) * inp + Double(u.cacheRead) * read + Double(u.cacheWrite) * write + Double(u.output) * out) / 1_000_000
     }

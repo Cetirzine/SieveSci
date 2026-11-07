@@ -25,7 +25,8 @@ public enum ProcessRunner {
         for flags in [["-i", "+m", "-l", "-c"], ["-l", "-c"]] {
             let p = Process()
             p.executableURL = URL(fileURLWithPath: shell)
-            p.arguments = flags + ["printf %s \"$PATH\""]
+            // PATH, and the proxy a profile exports (an app started from the Dock has neither).
+            p.arguments = flags + ["printf 'PATH=%s\\n' \"$PATH\"; env | grep -iE '^(https?|all|no)_proxy='"]
             let out = Pipe()
             p.standardInput = FileHandle.nullDevice
             p.standardOutput = out
@@ -34,8 +35,18 @@ public enum ProcessRunner {
             let deadline = Date().addingTimeInterval(5)
             while p.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.02) }
             if p.isRunning { p.terminate(); continue }
-            let path = String(decoding: out.fileHandleForReading.readRest(), as: UTF8.self)
-            if !path.isEmpty { env["PATH"] = path; break }
+            let text = String(decoding: out.fileHandleForReading.readRest(), as: UTF8.self)
+            var found: [String: String] = [:]
+            for line in text.split(separator: "\n") {
+                guard let eq = line.firstIndex(of: "=") else { continue }
+                found[String(line[..<eq])] = String(line[line.index(after: eq)...])
+            }
+            guard let path = found["PATH"], !path.isEmpty else { continue }
+            env["PATH"] = path
+            if !SystemProxy.hasProxy(env) {
+                for (k, v) in found where k != "PATH" && !v.isEmpty { env[k] = v }
+            }
+            break
         }
         #endif
         #if os(Windows)
@@ -158,6 +169,8 @@ public enum ProcessRunner {
         p.arguments = args
         if let cwd { p.currentDirectoryURL = cwd }
         var e = loginEnvironment
+        // No proxy from the launch environment or the shell profile: the one set for the computer.
+        if !SystemProxy.hasProxy(e) { for (k, v) in SystemProxy.current() { e[k] = v } }
         for (k, v) in env ?? [:] { e[k] = v }
         p.environment = e
         return p

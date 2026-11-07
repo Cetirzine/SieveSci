@@ -613,24 +613,25 @@ function CLISection({ profile: p }: { profile: ProviderProfile }) {
     setMessage({ ok: r.ok, text: r.ok ? r.value.message : r.error });
   };
   const command = help ? (platform === "windows" ? help.windows : help.unix) : "";
+  const installed = !!st?.cliPath;
+  const status = installed
+    ? L10n.f(onPlatform(platform, "Found %@ — SieveSci drives it with your existing sign-in, so usage counts against your plan. Your login token is never read.", "Found %@ — SieveSci drives it with your existing sign-in, so usage counts against your plan. Your login token is never read."), st!.cliPath!)
+    : L10n.f(onPlatform(platform, "%@ is not installed on this Mac.", "%@ is not installed on this computer."), exe);
+  const detail = !installed && help?.source ? L10n.f("Installs the official build from %@ — no npm or Node.js needed.", help.source) : undefined;
   return (
     <div className="stack">
-      {st?.cliPath
-        ? <span className="check-line c-ok"><Symbol name="checkmark.circle.fill" size={12} />{L10n.f(onPlatform(platform, "Found %@ — SieveSci drives it with your existing sign-in, so usage counts against your plan. Your login token is never read.", "Found %@ — SieveSci drives it with your existing sign-in, so usage counts against your plan. Your login token is never read."), st.cliPath)}</span>
-        : <span className="check-line secondary"><Symbol name="xmark.circle" size={12} />{L10n.f(onPlatform(platform, "%@ is not installed on this Mac.", "%@ is not installed on this computer."), exe)}</span>}
-      {help && (
-        <div className="hstack">
-          {st?.cliPath
-            ? <ActionButton kind="primary" width="column" onClick={() => void signIn()}>{L("Sign in…")}</ActionButton>
-            : <ActionButton kind="primary" width="column" disabled={busy} onClick={() => void install()}>{busy ? L("Installing…") : L("Install")}</ActionButton>}
-          {!st?.cliPath && help.source && <span className="t-caption secondary">{L10n.f("Installs the official build from %@ — no npm or Node.js needed.", help.source)}</span>}
-        </div>
-      )}
-      {lines.length > 0 && <div className="code-box install-log">{lines.join("\n")}</div>}
+      {/* The same row as "Models from the provider": what and why on the left, the action in the button column. */}
+      <ActionRow title={status} detail={detail}>
+        {help && (installed
+          ? <ActionButton width="column" onClick={() => void signIn()}>{L("Sign in…")}</ActionButton>
+          : <ActionButton kind="primary" width="column" disabled={busy} onClick={() => void install()}>{busy ? L("Installing…") : L("Install")}</ActionButton>)}
+      </ActionRow>
+      {/* Live installer output while it runs; afterwards the result line says what happened. */}
+      {busy && lines.length > 0 && <div className="code-box install-log">{lines.join("\n")}</div>}
       {message && <span className={`check-line ${message.ok ? "c-ok" : "c-warn"}`}><Symbol name={message.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"} size={12} />{message.text}</span>}
       {help && <>
         <Caption>{L("Or in a terminal:")}</Caption>
-        <div className="code-box">{st?.cliPath ? help.signIn : `${command}\n${help.signIn}`}</div>
+        <div className="code-box">{installed ? help.signIn : `${command}\n${help.signIn}`}</div>
       </>}
     </div>
   );

@@ -59,6 +59,15 @@ public enum ProviderPresets {
             models: ["deepseek-flash", "deepseek-v4-pro"],
             notes: "Automatic disk prefix cache (64-token units); usage reports prompt_cache_hit_tokens. Model list is refreshed from /models."),
 
+        // MARK: Naive AI
+        ProviderProfile(
+            id: "naive-ai", displayName: "Naive AI", family: .anthropic,
+            baseURL: "https://api.naive.ai", auth: .bearer, apiKeyRef: "NAIVE_AI_API_KEY",
+            models: ["naive-n0.5-flash"],
+            notes: "Anthropic Messages format, 1M-token context, text only (images go to the vision helper). Each task sends its own X-Session-Id; sampling follows Naive's published settings (temperature 1.0, top_p 0.95). Cache reads cost a tenth of input, so sessions keep up to ~600k tokens before compacting.",
+            extraBody: ["temperature": .double(1.0), "top_p": .double(0.95)],
+            options: { var o = ProviderOptions(); o.sessionAffinity = "x-session-id"; o.supportsLongRetention = false; return o }()),
+
         // MARK: Zhipu GLM
         ProviderProfile(
             id: "glm-coding-cn", displayName: "GLM Coding Plan (bigmodel.cn)", family: .openaiChat, flavor: .zhipu,
