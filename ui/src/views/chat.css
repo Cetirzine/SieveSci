@@ -19,7 +19,8 @@
 .chat-search input { flex: 1; border: 0; background: transparent; font: 13px var(--sans); color: var(--text); outline: none; }
 .chat-scroll { flex: 1; overflow-y: auto; min-height: 0; }
 /* frame(maxWidth: W).padding(.horizontal, 24): the padding is outside the width. */
-.transcript-column { max-width: calc(var(--transcript-width) + 2 * var(--s-xl)); margin: 0 auto; padding: var(--s-l) var(--s-xl); box-sizing: border-box; }
+/* Same width and centre as the composer (.reading-column), so rows and composer line up. */
+.transcript-column { max-width: calc(var(--reading-width) + 2 * var(--s-xl)); margin: 0 auto; padding: var(--s-l) var(--s-xl); box-sizing: border-box; }
 .chat-tail { max-width: var(--reading-width); padding: var(--s-s) 0; display: flex; flex-direction: column; gap: var(--s-s); }
 .reading-column { max-width: calc(var(--reading-width) + 2 * var(--s-xl)); width: 100%; margin: 0 auto; padding: 0 var(--s-xl); box-sizing: border-box; }
 .composer-area { padding-top: var(--s-xs); padding-bottom: var(--s-m); display: flex; flex-direction: column; gap: var(--s-s); }
@@ -34,7 +35,7 @@
 /* TranscriptRow */
 .row.compact { padding: 1px 0; }
 .row.roomy { padding: var(--s-s) 0; }
-.row-agent > * { max-width: var(--reading-width); }
+.row-agent > * { max-width: 100%; }
 .row-user { display: flex; justify-content: flex-end; }
 .user-message { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: calc(var(--reading-width) * 0.8); padding-top: var(--s-s); margin-left: 64px; }
 .user-bubble { padding: 10px var(--s-l); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text;
@@ -62,7 +63,9 @@
 .md strong { font-weight: 600; }
 .md a { color: var(--accent); }
 .md code { font-family: var(--mono); font-size: 0.88em; background: var(--surface); }
-.md pre { margin: 0.2em 0 0.9em; padding: var(--s-m); background: var(--surface-subtle); border: 1px solid var(--separator); box-shadow: inset 2px 0 0 var(--rule); overflow-x: auto; }
+/* Code wraps: a hidden sideways scroll looked like a reply cut off at the edge. */
+.md pre { margin: 0.2em 0 0.9em; padding: var(--s-m); background: var(--surface-subtle); border: 1px solid var(--separator); box-shadow: inset 2px 0 0 var(--rule);
+          white-space: pre-wrap; overflow-wrap: anywhere; }
 .md pre code { background: none; font-size: 0.86em; line-height: 1.45; }
 .md blockquote { margin: 0 0 0.8em; padding-left: var(--s-m); color: var(--secondary); box-shadow: inset 3px 0 0 var(--separator); }
 .md table { border-collapse: collapse; margin: 0 0 0.9em; font-size: 15px; }

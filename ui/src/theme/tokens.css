@@ -12,7 +12,8 @@
   --s-xxs: 2px; --s-xs: 4px; --s-s: 8px; --s-m: 12px; --s-l: 16px; --s-xl: 24px; --s-xxl: 32px;
   --r-s: 2px; --r-m: 3px; --r-l: 4px;
   --c-icon: 28px; --c-row: 32px; --c-button: 28px; --c-button-width: 112px; --c-field-width: 300px;
-  --reading-width: 760px; --transcript-width: 1400px; --gutter: 16px;
+  /* The conversation and the composer share one centred column, wide enough to use the window. */
+  --reading-width: 1040px; --transcript-width: 1040px; --gutter: 16px;
 
   /* Theme.Motion */
   --ease: cubic-bezier(0.12, 0.23, 0.5, 1);

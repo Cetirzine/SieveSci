@@ -22,6 +22,19 @@ export function loadMath(): Promise<void> {
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
 const md = new Marked({ gfm: true, breaks: false });
+// Only fenced blocks (```) are code. Models often indent a reply by four spaces, and Markdown's indented
+// code block turned those sentences into a monospaced box; indented text is read as a paragraph instead.
+const indented = /^(?: {4}| {0,3}\t)[^\n]+(?:\n(?:[ \t]*(?:\n|$))*)?(?:(?: {4}| {0,3}\t)[^\n]+(?:\n(?:[ \t]*(?:\n|$))*)?)*/;
+md.use({
+  tokenizer: {
+    code(src) {
+      const cap = indented.exec(src);
+      if (!cap) return false;
+      const text = cap[0].replace(/^(?: {1,4}| {0,3}\t)/gm, "").trim();
+      return { type: "paragraph", raw: cap[0], text, tokens: this.lexer.inline(text) } as never;
+    },
+  },
+});
 md.use({
   renderer: {
     html(token) { return escapeHtml(token.text); },
