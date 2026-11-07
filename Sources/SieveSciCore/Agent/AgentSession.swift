@@ -239,7 +239,7 @@ public final class AgentSession: @unchecked Sendable {
                     services.research.checkStall()
                     if let n = services.research.takeReviewNotice() { results.append(.text(n)) }
                 }
-                if role == .main, let every = KnownModels.spec(for: model)?.stateRefreshEvery, every > 0, steps % every == 0 {
+                if role == .main, let every = Self.refreshEvery(model), steps % every == 0 {
                     results.append(.text(TurnContext.refresh(services: services, request: turnRequest, steps: steps)))
                 }
                 if role != .main && steps >= maxSteps - 2 {
@@ -279,6 +279,16 @@ public final class AgentSession: @unchecked Sendable {
         reported = true
         services.emit(.turnFinished(agentId: id, stop: cancelled ? .pause : .endTurn))
         return last
+    }
+
+    /// Tool rounds between restatements of the objective in one turn. Every model drifts in long loops
+    /// (Arike et al. 2025, "Evaluating Goal Drift in Language Model Agents"; Laban et al. 2025, "LLMs Get
+    /// Lost in Multi-Turn Conversation"), so all get it; a model's spec may ask for it more often, or 0 for never.
+    static let defaultRefreshEvery = 12
+
+    static func refreshEvery(_ model: String) -> Int? {
+        let n = KnownModels.spec(for: model)?.stateRefreshEvery ?? defaultRefreshEvery
+        return n > 0 ? n : nil
     }
 
     /// Reviewers stay read-only whatever the session mode; others follow it.
@@ -855,14 +865,14 @@ public enum TurnContext {
     /// turn is for and where the plan stands, appended to a tool result (append-only, cache-safe).
     public static func refresh(services s: SessionServices, request: String, steps: Int) -> String {
         var lines = ["<state_refresh>", "tool rounds this turn: \(steps)"]
+        // A turn the host started (a recovery note, a job wake-up, a goal round) carries no request of the
+        // user's: their latest own message stands in for it, and the fixed objective comes first either way.
         let ask = request.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !ask.isEmpty { lines.append("the user asked: " + ask.truncated(600)) }
-        let plan = s.research.snapshot
-        if !plan.steps.isEmpty {
-            let done = plan.steps.filter { $0.status == "done" }.count
-            let current = plan.steps.first { $0.status == "in_progress" }?.title ?? plan.steps.first { $0.status == "pending" }?.title ?? "-"
-            lines.append("plan: \(done)/\(plan.steps.count) steps done; current: \(current)")
-        }
+        let own = ask.isEmpty || ask.hasPrefix("<") ? s.research.lastUserRequest : ask
+        let fixed = !(s.research.objective ?? "").isEmpty
+        if !fixed, !own.isEmpty { lines.append("the user asked: " + own.truncated(600)) }
+        lines += s.research.compass(lastRequest: fixed ? own : nil)
+        lines.append("Everything you do next serves this; if the work has drifted from it, say so and steer back.")
         if let goal = s.goal.current, goal.phase == .active { lines.append("goal: \(goal.objective)") }
         if let b = s.ideas.live { lines.append("brainstorm running (stage \(b.stage)): no plan, workers or file writes until `brainstorm` end") }
         lines.append("permission mode: \(s.permissions.mode.rawValue)")
@@ -895,6 +905,8 @@ public enum TurnContext {
         if plan.steps.isEmpty, let scale = s.research.turnScale.contextLine { lines.append(scale) }
         // Changing course: the fixed objective, a review the host waits for, and the last lessons (short).
         if let o = plan.objective, !o.isEmpty { lines.append("objective (the user's request; fixed): " + o.truncated(240)) }
+        let decided = (plan.decisions ?? []).suffix(ResearchProtocol.decisionsShown)
+        if !decided.isEmpty { lines.append("the user decided: " + decided.map(\.line).joined(separator: " | ")) }
         if let p = plan.pendingReview { lines.append("result review needed: \(p.trigger) — record `result_review` before more analysis") }
         let rv = (plan.reviews ?? []).suffix(3)
         if !rv.isEmpty {

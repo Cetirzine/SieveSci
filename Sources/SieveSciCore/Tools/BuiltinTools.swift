@@ -708,8 +708,16 @@ struct GoalTool: Tool {
         case "blocked": return ToolOutput(g.modelBlocked(reason: input.str("note") ?? ""))
         case "wait": return ToolOutput(g.modelWait(question: input.str("note") ?? ""))
         default:
-            guard let cur = g.current else { return ToolOutput("No goal set.") }
-            return ToolOutput("Goal: \(cur.objective)\nPhase: \(cur.phase.rawValue), round \(cur.roundsStarted)\(cur.maxRounds.map { "/\($0)" } ?? "")")
+            // "No goal" means no goal loop (/goal), never "no task": the task's anchor comes with it, so an agent
+            // that lost its context does not conclude it has nothing to do and ask the user what the task is.
+            let compass = ctx.services.research.compass(lastRequest: ctx.services.research.lastUserRequest)
+            let anchor = compass.isEmpty ? "" : "\n" + compass.joined(separator: "\n")
+            guard let cur = g.current else {
+                return ToolOutput(compass.isEmpty ? "No goal set." :
+                    "No goal loop is set (only the user starts one, with /goal). That does not mean there is no task — this is the task:" + anchor
+                    + "\nContinue it; do not ask the user what the task is.")
+            }
+            return ToolOutput("Goal: \(cur.objective)\nPhase: \(cur.phase.rawValue), round \(cur.roundsStarted)\(cur.maxRounds.map { "/\($0)" } ?? "")" + anchor)
         }
     }
 }

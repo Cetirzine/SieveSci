@@ -40,6 +40,13 @@ struct AskUserTool: Tool {
         guard ctx.role == .main else { return .error("Only the main agent asks the user; report the open question in your result instead.") }
         let s = ctx.services
         let questions = try AskFormat.parse(input)
+        // An agent that lost its thread (a long turn, a thin compaction) asks the user what the task is. The
+        // task is on record: hand it back instead of putting the question to the user.
+        if let o = s.research.objective, !o.isEmpty, let q = questions.first(where: { $0.kind == .text && Self.asksForTheTask($0.question) }) {
+            s.log("ask_refused", actor: "host", ["question": .string(q.question.truncated(300)), "reason": "task on record"])
+            return .error("The task is on record — do not ask the user for it:\n" + s.research.compass(lastRequest: s.research.lastUserRequest).joined(separator: "\n")
+                + "\nContinue from the plan, the ideas and the receipts. Ask only for a specific value or decision this task still needs.")
+        }
         if questions.contains(where: { $0.reason == .direction }),
            case .refuse(let m) = s.research.requireGrounding("asking the user to choose a research direction") {
             return .error(m + " Options for a direction must rest on what the searches found.")
@@ -60,10 +67,36 @@ struct AskUserTool: Tool {
         if goalWasActive { s.goal.hostWait(req.summary) }
         let outcome = await s.asks.ask(req, emit: s.emit)
         if case .answered = outcome, goalWasActive { s.goal.userReplied() }
+        if case .answered(let answers) = outcome { Self.recordDecisions(req, answers, s) }
         s.log("ask_answer", actor: outcome == .unavailable ? "host" : "user", ["id": .string(req.id), "outcome": .string(outcome.label),
                                                                              "answer": (try? JSONCodec.parse(JSONEncoder().encode(outcome))) ?? .null])
         s.emit(.askResolved(id: req.id, outcome: outcome))
         return ToolOutput(AskFormat.result(req, outcome), facts: ["ask": .string(req.id), "outcome": .string(outcome.label)])
+    }
+
+    /// "What would you like me to work on?" and its kin, in English and Chinese.
+    static func asksForTheTask(_ question: String) -> Bool {
+        let q = question.lowercased()
+        let patterns = [#"\bwhat\b[^?]{0,40}\b(question|task|topic|problem)s?\b[^?]{0,20}\b(would|do|should|shall) you\b"#,
+                        #"would you like (me )?to (work on|do|research|study)\b"#,
+                        #"what (should|shall) i (work on|do|research)"#,
+                        #"(你|您)(想|要|希望)(让)?我(做|研究|处理|完成)什么"#,
+                        #"(什么|哪个)(任务|研究问题|课题)"#]
+        return patterns.contains { q.range(of: $0, options: .regularExpression) != nil }
+    }
+
+    /// Every answer is a user decision; it is kept with the plan so later steps (and a compacted context) still see it.
+    static func recordDecisions(_ req: AskRequest, _ answers: [AskAnswer], _ s: SessionServices) {
+        let by = Dictionary(answers.map { ($0.questionId, $0) }, uniquingKeysWith: { a, _ in a })
+        for q in req.questions {
+            guard let a = by[q.id], !a.isEmpty else { continue }
+            var parts = a.selected
+            if let o = a.other?.trimmingCharacters(in: .whitespacesAndNewlines), !o.isEmpty { parts.append("other: \"\(o)\"") }
+            if let t = a.text?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty { parts.append("\"\(t)\"") }
+            let ideas = q.options.filter { a.selected.contains($0.label) }.compactMap(\.idea)
+            s.research.recordDecision(UserDecision(topic: q.header.isEmpty ? q.question : q.header, answer: parts.joined(separator: "; "),
+                                                   ideas: ideas.isEmpty ? nil : ideas))
+        }
     }
 }
 
@@ -186,6 +219,10 @@ struct BrainstormTool: Tool {
             guard let st = led.end(summary: input.str("summary") ?? "") else { return .error("No brainstorm is running.") }
             ctx.services.log("brainstorm", actor: "agent", ["event": "end", "id": .string(st.id), "summary": .string(st.summary ?? "")])
             ctx.services.emit(.brainstormChanged(st))
+            // The outcome is where the work goes from here: kept beside the objective for the rest of the task.
+            if st.trigger != .dream, let sum = st.summary, !sum.isEmpty {
+                ctx.services.research.recordDecision(UserDecision(topic: "brainstorm outcome", answer: sum))
+            }
             var text = "Brainstorm ended. Next, in this order: (1) if the user chose ideas, `idea` promote each one (independent review); "
                 + "(2) set or revise the plan with `update_plan` around the promoted hypotheses — steps that test them, `parallel: true` "
                 + "where a step needs no other step's results; (3) do the work, with workers where the plan allows. "
@@ -359,14 +396,21 @@ struct IdeaTool: Tool {
             different, or is this already published (search yourself)? Is the test feasible and could the falsifier actually occur? \
             Use "block" if it is already published or the verdict is unsupported, "revise" if more searching or a sharper test is needed.
             """
+            // The reviewer judges the idea against what the user asked and chose, not in isolation: one review
+            // after another can otherwise narrow an idea until it no longer answers the request.
+            let anchor = s.research.compass()
+            let anchored = anchor.isEmpty ? focus : focus + "\n\nThe task this idea must serve:\n" + anchor.joined(separator: "\n")
+                + "\nAlso check: does it still answer this objective and the direction the user chose? Ask for fixes that keep it "
+                + "serving them; if it has drifted away from them, say so as an issue."
             let review = await s.supervisor.review(kind: "ideation",
                                                    signals: [IntegritySignal(kind: .ideation, severity: 2, detail: "idea \(idea.id) → hypothesis (\(fp.prefix(8)))", location: nil)],
-                                                   focus: focus)
+                                                   focus: anchored)
             let verdict = review.map { $0.contains("verdict=\"block\"") ? "block" : $0.contains("verdict=\"unavailable\"") ? "unavailable" : "revise" } ?? "pass"
             led.setReview(id, verdict: verdict, fingerprint: fp)
             if let review {
                 changed()
-                return .error("Not registered: the independent review did not pass.\n" + review)
+                let failed = verdict == "unavailable" ? 0 : s.research.noteIdeaReviewFailed()
+                return .error("Not registered: the independent review did not pass.\n" + review + Self.backToTheUser(failed))
             }
             let (gate, h) = s.research.addHypothesis(statement: idea.statement, prediction: prediction, falsification: idea.falsifier,
                                                      rationale: "promoted from idea \(idea.id) after \(idea.aim == "proven" ? "evidence" : "novelty") check and review")
@@ -380,6 +424,17 @@ struct IdeaTool: Tool {
         default:
             return .error("Unknown action.")
         }
+    }
+
+    /// Reviews that may fail before the user decides again; each revision moves the idea further from their choice.
+    static let reviewsBeforeAsking = 2
+
+    static func backToTheUser(_ failed: Int) -> String {
+        guard failed >= reviewsBeforeAsking else { return "" }
+        return "\n\n<back_to_the_user>\(failed) idea reviews have not passed since the user last decided. Do not revise again on your own: "
+            + "show the user the current version, the open issues, and how it now differs from what they chose and from their objective; "
+            + "then ask with `ask_user` (reason direction) whether to go on with this version, go back to their original choice as it was, "
+            + "or pick another idea.</back_to_the_user>"
     }
 }
 

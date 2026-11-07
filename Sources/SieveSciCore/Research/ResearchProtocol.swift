@@ -93,6 +93,13 @@ public struct ResearchPlan: Codable, Sendable, Equatable {
     /// Ledger position of the last review: failed runs before it do not count towards a stall (kept
     /// across restarts, so old failures never trigger a review again).
     public var reviewMark: Int? = nil
+    /// What the user decided along the way (answers to `ask_user`, the brainstorm's outcome), oldest first.
+    /// Shown in every turn's context and kept through compaction, so a long task does not forget a choice
+    /// made at its start (Manus's recitation; Anthropic's progress file for long-running agents).
+    public var decisions: [UserDecision]? = nil
+    /// Idea reviews that did not pass since the user last decided: after a few, the user is asked again
+    /// instead of the agent revising the idea away from what they chose.
+    public var ideaReviewsSinceDecision: Int? = nil
 
     public init(goal: String = "") {
         self.goal = goal
@@ -115,10 +122,34 @@ public struct ResearchPlan: Codable, Sendable, Equatable {
             let deps = (st.dependsOn ?? []).isEmpty ? "" : "  ← " + st.dependsOn!.joined(separator: ", ")
             s += "\(box) \(st.id) \(st.title)\(st.checkpoint ? "  ⟡ checkpoint" : "")\(st.parallel == true ? "  ∥ parallel" : "")\(deps)\n"
         }
+        if let ds = decisions, !ds.isEmpty {
+            s += "\n**User decisions**\n" + ds.map { "- \($0.line)" }.joined(separator: "\n") + "\n"
+        }
         if let rv = reviews, !rv.isEmpty {
             s += "\n**Reviews**\n" + rv.map { "- \($0.id) \($0.subject.isEmpty ? "" : $0.subject + " ")→ \($0.decision.rawValue): \($0.next.truncated(120))" }.joined(separator: "\n") + "\n"
         }
         return s
+    }
+}
+
+/// A decision the user made during the task, in their words (or the options they picked).
+public struct UserDecision: Codable, Sendable, Equatable {
+    public var at: Date
+    /// What was decided: the question's header, or "brainstorm".
+    public var topic: String
+    public var answer: String
+    /// Idea ids the decision chose, when its options came from ideas.
+    public var ideas: [String]?
+    /// The receipt of the answer, when there is one.
+    public var receipt: String?
+
+    public init(at: Date = Date(), topic: String, answer: String, ideas: [String]? = nil, receipt: String? = nil) {
+        self.at = at; self.topic = topic; self.answer = answer; self.ideas = ideas; self.receipt = receipt
+    }
+
+    public var line: String {
+        "\(topic.truncated(40)): \(answer.truncated(240))" + ((ideas ?? []).isEmpty ? "" : " [\((ideas ?? []).joined(separator: ", "))]")
+            + (receipt.map { " (\($0))" } ?? "")
     }
 }
 
@@ -434,6 +465,55 @@ public final class ResearchProtocol: @unchecked Sendable {
         plan.reviewMark = ledger.count
         persist()
         return (.allow, r)
+    }
+
+    // MARK: User decisions
+
+    /// Kept in full on disk; the context shows the last few.
+    public static let decisionsShown = 5
+
+    public var decisions: [UserDecision] { lock.withLock { plan.decisions ?? [] } }
+
+    /// Records what the user decided. A new decision also resets the count of idea reviews that did not pass.
+    public func recordDecision(_ d: UserDecision) {
+        let a = d.answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !a.isEmpty else { return }
+        lock.lock(); defer { lock.unlock() }
+        var d = d
+        d.answer = a.truncated(1200)
+        plan.decisions = (plan.decisions ?? []) + [d]
+        plan.ideaReviewsSinceDecision = 0
+        persist()
+    }
+
+    /// Counts an idea review that did not pass; returns how many there were since the user last decided.
+    @discardableResult
+    public func noteIdeaReviewFailed() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        let n = (plan.ideaReviewsSinceDecision ?? 0) + 1
+        plan.ideaReviewsSinceDecision = n
+        persist()
+        return n
+    }
+
+    /// The task's anchor in a few lines: the objective in the user's words, what they decided since, and
+    /// where the plan stands. Recited in the turn context, in long tool loops, after compaction and when
+    /// the agent asks about the goal — wherever a long task could otherwise lose its thread.
+    public func compass(lastRequest: String? = nil) -> [String] {
+        let p = snapshot
+        var lines: [String] = []
+        if let o = p.objective, !o.isEmpty { lines.append("objective (the user's request; fixed): " + o.truncated(400)) }
+        let ds = (p.decisions ?? []).suffix(Self.decisionsShown)
+        if !ds.isEmpty { lines.append("the user decided: " + ds.map(\.line).joined(separator: " | ")) }
+        if let r = lastRequest?.trimmingCharacters(in: .whitespacesAndNewlines), !r.isEmpty, r != p.objective {
+            lines.append("the user's latest message: " + r.truncated(300))
+        }
+        if !p.steps.isEmpty {
+            let done = p.steps.filter { $0.status == "done" }.count
+            let current = p.steps.first { $0.status == "in_progress" }?.title ?? p.steps.first { $0.status == "pending" }?.title ?? "-"
+            lines.append("plan: \(done)/\(p.steps.count) steps done; current: \(current)")
+        }
+        return lines
     }
 
     /// Changes the task's objective; only with the user's own words (checked by the caller).

@@ -37,6 +37,28 @@ public final class MemoryStore: @unchecked Sendable {
     private let lock = NSLock()
     public static let separator = "\n§\n"
 
+    /// Entries of a stored file. Only a line holding nothing but `§` separates entries: a `§` inside an entry
+    /// ("see §1.2") stays part of it. (Splitting on every `§` once cut such lessons into stubs like "1.2/".)
+    static func split(_ t: String) -> [String] {
+        var out: [String] = [], cur: [Substring] = []
+        func flush() {
+            let e = cur.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !e.isEmpty { out.append(e) }
+            cur = []
+        }
+        for line in t.split(separator: "\n", omittingEmptySubsequences: false) {
+            if line.trimmingCharacters(in: .whitespaces) == "§" { flush() } else { cur.append(line) }
+        }
+        flush()
+        return out
+    }
+
+    /// An entry may not contain a separator line of its own.
+    static func clean(_ text: String) -> String {
+        text.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) == "§" ? "Sec." : String($0) }.joined(separator: "\n")
+    }
+
     public init(dir: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".sievesci/memory")) {
         self.dir = dir
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -47,7 +69,7 @@ public final class MemoryStore: @unchecked Sendable {
 
     public func archived(_ s: Store) -> [String] {
         guard let t = try? String(contentsOf: archiveURL(s), encoding: .utf8) else { return [] }
-        return t.components(separatedBy: "§").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return Self.split(t)
     }
 
     /// Moves the oldest entries (automatic ones first, never `keep`) to the archive until the store fits.
@@ -77,7 +99,7 @@ public final class MemoryStore: @unchecked Sendable {
 
     public func entries(_ s: Store) -> [String] {
         guard let t = try? String(contentsOf: url(s), encoding: .utf8) else { return [] }
-        return t.components(separatedBy: "§").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return Self.split(t)
     }
 
     func save(_ s: Store, _ es: [String]) throws {
@@ -89,6 +111,7 @@ public final class MemoryStore: @unchecked Sendable {
     /// Applies an edit; returns the live state, or throws when the store would overflow.
     public func apply(_ op: Op, store: Store, text: String, match: String?) throws -> String {
         lock.lock(); defer { lock.unlock() }
+        let text = Self.clean(text)
         var es = entries(store)
         switch op {
         case .add:
@@ -248,15 +271,24 @@ struct SessionReadTool: Tool {
             let known = SessionStore.tasks(in: ctx.workspace).prefix(12).map { "\($0.id) · \(SessionStore.title(dir: SessionStore.taskDir($0.id, in: ctx.workspace)) ?? "untitled")" }
             return .error("No single conversation matches “\(ref)”. Recent ones:\n" + known.joined(separator: "\n"))
         }
+        if id == ctx.services.taskId {
+            return .error("\(id) is this conversation. Its history is in your context (and its checkpoint, after a compaction); "
+                + "use `receipt` for an earlier tool output instead of reading it back.")
+        }
+        // Another conversation is background, not the task: an agent that lost its thread otherwise takes up an
+        // older one's work (in one session, it re-recorded a previous brainstorm's ideas as its own).
+        let anchor = ctx.services.research.compass()
+        let note = anchor.isEmpty ? "" : "<note>This is another conversation (\(id)), not the current task. Use it as background only; "
+            + "the current task stays: \(anchor.first ?? "")</note>\n"
         if input.str("part") == "full" {
             let text = SessionStore.markdown(SessionStore.load(dir: SessionStore.taskDir(id, in: ctx.workspace), agent: "main"))
             let from = max(0, min(input.int("offset") ?? 0, text.count))
             let start = text.index(text.startIndex, offsetBy: from)
             let chunk = String(text[start...].prefix(Self.page))
             let next = from + chunk.count
-            return ToolOutput("[\(id) · characters \(from)–\(next) of \(text.count)\(next < text.count ? "; continue with offset \(next)" : "")]\n" + chunk)
+            return ToolOutput(note + "[\(id) · characters \(from)–\(next) of \(text.count)\(next < text.count ? "; continue with offset \(next)" : "")]\n" + chunk)
         }
-        return ToolOutput(SessionStore.digest(task: id, in: ctx.workspace))
+        return ToolOutput(note + SessionStore.digest(task: id, in: ctx.workspace))
     }
 }
 
