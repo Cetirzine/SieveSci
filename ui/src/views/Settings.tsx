@@ -135,12 +135,15 @@ function Stepper({ label, value, min, max, step = 1, onChange }: { label: string
 }
 
 function Disclosure({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: () => void; children: ReactNode }) {
+  const items = Children.toArray(children).filter(Boolean);
+  // Nothing inside: a plain line, not a row that opens onto nothing.
+  if (items.length === 0) return <div className="disclosure-row empty">{title}</div>;
   return (
     <div>
       <button type="button" className={`disclosure-row ${open ? "open" : ""}`} onClick={onToggle} aria-expanded={open}>
         <Symbol name="chevron.right" size={11} strokeWidth={2.5} className="chev" /> {title}
       </button>
-      {open && <div className="disclosure-body">{Children.toArray(children).filter(Boolean).map((c, i) => <div key={i}>{c}</div>)}</div>}
+      {open && <div className="disclosure-body">{items.map((c, i) => <div key={i}>{c}</div>)}</div>}
     </div>
   );
 }
@@ -529,7 +532,10 @@ function ProviderDetail({ profile: p }: { profile: ProviderProfile }) {
           ].concat(editing === m && ms ? [<ModelSpecEditor key={m + "-spec"} model={m} info={ms} profile={p} onChange={(change) => update(change)} />] : []);
         })}
         {discovered.length > 0 && (
-          <Disclosure title={L10n.f("%d models available", discovered.length)} open={showDiscovered} onToggle={() => setShowDiscovered(!showDiscovered)}>
+          <Disclosure title={discovered.every((d) => p.models.includes(d.id))
+                               ? L10n.f("All %d models the provider lists are added.", discovered.length)
+                               : L10n.f("%d models available", discovered.filter((d) => !p.models.includes(d.id)).length)}
+                      open={showDiscovered} onToggle={() => setShowDiscovered(!showDiscovered)}>
             {discovered.filter((d) => !p.models.includes(d.id)).map((d) => (
               <div key={d.id} className="hstack">
                 <span className="mono-tiny">{d.id}</span>

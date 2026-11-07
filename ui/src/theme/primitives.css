@@ -40,6 +40,10 @@
 .hover-row { background: transparent; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: var(--r-s); width: 100%; }
 .hover-row:hover { background: var(--hairline); }
 .hover-row:active { background: var(--separator); }
+/* Looks like a row, opens nothing (no output, no steps, no text): no pointer, no hover. */
+.inert { cursor: default !important; }
+.hover-row.inert:hover, .hover-row.inert:active { background: transparent; }
+.line-row.expandable { cursor: pointer; }
 
 .action-button { position: relative; display: inline-flex; align-items: center; justify-content: center; height: var(--c-button); padding: 0 14px;
                  font: 500 13px/1 var(--sans); white-space: nowrap; color: var(--text); background: var(--raised); border: 1px solid var(--rule);
@@ -66,7 +70,8 @@
 .action-row-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .action-row-trailing { display: flex; gap: var(--s-s); flex: none; }
 
-@keyframes appear-pop { from { opacity: 0; transform: scale(0.96); } }
+/* Scale only, never from transparent: content stays readable if the animation is held on its first frame. */
+@keyframes appear-pop { from { transform: scale(0.96); } }
 .appear-pop { animation: appear-pop 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.05); transform-origin: top left; }
 
 .menu { position: relative; display: inline-flex; }

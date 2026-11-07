@@ -1107,3 +1107,4 @@
 "Added %@ to your PATH. Open a new terminal and run sievesci." = "已把 %@ 加入 PATH。打开一个新的终端，运行 sievesci 即可。";
 "%@ is already on your PATH. Open a new terminal and run sievesci." = "%@ 已经在 PATH 里。打开一个新的终端，运行 sievesci 即可。";
 "Could not change your PATH (%@). Add %@ to it yourself." = "无法修改 PATH（%@）。请手动把 %@ 加入 PATH。";
+"All %d models the provider lists are added." = "服务商列出的 %d 个模型都已添加。";

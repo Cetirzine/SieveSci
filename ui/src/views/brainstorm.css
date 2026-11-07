@@ -36,7 +36,7 @@
 .dot-stack i { width: 4px; height: 4px; background: var(--hairline); }
 .dot-stack i.on { animation: grain-drop 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.05); }
 .dot-more { position: absolute; left: calc(100% + 4px); top: 0; }
-@keyframes grain-drop { from { opacity: 0; transform: translateY(-10px); } }
+@keyframes grain-drop { from { opacity: 0.4; transform: translateY(-10px); } }
 
 .bs-thought { display: flex; flex-direction: column; gap: var(--s-xs); padding: var(--s-s); background: var(--surface-subtle); }
 .bs-thought-head { display: flex; align-items: baseline; gap: var(--s-s); width: 100%; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }

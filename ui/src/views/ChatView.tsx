@@ -396,7 +396,7 @@ function RowContent({ item, stream, showThinking, hovering }: { item: Transcript
       const n = k.notification;
       const tone = n.kind === "failed" ? "bad" : n.kind === "exited" ? "ok" : "warn";
       return (
-        <div className="line-row align-top" onClick={() => setExpanded(!expanded)}>
+        <div className={`line-row align-top ${n.text.includes("\n") ? "expandable" : ""}`} onClick={() => n.text.includes("\n") && setExpanded(!expanded)}>
           <span className={`gutter c-${tone}`}><Symbol name={n.kind === "failed" ? "exclamationmark.circle.fill" : n.kind === "exited" ? "checkmark.circle.fill" : "bell"} size={11} /></span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="t-meta-strong">{n.text.split("\n")[0]}</div>
@@ -508,15 +508,18 @@ function ThinkingRow({ text, started, ended, untimed }: { text: string; started:
   const now = useTicker(ended === undefined);
   const secs = Math.floor(((ended ?? now) - started) / 1000);
   const last = text.split("\n").filter(Boolean).pop() ?? "";
+  // A timed thought whose text the provider did not send opens onto nothing: a plain line then.
+  const hasText = text.trim() !== "";
   return (
     <div className="thinking-row" ref={reveal}>
-      <button type="button" className="line-row plain-row" onClick={() => setExpanded(!expanded)}>
+      <button type="button" className={`line-row plain-row ${hasText ? "" : "inert"}`} aria-expanded={hasText ? expanded : undefined}
+              onClick={() => hasText && setExpanded(!expanded)}>
         <span className="gutter secondary"><Symbol name="brain" size={12} /></span>
         <span className="t-body thinking-label">{ended === undefined ? L10n.f("Thinking… %ds", secs) : untimed ? L("Thought") : L10n.f("Thought for %ds", Math.max(1, secs))}</span>
         {!expanded && ended === undefined && <span className="t-body secondary clip">· {last}</span>}
-        <span className={`chev ${expanded ? "open" : ""}`}><Symbol name="chevron.right" size={9} strokeWidth={3} /></span>
+        {hasText && <span className={`chev ${expanded ? "open" : ""}`}><Symbol name="chevron.right" size={9} strokeWidth={3} /></span>}
       </button>
-      {expanded && <div className="thinking-text t-body">{text}</div>}
+      {expanded && hasText && <div className="thinking-text t-body">{text}</div>}
     </div>
   );
 }
@@ -530,7 +533,7 @@ function ToolRow({ call }: { call: ToolCallView }) {
   const secs = ((call.ended ?? now) - call.started) / 1000;
   return (
     <div className="tool-row" ref={reveal}>
-      <button type="button" className="hover-row tool-row-button" title={hasOutput ? (expanded ? L("Hide output") : L("Show output")) : ""}
+      <button type="button" className={`hover-row tool-row-button ${hasOutput ? "" : "inert"}`} title={hasOutput ? (expanded ? L("Hide output") : L("Show output")) : ""}
               onClick={() => hasOutput && setExpanded(!expanded)}>
         <span className="gutter">
           {running ? <span className="mini-spinner" /> : <Symbol name={call.isError ? "exclamationmark.circle.fill" : toolIcon(call.name)} size={12} className={call.isError ? "c-bad" : "secondary"} />}
@@ -607,9 +610,12 @@ function AgentCardView({ id }: { id: string }) {
   const tools = items.filter((it) => it.kind.type === "tool");
   const last = [...tools].reverse()[0]?.kind;
   const tint = roleVar[card.role as Role];
+  // Steps to show (live, or loaded on opening a reopened task's card); none: the head does not open.
+  const canExpand = items.length > 0 || (card.stepCount ?? 0) > 0 || !!card.lazy;
   return (
     <div className="agent-card" ref={reveal} style={{ ["--thread" as string]: `color-mix(in srgb, ${tint} ${card.ended === undefined ? 90 : 35}%, transparent)` }}>
-      <button type="button" className="hover-row agent-card-head" onClick={() => { if (!expanded && card.lazy) void A.loadAgentSteps(id); setExpanded(!expanded); }}>
+      <button type="button" className={`hover-row agent-card-head ${canExpand ? "" : "inert"}`} aria-expanded={canExpand ? expanded : undefined}
+              onClick={() => { if (!canExpand) return; if (!expanded && card.lazy) void A.loadAgentSteps(id); setExpanded(!expanded); }}>
         <RoleGhostBadge role={card.role as Role} working={card.ended === undefined} size={30} />
         <span className="agent-card-text">
           <span className="agent-card-name"><span className="t-body-strong">{agentName(id)}</span><span className="t-caption tertiary">← {agentName(card.parent)}</span></span>
@@ -618,7 +624,7 @@ function AgentCardView({ id }: { id: string }) {
         <span style={{ flex: 1, minWidth: 8 }} />
         <span className="t-caption tertiary tabular">{`${(((card.ended ?? now) - card.started) / 1000).toFixed(0)}s`}</span>
         <span className="t-caption tertiary">{L10n.f("%d steps", tools.length || card.stepCount || 0)}</span>
-        <span className={`chev ${expanded ? "open" : ""}`}><Symbol name="chevron.right" size={9} strokeWidth={3} /></span>
+        {canExpand && <span className={`chev ${expanded ? "open" : ""}`}><Symbol name="chevron.right" size={9} strokeWidth={3} /></span>}
       </button>
       {expanded ? items.map((it) => <TranscriptRow key={it.id} item={it} stream={id} showThinking={showThinking} />)
         : card.ended === undefined && last?.type === "tool" ? (

@@ -1107,3 +1107,4 @@
 "Added %@ to your PATH. Open a new terminal and run sievesci." = "%@ добавлена в PATH. Откройте новый терминал и запустите sievesci.";
 "%@ is already on your PATH. Open a new terminal and run sievesci." = "%@ уже есть в PATH. Откройте новый терминал и запустите sievesci.";
 "Could not change your PATH (%@). Add %@ to it yourself." = "Не удалось изменить PATH (%@). Добавьте %@ вручную.";
+"All %d models the provider lists are added." = "Все %d моделей из списка провайдера уже добавлены.";

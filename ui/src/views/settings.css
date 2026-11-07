@@ -28,7 +28,9 @@
 .settings-pane .form > :nth-child(2) { animation-delay: 0.04s; } .settings-pane .form > :nth-child(3) { animation-delay: 0.08s; }
 .settings-pane .form > :nth-child(4) { animation-delay: 0.12s; } .settings-pane .form > :nth-child(5) { animation-delay: 0.16s; }
 .settings-pane .form > :nth-child(n+6) { animation-delay: 0.2s; }
-@keyframes settings-rise { from { opacity: 0; transform: translateY(6px); } }
+/* Movement only: a section is never invisible, even when the window holds its animations (a busy
+   re-render on a language switch, a hidden or throttled WebView) and leaves them on the first frame. */
+@keyframes settings-rise { from { transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) { .settings-pane .form > * { animation: none; } }
 .settings-pane-title h1 { position: relative; margin: 0; font: 600 26px/1.2 var(--sans); letter-spacing: -0.6px; }
 .form-box { position: relative; }
@@ -84,6 +86,7 @@
 .disclosure-row { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; padding: 0; background: transparent; color: var(--text); font: 13px var(--sans); cursor: pointer; text-align: left; }
 .disclosure-row .chev { transition: transform 0.15s var(--ease); color: var(--secondary); }
 .disclosure-row.open .chev { transform: rotate(90deg); }
+.disclosure-row.empty { cursor: default; color: var(--secondary); font-size: 12px; }
 .disclosure-body { display: flex; flex-direction: column; }
 .disclosure-body > * { padding: 9px 0 9px 16px; }
 .disclosure-body > * + * { border-top: 1px solid var(--hairline); }

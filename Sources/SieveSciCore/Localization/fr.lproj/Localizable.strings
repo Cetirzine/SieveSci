@@ -1107,3 +1107,4 @@
 "Added %@ to your PATH. Open a new terminal and run sievesci." = "%@ a été ajouté au PATH. Ouvrez un nouveau terminal et lancez sievesci.";
 "%@ is already on your PATH. Open a new terminal and run sievesci." = "%@ est déjà dans le PATH. Ouvrez un nouveau terminal et lancez sievesci.";
 "Could not change your PATH (%@). Add %@ to it yourself." = "Impossible de modifier le PATH (%@). Ajoutez %@ vous-même.";
+"All %d models the provider lists are added." = "Les %d modèles listés par le fournisseur sont tous ajoutés.";
