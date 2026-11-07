@@ -1,1 +1,1 @@
-public enum SieveSci { public static let version = "0.3.0" }
+public enum SieveSci { public static let version = "0.3.1" }

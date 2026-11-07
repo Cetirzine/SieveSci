@@ -34,11 +34,45 @@ public struct URLSessionStreaming: HTTPStreaming {
     public init(session: URLSession = .shared) { self.session = session }
 
     public func send(_ request: URLRequest) async throws -> (Int, Data) {
+        #if canImport(FoundationNetworking)
+        if CurlTransport.prefers(request) { return try await CurlTransport.send(request) }
+        do { return try await sessionSend(request) } catch where CurlTransport.canTake(after: error, request) {
+            let r = try await CurlTransport.send(request)
+            CurlTransport.prefer(request)
+            return r
+        }
+        #else
+        return try await sessionSend(request)
+        #endif
+    }
+
+    private func sessionSend(_ request: URLRequest) async throws -> (Int, Data) {
         let (data, resp) = try await session.data(for: request)
         return ((resp as? HTTPURLResponse)?.statusCode ?? 0, data)
     }
 
     public func postSSE(_ request: URLRequest) async throws -> HTTPStreamResponse {
+        #if canImport(FoundationNetworking)
+        // URLSession here has sent a request's headers and then never its body (the server closes after
+        // 15 s: "Empty reply from server", on every retry). A failure before any response goes out once
+        // more through the system's curl; a host curl answered stays on curl for this run.
+        if CurlTransport.prefers(request) { return try await CurlTransport.postSSE(request) }
+        do { return try await sessionPostSSE(request) } catch where CurlTransport.canTake(after: error, request) {
+            do {
+                let r = try await CurlTransport.postSSE(request)
+                CurlTransport.prefer(request)
+                return r
+            } catch let e as ProviderError {
+                CurlTransport.prefer(request)   // curl reached the server (an HTTP error is an answer)
+                throw e
+            }
+        }
+        #else
+        return try await sessionPostSSE(request)
+        #endif
+    }
+
+    private func sessionPostSSE(_ request: URLRequest) async throws -> HTTPStreamResponse {
         #if canImport(FoundationNetworking)
         // swift-corelibs-foundation (Windows, Linux) has no URLSession.bytes(for:): a data delegate streams
         // the body as it arrives. (Buffering it whole showed nothing until a reply ended, so a long reply

@@ -6,8 +6,10 @@
 .box.highlighted::before { content: ""; position: absolute; left: -1px; top: -1px; bottom: -1px; width: 3px; background: var(--box-highlight); }
 .box-tab { position: absolute; left: var(--s-m); top: -8px; }
 
-.label-tab { display: inline-flex; align-items: center; height: 16px; padding: 0 5px; background: var(--ink); color: var(--paper);
-             font: 500 10.5px/1 var(--mono); letter-spacing: 0.6px; text-transform: uppercase; white-space: nowrap; }
+/* 16 px from a 14 px line plus padding, not a fixed height: Chinese glyphs are taller than the Latin
+   line box and were cut off at the bottom of a fixed 16 px box with line-height 1 on Windows. */
+.label-tab { display: inline-flex; align-items: center; min-height: 16px; padding: 1px 5px; background: var(--ink); color: var(--paper);
+             font: 500 10.5px/14px var(--mono); letter-spacing: 0.6px; text-transform: uppercase; white-space: nowrap; }
 
 .crop-marks { position: absolute; inset: var(--crop-inset); pointer-events: none; }
 .crop-marks i { position: absolute; width: var(--crop-len); height: var(--crop-len); border-color: var(--rule); border-style: solid; border-width: 0; }

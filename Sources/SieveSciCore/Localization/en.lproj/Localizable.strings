@@ -154,9 +154,9 @@
 "Interrupt (Esc)" = "Interrupt (Esc)";
 "Send (Enter)" = "Send (Enter)";
 "ask before edits & code" = "ask before edits & code";
-"accept edits on" = "accept edits on";
-"auto mode on" = "auto mode on";
-"plan mode on" = "plan mode on";
+"accept edits on" = "accept edits";
+"auto mode on" = "auto mode";
+"plan mode on" = "plan mode";
 "(⇧⇥ to cycle)" = "(⇧⇥ to cycle)";
 "%d jobs" = "%d jobs";
 "Background jobs stream live; the agent is notified when they finish or report errors" = "Background jobs stream live; the agent is notified when they finish or report errors";
@@ -1076,8 +1076,8 @@
 "Sign in…" = "Sign in…";
 "Installs the official build from %@ — no npm or Node.js needed." = "Installs the official build from %@ — no npm or Node.js needed.";
 "Or in a terminal:" = "Or in a terminal:";
-"auto mode on · sandboxed" = "auto mode on · sandboxed";
-"YOLO mode on · no sandbox" = "YOLO mode on · no sandbox";
+"auto mode on · sandboxed" = "auto mode · sandboxed";
+"YOLO mode on · no sandbox" = "YOLO mode · no sandbox";
 "yolo" = "YOLO";
 "Turn on YOLO mode?" = "Turn on YOLO mode?";
 "Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …)." = "Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …).";

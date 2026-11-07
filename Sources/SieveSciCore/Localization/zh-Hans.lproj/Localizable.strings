@@ -154,9 +154,9 @@
 "Interrupt (Esc)" = "中断（Esc）";
 "Send (Enter)" = "发送（Enter）";
 "ask before edits & code" = "编辑和运行代码前询问";
-"accept edits on" = "已开启接受编辑";
-"auto mode on" = "已开启自动模式";
-"plan mode on" = "已开启计划模式";
+"accept edits on" = "接受编辑";
+"auto mode on" = "自动模式";
+"plan mode on" = "计划模式";
 "(⇧⇥ to cycle)" = "（⇧⇥ 切换）";
 "%d jobs" = "%d 个作业";
 "Background jobs stream live; the agent is notified when they finish or report errors" = "后台作业实时输出；完成或报错时会通知智能体";
@@ -1076,8 +1076,8 @@
 "Sign in…" = "登录…";
 "Installs the official build from %@ — no npm or Node.js needed." = "从 %@ 安装官方版本——无需 npm 或 Node.js。";
 "Or in a terminal:" = "或在终端中运行：";
-"auto mode on · sandboxed" = "已开启自动模式 · 沙盒内";
-"YOLO mode on · no sandbox" = "已开启 YOLO 模式 · 无沙盒";
+"auto mode on · sandboxed" = "自动模式 · 沙盒内";
+"YOLO mode on · no sandbox" = "YOLO 模式 · 无沙盒";
 "yolo" = "YOLO";
 "Turn on YOLO mode?" = "开启 YOLO 模式？";
 "Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …)." = "智能体将不经询问直接运行命令、修改文件，且所有命令都不在沙盒中运行：命令能改动你的用户账户能改动的一切。只有安全拒绝清单仍然生效（sudo、rm -rf /、强制推送……）。";

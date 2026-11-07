@@ -378,7 +378,9 @@ public enum ProviderError: Error, LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .missingAPIKey(let ref): return "No API key configured for \(ref)."
-        case .http(let s, let b): return "HTTP \(s): \(b.truncated(800))"
+        case .http(let s, let b):
+            let body = b.trimmingCharacters(in: .whitespacesAndNewlines)
+            return body.isEmpty ? "HTTP \(s)" : "HTTP \(s): \(body.truncated(800))"
         case .protocolError(let m): return "Provider protocol error: \(m)"
         case .refused(let m): return "Model declined: \(m)"
         case .cliNotFound(let m):

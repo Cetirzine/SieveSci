@@ -28,7 +28,8 @@ function notifyFor(e: JsonObject) {
   const task = typeof e.task === "string" ? e.task : s.taskId;
   switch (e.type) {
     case "turnFinished":
-      if (mine && str("agentId") === "main" && c.notifyTurnFinished) {
+      // Only a turn that really finished: a failed attempt (stop "error", often retried) or a Stop is not "finished".
+      if (mine && str("agentId") === "main" && c.notifyTurnFinished && str("stop") !== "error" && str("stop") !== "pause") {
         const last = [...(s.streams.main ?? [])].reverse().find((i) => i.kind.type === "assistant");
         notify(L("SieveSci finished"), last && last.kind.type === "assistant" ? last.kind.text.slice(0, 160) : titleOf(s, task, L("New task")), `turn-${task}`);
       }

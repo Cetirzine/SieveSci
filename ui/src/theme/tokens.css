@@ -6,7 +6,9 @@
   --info-l: #2f80ed; --info-d: #6aa7ff; --verifier-l: #1e8780; --verifier-d: #4fc3ba; --worker-l: #7d6c57; --worker-d: #b8a992;
 
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
-  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  /* system-ui before the generic: Chinese in monospaced labels falls back to the system UI font
+     (Microsoft YaHei UI / JhengHei UI, PingFang) rather than Windows' SimSun, whose low metrics clipped tags. */
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, system-ui, monospace;
 
   /* Theme.Space, Theme.Radius, Theme.Control */
   --s-xxs: 2px; --s-xs: 4px; --s-s: 8px; --s-m: 12px; --s-l: 16px; --s-xl: 24px; --s-xxl: 32px;

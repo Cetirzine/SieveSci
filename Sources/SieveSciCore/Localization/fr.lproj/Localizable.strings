@@ -155,8 +155,8 @@
 "Send (Enter)" = "Envoyer (Entrée)";
 "ask before edits & code" = "demander avant modifications et code";
 "accept edits on" = "modifications acceptées";
-"auto mode on" = "mode auto activé";
-"plan mode on" = "mode plan activé";
+"auto mode on" = "mode auto";
+"plan mode on" = "mode plan";
 "(⇧⇥ to cycle)" = "(⇧⇥ pour changer)";
 "%d jobs" = "%d tâches de fond";
 "Background jobs stream live; the agent is notified when they finish or report errors" = "Les tâches de fond s’affichent en direct ; l’agent est averti lorsqu’elles se terminent ou signalent des erreurs";
@@ -1076,8 +1076,8 @@
 "Sign in…" = "Se connecter…";
 "Installs the official build from %@ — no npm or Node.js needed." = "Installe la version officielle depuis %@ — ni npm ni Node.js requis.";
 "Or in a terminal:" = "Ou dans un terminal :";
-"auto mode on · sandboxed" = "mode auto activé · en bac à sable";
-"YOLO mode on · no sandbox" = "mode YOLO activé · sans bac à sable";
+"auto mode on · sandboxed" = "mode auto · en bac à sable";
+"YOLO mode on · no sandbox" = "mode YOLO · sans bac à sable";
 "yolo" = "YOLO";
 "Turn on YOLO mode?" = "Activer le mode YOLO ?";
 "Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …)." = "Les agents exécutent des commandes et modifient des fichiers sans demander, et rien ne tourne dans le bac à sable : une commande peut modifier tout ce que votre compte utilisateur peut modifier. Seule la liste de refus de sécurité s’applique encore (sudo, rm -rf /, push forcés…).";

@@ -209,7 +209,8 @@ public final class AgentSession: @unchecked Sendable {
         // Every started turn reports its end, also when Stop or an error ends it by throwing: front ends
         // keep showing "running" until they hear it.
         var reported = false
-        defer { if !reported { services.emit(.turnFinished(agentId: id, stop: .pause)) } }
+        // Stopped → pause; an error → error (front ends tell a failed attempt from a finished turn).
+        defer { if !reported { services.emit(.turnFinished(agentId: id, stop: cancelled ? .pause : .error)) } }
         var steps = 0
         var last: Message?
         while !cancelled && !Task.isCancelled && steps < maxSteps {

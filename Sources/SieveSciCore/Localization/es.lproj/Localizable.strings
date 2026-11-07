@@ -154,9 +154,9 @@
 "Interrupt (Esc)" = "Interrumpir (Esc)";
 "Send (Enter)" = "Enviar (Intro)";
 "ask before edits & code" = "preguntar antes de ediciones y código";
-"accept edits on" = "aceptar ediciones activado";
-"auto mode on" = "modo automático activado";
-"plan mode on" = "modo plan activado";
+"accept edits on" = "aceptar ediciones";
+"auto mode on" = "modo automático";
+"plan mode on" = "modo plan";
 "(⇧⇥ to cycle)" = "(⇧⇥ para alternar)";
 "%d jobs" = "%d trabajos";
 "Background jobs stream live; the agent is notified when they finish or report errors" = "Los trabajos en segundo plano se transmiten en directo; el agente recibe un aviso cuando terminan o notifican errores";
@@ -1076,8 +1076,8 @@
 "Sign in…" = "Iniciar sesión…";
 "Installs the official build from %@ — no npm or Node.js needed." = "Instala la versión oficial desde %@, sin npm ni Node.js.";
 "Or in a terminal:" = "O en una terminal:";
-"auto mode on · sandboxed" = "modo automático activado · en sandbox";
-"YOLO mode on · no sandbox" = "modo YOLO activado · sin sandbox";
+"auto mode on · sandboxed" = "modo automático · en sandbox";
+"YOLO mode on · no sandbox" = "modo YOLO · sin sandbox";
 "yolo" = "YOLO";
 "Turn on YOLO mode?" = "¿Activar el modo YOLO?";
 "Agents run commands and edit files without asking, and nothing runs in the sandbox: a command can change anything your user account can. Only the safety deny list still applies (sudo, rm -rf /, force pushes …)." = "Los agentes ejecutan comandos y editan archivos sin preguntar, y nada se ejecuta en el sandbox: un comando puede cambiar todo lo que puede tu cuenta de usuario. Solo sigue aplicándose la lista de bloqueo de seguridad (sudo, rm -rf /, push forzados…).";

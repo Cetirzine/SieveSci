@@ -357,6 +357,8 @@ public final class Workbench: @unchecked Sendable {
                 services.log("turn_retry", actor: "host", ["error": .string(error.localizedDescription), "attempt": .int(attempt + 1), "wait_s": .int(Int(wait))])
                 services.emit(.notice(L10n.s("The connection failed (%@); going on in %@ s (%@ of %@).", error.localizedDescription.truncated(120),
                                              String(Int(wait)), String(attempt + 1), String(Self.passingRetries.count))))
+                // Still working: the turn is not over while it waits to go on (no "finished" state or notice).
+                services.emit(.turnStarted(role: .main, agentId: "main"))
                 let pause = Task { try await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
                 stateLock.withLock { running = pause }
                 if (try? await pause.value) == nil || stateLock.withLock({ stoppedByUser }) {

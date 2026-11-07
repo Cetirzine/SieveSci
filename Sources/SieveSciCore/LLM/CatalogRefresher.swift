@@ -12,8 +12,9 @@ public enum CatalogRefresher {
     public static var dir: URL { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".sievesci/catalog") }
 
     public static let upstream: [(file: String, url: String)] = [
-        ("provider_protocol_endpoints.json", "https://raw.githubusercontent.com/futureflowtech/reasonix/main/internal/config/provider_protocol_endpoints.json"),
-        ("zcode-builtin.json", "https://raw.githubusercontent.com/zai-org/ZCode/main/config/provider/zcode-builtin.json"),
+        // HEAD follows each repository's default branch (reasonix moved from main to main-v2, which left a 404).
+        ("provider_protocol_endpoints.json", "https://raw.githubusercontent.com/futureflowtech/reasonix/HEAD/internal/config/provider_protocol_endpoints.json"),
+        ("zcode-builtin.json", "https://raw.githubusercontent.com/zai-org/ZCode/HEAD/config/provider/zcode-builtin.json"),
     ]
 
     public struct Report: Sendable { public var lines: [String] }
