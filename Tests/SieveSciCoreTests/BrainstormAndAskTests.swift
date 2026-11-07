@@ -131,7 +131,7 @@ import Testing
         guard case .failure = l.start(topic: "x", reason: "") else { Issue.record("auto start must be refused when off"); return }
         // The user can always ask.
         l.request(.user)
-        guard case .success(let st) = l.start(topic: "x", reason: "") else { Issue.record("a user request starts it"); return }
+        guard case .success(let st) = l.start(topic: "x", reason: "", goal: .novel) else { Issue.record("a user request starts it"); return }
         #expect(st.trigger == .user)
         #expect(l.requestWrapUp() != nil)
         #expect(l.drainWrapUp()?.contains("wrap up") == true)

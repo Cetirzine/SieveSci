@@ -23,7 +23,12 @@ reading exists (take it and state it), and not for what a search or the workspac
      it would answer, what it needs) and `evidence` ([@key], receipt ids);
    - fill-in questions (kind `text`, reason `missing_value`) for values only the user has — organism,
      sample size, data location, deadline — with a `placeholder` example;
+   - unless the user said, one question (kind single, reason user_decision) on what matters most: novelty
+     (something not done before) or what works best (methods with good published results, the field's best
+     answers combined) — it decides how a brainstorm checks its ideas (`goal` novel or proven);
    - at most 4 questions in all; "Other" is added automatically.
 4. **Act on the answer**: restate the chosen question in one sentence, cite the answer's receipt in the
-   plan's rationale, and plan. If the user dismissed the card, reply briefly and wait. If nobody could
+   plan's rationale, and plan. When the request named a goal but not the way there ("I want to do target
+   fishing"), brainstorm the approach first with `brainstorm` start and the `goal` the user chose — then
+   propose the plan with your recommendation and start. If the user dismissed the card, reply briefly and wait. If nobody could
    answer (headless run), proceed on the most defensible reading and say which decision is missing.

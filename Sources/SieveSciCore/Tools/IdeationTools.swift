@@ -74,9 +74,12 @@ struct BrainstormTool: Tool {
     let description = """
     Enter, advance and leave brainstorming mode, which the user watches live. Enter it on your own when the work \
     needs new ideas (the request asks for them, a direction is unclear, an approach keeps failing, a claim was \
-    refuted) — unless the user turned that off, in which case `start` is refused. Actions: start (topic, reason) · \
-    stage (stage: ground | diverge | dedupe | rank | novelty | review | evolve | report; note: one line on what you \
-    are doing) · end (summary). Stages run in this order and the host refuses a skipped stage or one whose work is \
+    refuted) — unless the user turned that off, in which case `start` is refused. Actions: start (topic, reason, \
+    goal) · stage (stage: ground | diverge | dedupe | rank | novelty (or evidence) | review | evolve | report; note: \
+    one line on what you are doing) · end (summary). goal is the user's answer to "is novelty required?": novel — \
+    new ideas, checked for novelty against prior work; proven — what works best, where methods with published good \
+    results are preferred and the field's best answers are combined (stage evidence replaces novelty). Ask the user \
+    once with `ask_user` before starting unless they already said. Stages run in this order and the host refuses a skipped stage or one whose work is \
     not done (review and evolve are optional). While a brainstorm is live there is no planning, no workers \
     (`task`, `dispatch`), no analysis and no file writing: those come after `end`, built on the ideas the user \
     chose. Record ideas with `idea`; follow the `brainstorm` skill for the procedure.
@@ -85,7 +88,8 @@ struct BrainstormTool: Tool {
         Schema.object(["action": Schema.stringEnum("start | stage | end", ["start", "stage", "end"]),
                        "topic": Schema.string("start: what the ideas are for"),
                        "reason": Schema.string("start: why new ideas are needed now"),
-                       "stage": Schema.stringEnum("stage: the step you are entering", BrainstormState.stages),
+                       "goal": Schema.stringEnum("start: novel (novelty required) or proven (what works best)", ["novel", "proven"]),
+                       "stage": Schema.stringEnum("stage: the step you are entering", BrainstormState.allStages),
                        "note": Schema.string("stage: one line the user sees"),
                        "summary": Schema.string("end: what came out, in two lines")], required: ["action"])
     }
@@ -105,10 +109,25 @@ struct BrainstormTool: Tool {
         "dedupe": "Merge ideas that say the same thing (`idea` discard with \"duplicate of In\").",
         "rank": "Compare the live ideas pairwise yourself and record the order with `idea` rank.",
         "novelty": "For the top third: ≥3 searches each, read the closest papers, record `idea` novelty.",
+        "evidence": "For the top third: ≥3 searches each for published results (benchmarks, comparisons, reviews, wide use), "
+            + "read them, record `idea` evidence with the results and their numbers.",
         "review": "Name the recurring weaknesses of the survivors.",
         "evolve": "Add improved versions as new ideas (operator evolve:<id>); go back to rank for one more round, or on to report.",
         "report": "Present the top ideas as speculation (what each builds on, how it was checked, what is unchecked), then `ask_user` "
             + "(kind multi, reason direction, one option per idea). After the answer, call `brainstorm` end; planning starts after that.",
+    ]
+
+    /// The stages that differ when the goal is what works best: collect the field's proven answers, rank by
+    /// reported results, and assemble the best-supported ones into one recommended approach.
+    static let provenGuide: [String: String] = [
+        "diverge": "Collect 12–24 candidates the field has shown to work: methods with published results, widely used tools, "
+            + "benchmark leaders, and combinations of their strongest parts (operator survey or merge). Record each batch with `idea` add, "
+            + "citing the work it comes from in `evidence`.",
+        "rank": "Compare the live candidates pairwise on reported performance on comparable problems, robustness, maturity of the "
+            + "tools and fit to this data; record the order with `idea` rank.",
+        "report": "Assemble the best-supported candidates into one recommended approach — the field's best answer for this problem, "
+            + "each part with its published results — plus the main alternatives. Then `ask_user` (kind multi, reason direction, your "
+            + "recommendation first). After the answer, call `brainstorm` end; planning starts after that.",
     ]
 
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
@@ -118,33 +137,41 @@ struct BrainstormTool: Tool {
         case "start":
             let topic = (input.str("topic") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !topic.isEmpty else { return .error("Give the brainstorm a topic.") }
-            switch led.start(topic: topic, reason: input.str("reason") ?? "") {
+            let goal = input.str("goal").flatMap(BrainstormState.Goal.init(rawValue:))
+            switch led.start(topic: topic, reason: input.str("reason") ?? "", goal: goal) {
             case .failure(let r): return .error(r.message)
             case .success(let st):
                 ctx.services.log("brainstorm", actor: st.trigger == .auto ? "agent" : "user",
-                                 ["event": "start", "id": .string(st.id), "topic": .string(topic), "trigger": .string(st.trigger.rawValue)])
+                                 ["event": "start", "id": .string(st.id), "topic": .string(topic), "trigger": .string(st.trigger.rawValue),
+                                  "goal": .string(st.goal?.rawValue ?? "novel")])
                 ctx.services.emit(.brainstormChanged(st))
                 let g = ctx.services.research.hasGrounding()
-                return ToolOutput("Brainstorm \(st.id) started (\(st.trigger.rawValue)); stage: ground. The user sees each stage and every idea as you record it, "
+                let aim = st.goal == .proven
+                    ? "Goal: what works best — prior work with good published results is preferred; the check is stage evidence; "
+                        + "the report assembles the field's best answers into one recommended approach. "
+                    : "Goal: new ideas — each top idea is checked for novelty against prior work. "
+                return ToolOutput("Brainstorm \(st.id) started (\(st.trigger.rawValue)); stage: ground. " + aim
+                    + "The user sees each stage and every idea as you record it, "
                     + "and may ask you to wrap up. Ideas are speculation until checked. Until `brainstorm` end: no `update_plan`, no workers, "
                     + "no analysis or file writing — do every stage yourself, in order."
                     + (g.web && g.literature ? "" : " Ground first: search the background before generating anything."))
             }
         case "stage":
             let stage = input.str("stage") ?? ""
-            guard BrainstormState.stages.contains(stage) else { return .error("Unknown stage \(stage).") }
-            guard led.live != nil else { return .error("No brainstorm is running; start one first.") }
+            guard BrainstormState.allStages.contains(stage) else { return .error("Unknown stage \(stage).") }
+            guard let running = led.live else { return .error("No brainstorm is running; start one first.") }
             if let why = led.stageBlocker(stage, grounded: Self.grounded(ctx)) {
                 ctx.services.log("brainstorm_gate", actor: "host", ["stage": .string(stage), "reason": .string(why)])
                 return .error("Not moved to \(stage): " + why)
             }
             guard let st = led.stage(stage, note: input.str("note") ?? "") else { return .error("No brainstorm is running; start one first.") }
             ctx.services.emit(.brainstormChanged(st))
-            return ToolOutput("Stage: \(stage). " + (Self.stageGuide[stage] ?? ""))
+            let guide = running.goal == .proven ? (Self.provenGuide[stage] ?? Self.stageGuide[stage]) : Self.stageGuide[stage]
+            return ToolOutput("Stage: \(stage). " + (guide ?? ""))
         case "end":
             if let c = led.live, c.stage != "report", !c.wrapUpRequested {
                 return .error("The brainstorm is in \(c.stage); it ends from the report stage. Finish the remaining stages "
-                    + "(\(BrainstormState.stages.joined(separator: " → "))), then report and let the user choose before ending. "
+                    + "(\(c.order.joined(separator: " → "))), then report and let the user choose before ending. "
                     + "If the user wants to cut it short, they press Wrap up (straight to report) or Stop in the brainstorm panel; tell them so.")
             }
             guard let st = led.end(summary: input.str("summary") ?? "") else { return .error("No brainstorm is running.") }
@@ -177,8 +204,10 @@ struct IdeaTool: Tool {
     mechanism, test, falsifier, operator, seeds, evidence}]; near-duplicates are merged automatically) · list · \
     discard (id, reason) · rank (order: ids best first, e.g. from `dispatch` rank) · novelty (id, verdict: \
     not_found_in_search | incremental | known, closest_prior: [@key…], receipts: ids of ≥3 searches run after the \
-    idea was written) · promote (id, prediction): an independent checker reviews the novelty check, then the idea is \
-    registered as a hypothesis in the plan. Never call an idea novel: say "no prior work found in these searches".
+    idea was written) · evidence (in a brainstorm after what works best, instead of novelty: id, support: \
+    established | partial | unproven, results: [@key or URL with the reported numbers], receipts: ids of ≥3 searches) \
+    · promote (id, prediction): an independent checker reviews the check, then the idea is registered as a \
+    hypothesis in the plan. Never call an idea novel: say "no prior work found in these searches".
     """
     var inputSchema: JSON {
         let idea = Schema.object(["statement": Schema.string("The idea in one or two sentences"),
@@ -189,7 +218,9 @@ struct IdeaTool: Tool {
                                   "seeds": Schema.array("Seed concepts used", items: ["type": "string"]),
                                   "evidence": Schema.array("[@key] or receipt ids it builds on", items: ["type": "string"])],
                                  required: ["statement"])
-        return Schema.object(["action": Schema.stringEnum("Action", ["add", "list", "discard", "rank", "novelty", "promote"]),
+        return Schema.object(["action": Schema.stringEnum("Action", ["add", "list", "discard", "rank", "novelty", "evidence", "promote"]),
+                              "support": Schema.stringEnum("evidence: how well published results back it", ["established", "partial", "unproven"]),
+                              "results": Schema.array("evidence: the published results ([@key] or URL, with numbers)", items: ["type": "string"]),
                               "ideas": Schema.array("add: new ideas", items: idea),
                               "id": Schema.string("Idea id (I3)"),
                               "reason": Schema.string("discard: why"),
@@ -214,6 +245,7 @@ struct IdeaTool: Tool {
             let raw = input["ideas"]?.arrayValue ?? []
             guard !raw.isEmpty else { return .error("No ideas given.") }
             let origin = led.live.map { $0.trigger == .dream ? "dream:\($0.id)" : "brainstorm:\($0.id)" } ?? "session"
+            let aim = led.live?.goal == .proven ? "proven" : nil
             let now = Date()
             let new = raw.compactMap { j -> Idea? in
                 let st = (j.str("statement") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -222,7 +254,7 @@ struct IdeaTool: Tool {
                             op: j.str("operator") ?? "free", seeds: j["seeds"]?.arrayValue?.compactMap(\.stringValue) ?? [],
                             evidence: j["evidence"]?.arrayValue?.compactMap(\.stringValue) ?? [], status: .raw, mergedInto: nil, novelty: nil,
                             noveltyReceipts: [], closestPrior: [], rank: nil, review: nil, reviewFingerprint: nil, hypothesisId: nil, note: nil,
-                            origin: origin, createdAt: now)
+                            origin: origin, createdAt: now, aim: aim)
             }
             let added = led.add(new)
             changed()
@@ -238,7 +270,7 @@ struct IdeaTool: Tool {
             let all = led.snapshot
             guard !all.isEmpty else { return ToolOutput("No ideas yet.") }
             return ToolOutput(all.map { i in
-                "\(i.id) [\(i.status.rawValue)\(i.novelty.map { ", \($0.rawValue)" } ?? "")\(i.rank.map { ", #\($0)" } ?? "")] \(i.statement.truncated(140)) · \(i.op)"
+                "\(i.id) [\(i.status.rawValue)\(i.novelty.map { ", \($0.rawValue)" } ?? "")\(i.support.map { ", \($0.rawValue)" } ?? "")\(i.rank.map { ", #\($0)" } ?? "")] \(i.statement.truncated(140)) · \(i.op)"
             }.joined(separator: "\n"))
         case "discard":
             guard let id = input.str("id"), let i = led.discard(id, reason: input.str("reason") ?? "") else { return .error("No such idea.") }
@@ -262,6 +294,18 @@ struct IdeaTool: Tool {
                                                "receipts": .array(i.noveltyReceipts.map { .string($0) }), "prior": .array(i.closestPrior.map { .string($0) })])
                 return ToolOutput("\(i.id): \(v.rawValue)" + (v == .known ? " — discarded as already published." : " (searches \(i.noveltyReceipts.joined(separator: ", "))). The checker reviews this verdict when the idea is promoted."))
             }
+        case "evidence":
+            guard let id = input.str("id"), let v = Idea.Support(rawValue: input.str("support") ?? "") else { return .error("Give id and support.") }
+            let r = led.setSupport(id, v, results: input["results"]?.arrayValue?.compactMap(\.stringValue) ?? [],
+                                   receipts: input["receipts"]?.arrayValue?.compactMap(\.stringValue) ?? [], ledger: s.ledger)
+            switch r {
+            case .failure(let g): return .error(g.message)
+            case .success(let i):
+                changed()
+                s.log("idea", actor: "agent", ["event": "evidence", "id": .string(i.id), "support": .string(v.rawValue),
+                                               "receipts": .array(i.noveltyReceipts.map { .string($0) }), "results": .array(i.closestPrior.map { .string($0) })])
+                return ToolOutput("\(i.id): \(v.rawValue) (searches \(i.noveltyReceipts.joined(separator: ", "))). The checker reviews this when the idea is promoted.")
+            }
         case "promote":
             guard ctx.role == .main else { return .error("Only the main agent registers hypotheses.") }
             guard let id = input.str("id") else { return .error("Give the idea id.") }
@@ -278,7 +322,21 @@ struct IdeaTool: Tool {
                 return .error("The checker returned \(v) on this idea and nothing has changed since. Address its points (more searches, a sharper test) first.")
             }
             let searches = idea.noveltyReceipts.compactMap { s.ledger.receipt($0) }.map { "\($0.id) · \($0.tool) · \($0.argsSummary.prefix(200))" }
-            let focus = """
+            let focus = idea.aim == "proven" ? """
+            Idea \(idea.id) is about to be registered as a hypothesis. The user wants what works best, not novelty: \
+            review its evidence check and testability.
+            Statement: \(idea.statement)
+            Mechanism: \(idea.mechanism)
+            Test: \(idea.test)
+            Falsifier: \(idea.falsifier)
+            Prediction: \(prediction)
+            Support: \(idea.support?.rawValue ?? "none") · published results: \(idea.closestPrior.joined(separator: ", "))
+            Searches cited (open them with `receipt`):
+            \(searches.joined(separator: "\n"))
+            Check: do the cited results really show this approach working well on comparable problems (read them)? Are better \
+            supported alternatives being passed over? Is the test feasible here and could the falsifier occur? Prior work is \
+            expected, not a fault. Use "block" if the support is unfounded, "revise" if more evidence or a sharper test is needed.
+            """ : """
             Idea \(idea.id) is about to be registered as a hypothesis. Review its novelty check and testability.
             Statement: \(idea.statement)
             Mechanism: \(idea.mechanism)
@@ -302,7 +360,7 @@ struct IdeaTool: Tool {
                 return .error("Not registered: the independent review did not pass.\n" + review)
             }
             let (gate, h) = s.research.addHypothesis(statement: idea.statement, prediction: prediction, falsification: idea.falsifier,
-                                                     rationale: "promoted from idea \(idea.id) after novelty check and review")
+                                                     rationale: "promoted from idea \(idea.id) after \(idea.aim == "proven" ? "evidence" : "novelty") check and review")
             if case .refuse(let m) = gate { return .error(m) }
             guard let h else { return .error("Could not register the hypothesis.") }
             _ = led.markPromoted(id, hypothesis: h.id)

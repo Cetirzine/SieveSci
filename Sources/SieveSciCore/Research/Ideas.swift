@@ -15,6 +15,15 @@ public struct Idea: Codable, Sendable, Equatable, Identifiable {
         case notFound = "not_found_in_search"
         case incremental, known
     }
+    /// The check of an idea when the goal is what works best: how well published results back it.
+    public enum Support: String, Codable, Sendable {
+        /// Reported to work well on comparable problems (benchmarks, wide use).
+        case established
+        /// Some results, on other problems or with mixed outcomes.
+        case partial
+        /// No results found that show it works.
+        case unproven
+    }
     public var id: String
     public var statement: String
     public var mechanism: String
@@ -38,6 +47,11 @@ public struct Idea: Codable, Sendable, Equatable, Identifiable {
     /// session | brainstorm:<id> | dream:<yyyy-mm-dd>
     public var origin: String
     public var createdAt: Date
+    /// "proven" when written in a brainstorm after what works best (nil: novelty first).
+    public var aim: String?
+    /// Its evidence check in such a brainstorm; `closestPrior` then holds the published results and
+    /// `noveltyReceipts` the searches.
+    public var support: Support?
 
     public var isLive: Bool { status != .merged && status != .discarded && novelty != .known }
 }
@@ -46,7 +60,13 @@ public struct Idea: Codable, Sendable, Equatable, Identifiable {
 /// is in, and how the ideas thin out through the sieve.
 public struct BrainstormState: Codable, Sendable, Equatable, Identifiable {
     public enum Trigger: String, Codable, Sendable { case user, auto, dream }
+    /// What the ideas are for, settled with the user before the brainstorm: something new (checked for
+    /// novelty), or what works best (checked for published evidence that it works, prior work preferred).
+    public enum Goal: String, Codable, Sendable { case novel, proven }
     public static let stages = ["ground", "diverge", "dedupe", "rank", "novelty", "review", "evolve", "report"]
+    /// The stages when the goal is what works best: an evidence check takes the novelty check's place.
+    public static let provenStages = ["ground", "diverge", "dedupe", "rank", "evidence", "review", "evolve", "report"]
+    public static let allStages = stages + ["evidence"]
     public var id: String
     public var topic: String
     public var reason: String
@@ -63,6 +83,11 @@ public struct BrainstormState: Codable, Sendable, Equatable, Identifiable {
     /// Times the brainstorm went from `evolve` back to `dedupe`/`rank` (a second round). Optional so state saved
     /// by earlier versions still decodes.
     public var evolveRounds: Int?
+    /// Optional so brainstorms saved by earlier versions (always novelty-first) still decode.
+    public var goal: Goal?
+
+    /// This brainstorm's stage order.
+    public var order: [String] { goal == .proven ? Self.provenStages : Self.stages }
 
     /// Ideas recorded during this episode carry this origin.
     public var origin: String { (trigger == .dream ? "dream:" : "brainstorm:") + id }
@@ -103,7 +128,7 @@ public final class IdeaLedger: @unchecked Sendable {
 
     // MARK: Episodes
 
-    public func start(topic: String, reason: String) -> Result<BrainstormState, GateRefusal> {
+    public func start(topic: String, reason: String, goal: BrainstormState.Goal? = nil) -> Result<BrainstormState, GateRefusal> {
         lock.lock(); defer { lock.unlock() }
         if let c = current, c.endedAt == nil { return .success(c) }
         let trigger = requested ?? .auto
@@ -111,11 +136,17 @@ public final class IdeaLedger: @unchecked Sendable {
             return .failure(GateRefusal("Autonomous brainstorming is turned off in the user's settings. Continue without it; "
                 + "suggest /brainstorm in your reply if new ideas would help."))
         }
+        // Whether the ideas must be new is the user's decision; an unattended dream looks for new ones.
+        guard let goal = goal ?? (trigger == .dream ? .novel : nil) else {
+            return .failure(GateRefusal("First settle what the ideas are for. Unless the user already said, ask once with `ask_user` "
+                + "(kind single, reason user_decision): is novelty required, or does what works best matter most — methods others "
+                + "have used with good results preferred, the field's best answers combined? Then `brainstorm` start with goal novel or proven."))
+        }
         requested = nil
         wrapUpPending = false
         let s = BrainstormState(id: "B" + String(UUID().uuidString.prefix(6)).lowercased(), topic: topic, reason: reason, trigger: trigger,
                                 stage: "ground", stageNote: "", stagesDone: [], startedAt: Date(), endedAt: nil, summary: nil,
-                                wrapUpRequested: false, stopped: false)
+                                wrapUpRequested: false, stopped: false, goal: goal)
         current = s
         persist()
         return .success(s)
@@ -203,13 +234,19 @@ public final class IdeaLedger: @unchecked Sendable {
     /// What the agent must do before entering `next`, or nil when the move is allowed.
     /// `grounded`: the grounding searches the session requires have succeeded.
     public func stageBlocker(_ next: String, grounded: Bool) -> String? {
-        let order = BrainstormState.stages
         lock.lock(); defer { lock.unlock() }
-        guard let c = current, c.endedAt == nil, let to = order.firstIndex(of: next), let from = order.firstIndex(of: c.stage) else { return nil }
+        guard let c = current, c.endedAt == nil else { return nil }
+        let order = c.order
+        guard let to = order.firstIndex(of: next) else {
+            return c.goal == .proven
+                ? "This brainstorm is after what works best: its check is stage evidence (published results that the idea works), not novelty."
+                : "This brainstorm is after new ideas: its check is stage novelty, not evidence."
+        }
+        guard let from = order.firstIndex(of: c.stage) else { return nil }
         if to == from { return nil }
         let mine = ideas.filter { $0.origin == c.origin }
         let live = mine.filter(\.isLive)
-        let checked = mine.filter { $0.novelty != nil }
+        let checked = mine.filter { c.goal == .proven ? $0.support != nil : $0.novelty != nil }
         let needChecked = min(3, max(1, mine.filter { $0.status != .merged && $0.status != .discarded || $0.novelty != nil }.count))
         if c.wrapUpRequested && next == "report" { return nil }
         if to < from {
@@ -234,6 +271,9 @@ public final class IdeaLedger: @unchecked Sendable {
                 return "Rank the live ideas yourself (compare them pairwise on grounding, mechanistic specificity and testability) and record the order with `idea` rank."
             case "novelty" where checked.count < needChecked:
                 return "Novelty-check the top \(needChecked) ranked ideas (≥\(Self.minNoveltySearches) searches each, then `idea` novelty); \(checked.count) done."
+            case "evidence" where checked.count < needChecked:
+                return "Check the evidence for the top \(needChecked) ranked ideas (≥\(Self.minNoveltySearches) searches each for published results, "
+                    + "then `idea` evidence); \(checked.count) done."
             default: continue
             }
         }
@@ -248,8 +288,13 @@ public final class IdeaLedger: @unchecked Sendable {
             return "Ideas are recorded in the diverge stage (or as evolved versions in evolve); the brainstorm is in \(c.stage)."
         case "rank" where c.stage != "rank":
             return "Ranking happens in the rank stage; the brainstorm is in \(c.stage). Enter it with `brainstorm` stage first."
-        case "novelty" where !["novelty", "review", "evolve"].contains(c.stage) && !c.wrapUpRequested:
-            return "Novelty verdicts are recorded from the novelty stage on; the brainstorm is in \(c.stage)."
+        case "novelty" where c.goal == .proven:
+            return "This brainstorm is after what works best: record `idea` evidence (published results that it works), not novelty."
+        case "evidence" where c.goal != .proven:
+            return "This brainstorm is after new ideas: record `idea` novelty."
+        case "novelty" where !["novelty", "review", "evolve"].contains(c.stage) && !c.wrapUpRequested,
+             "evidence" where !["evidence", "review", "evolve"].contains(c.stage) && !c.wrapUpRequested:
+            return "Verdicts are recorded from the \(action) stage on; the brainstorm is in \(c.stage)."
         case "promote":
             return "An idea is promoted after the brainstorm: report, let the user choose with `ask_user`, call `brainstorm` end, then promote what they chose."
         default:
@@ -314,12 +359,48 @@ public final class IdeaLedger: @unchecked Sendable {
         return .success(out)
     }
 
+    /// Records how well published results support an idea (a brainstorm after what works best). The searches
+    /// must have succeeded and postdate the idea; established or partial support names the results.
+    public func setSupport(_ id: String, _ verdict: Idea.Support, results: [String], receipts: [String], ledger: EvidenceLedger) -> Result<Idea, GateRefusal> {
+        guard let idea = snapshot.first(where: { $0.id == id }) else { return .failure(GateRefusal("No idea \(id).")) }
+        let searchTools = ResearchProtocol.webSearchTools.union(ResearchProtocol.literatureTools)
+        let valid = receipts.filter { r in
+            guard let rc = ledger.receipt(r) else { return false }
+            return rc.success && (searchTools.contains(rc.tool) || rc.tool == "bio_db") && rc.startedAt >= idea.createdAt.addingTimeInterval(-1)
+        }
+        if valid.count < Self.minNoveltySearches {
+            return .failure(GateRefusal("An evidence verdict needs at least \(Self.minNoveltySearches) successful searches (benchmarks, reviews, "
+                + "comparisons, leaderboards) run after \(id) was written; cite their receipt ids. Valid so far: \(valid.isEmpty ? "none" : valid.joined(separator: ", "))."))
+        }
+        if verdict != .unproven && results.isEmpty {
+            return .failure(GateRefusal("Name the published results ([@key] or a URL, with the reported numbers) that support \(id)."))
+        }
+        guard let out = mutate(id, { i in
+            i.support = verdict
+            i.noveltyReceipts = valid
+            i.closestPrior = results
+            if i.status == .raw { i.status = .checked }
+        }) else { return .failure(GateRefusal("No idea \(id).")) }
+        return .success(out)
+    }
+
     /// What must hold before an idea may become a hypothesis (the review comes on top).
     public func promotionBlocker(_ id: String) -> String? {
         guard let i = snapshot.first(where: { $0.id == id }) else { return "No idea \(id)." }
         if i.status == .promoted { return "\(id) is already hypothesis \(i.hypothesisId ?? "?")." }
         if i.status == .merged { return "\(id) duplicates \(i.mergedInto ?? "another idea"); promote that one." }
         if i.status == .discarded { return "\(id) was discarded (\(i.note ?? ""))." }
+        if i.aim == "proven" {
+            // After what works best: published results must back it; prior work is what is wanted.
+            guard let s = i.support else {
+                return "\(id) has no evidence check yet: search for published results (at least \(Self.minNoveltySearches) searches) and record `idea` evidence."
+            }
+            if s == .unproven { return "No published results show that \(id) works; choose a better-supported idea, or brainstorm for new ideas instead." }
+            if i.test.trimmingCharacters(in: .whitespaces).isEmpty || i.falsifier.trimmingCharacters(in: .whitespaces).isEmpty {
+                return "\(id) needs a concrete test and a falsifier (the result that would show it does not work here) before it can be registered."
+            }
+            return nil
+        }
         guard let n = i.novelty else {
             return "\(id) has no novelty check yet: search for prior work (at least \(Self.minNoveltySearches) searches) and record it with `idea` action novelty."
         }

@@ -34,7 +34,7 @@ import Testing
     func started() throws -> SessionServices {
         let (s, _) = try makeServices()
         s.ideas.request(.user)
-        guard case .success = s.ideas.start(topic: "electrolyte additives", reason: "test") else { throw ToolError.invalidInput("start") }
+        guard case .success = s.ideas.start(topic: "electrolyte additives", reason: "test", goal: .novel) else { throw ToolError.invalidInput("start") }
         return s
     }
 
@@ -154,5 +154,51 @@ import Testing
         let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601
         let st = try d.decode(BrainstormState.self, from: Data(json.utf8))
         #expect(st.evolveRounds == nil && st.origin == "brainstorm:Babc")
+    }
+    /// Not every task needs novelty: the goal is settled first, and "what works best" checks evidence.
+    @Test func theGoalIsSettledFirstAndWhatWorksBestChecksEvidence() async throws {
+        let (s, _) = try makeServices()
+        // No goal yet: the agent is told to ask the user.
+        let refused = try await BrainstormTool().run(["action": "start", "topic": "target fishing", "reason": "open request"], ctx(s))
+        #expect(refused.isError && refused.text.contains("is novelty required"))
+        let started = try await BrainstormTool().run(["action": "start", "topic": "target fishing", "reason": "open request", "goal": "proven"], ctx(s))
+        #expect(!started.isError && started.text.contains("what works best"))
+        #expect(s.ideas.live?.order.contains("evidence") == true && s.ideas.live?.order.contains("novelty") == false)
+        ground(s)
+        _ = try await stage(s, "diverge")
+        _ = try await addIdeas(s, 6)
+        #expect(s.ideas.snapshot.allSatisfy { $0.aim == "proven" })
+        _ = try await stage(s, "dedupe")
+        _ = try await stage(s, "rank")
+        let ids = s.ideas.snapshot.filter(\.isLive).map { JSON.string($0.id) }
+        _ = try await IdeaTool().run(["action": "rank", "order": .array(ids)], ctx(s))
+        // The novelty stage does not exist here; evidence takes its place and needs its work.
+        #expect(try await stage(s, "novelty").text.contains("its check is stage evidence"))
+        #expect(!(try await stage(s, "evidence")).isError)
+        #expect(try await IdeaTool().run(["action": "novelty", "id": ids[0], "verdict": "known", "closest_prior": ["x"]], ctx(s)).text.contains("record `idea` evidence"))
+        #expect(try await stage(s, "report").text.contains("Check the evidence for the top 3"))
+        let rs = (0..<3).map { _ in s.ledger.record(tool: "web_search", args: [:], output: ToolOutput("ok"), role: .main, startedAt: Date().addingTimeInterval(5), duration: 0).id }
+        // Support needs the published results it rests on.
+        #expect(try await IdeaTool().run(["action": "evidence", "id": ids[0], "support": "established", "receipts": .array(rs.map { .string($0) })], ctx(s)).text.contains("Name the published results"))
+        for id in ids.prefix(3) {
+            let out = try await IdeaTool().run(["action": "evidence", "id": id, "support": "established", "results": ["[@lee2024] AUC 0.91 on DUD-E"],
+                                                "receipts": .array(rs.map { .string($0) })], ctx(s))
+            #expect(!out.isError, "\(out.text)")
+        }
+        let report = try await stage(s, "report")
+        #expect(!report.isError && report.text.contains("recommended approach"))
+        _ = try await BrainstormTool().run(["action": "end", "summary": "x"], ctx(s))
+        // Prior work is expected here, so promotion does not ask for a novelty check.
+        let ideaId = ids[0].stringValue ?? ""
+        #expect(s.ideas.promotionBlocker(ideaId) == nil)
+        _ = s.ideas.setSupport(ids[3].stringValue ?? "", .unproven, results: [], receipts: rs, ledger: s.ledger)
+        #expect(s.ideas.promotionBlocker(ids[3].stringValue ?? "")?.contains("No published results") == true)
+    }
+
+    @Test func aDreamLooksForNewIdeasWithoutAsking() {
+        let l = IdeaLedger()
+        l.request(.dream)
+        guard case .success(let st) = l.start(topic: "x", reason: "") else { Issue.record("a dream starts without a goal"); return }
+        #expect(st.goal == .novel && st.order.contains("novelty"))
     }
 }

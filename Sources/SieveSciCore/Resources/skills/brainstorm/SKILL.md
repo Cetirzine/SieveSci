@@ -10,6 +10,20 @@ metadata:
 The user sees each stage, every idea you record and your thinking, and can stop you or ask you to wrap
 up. Announce each stage with `brainstorm` stage (one-line `note`), so what they see is what you do.
 
+## First: what are the ideas for?
+
+Not every task needs something new. Before `brainstorm` start, know the goal — ask once with `ask_user`
+(kind single, reason user_decision) unless the user already said:
+
+- **novel** — new ideas are wanted. Prior work counts against an idea; the check is stage `novelty`.
+- **proven** — what works best matters most. Prior work with good published results counts *for* an
+  idea: gather the field's established answers (methods with benchmark results, widely used tools,
+  leaderboard leaders), combine their strongest parts, and report one recommended approach — the
+  field's best answer for this problem. The check is stage `evidence` instead of `novelty`.
+
+Pass it as `goal` to `brainstorm` start. The host refuses a start without one (an unattended dream run
+is always novel).
+
 ## The flow is fixed
 
 ```
@@ -57,10 +71,16 @@ The host enforces it:
 5. **Rank** (stage `rank`). Compare the live ideas pairwise yourself on "better grounded in the
    evidence, more mechanistically specific, testable with available means", and record the order with
    `idea` rank.
-6. **Novelty** (stage `novelty`). For the top third (at least the top 3): 5–10 searches each (synonyms,
-   the mechanism, the method, the organism; preprints and patents via `web_search`), read the closest
-   papers, then `idea` novelty with the verdict and the receipts. A verdict is "not found in these
+6. **Novelty** (stage `novelty`, goal novel). For the top third (at least the top 3): 5–10 searches each
+   (synonyms, the mechanism, the method, the organism; preprints and patents via `web_search`), read the
+   closest papers, then `idea` novelty with the verdict and the receipts. A verdict is "not found in these
    searches", never "novel". Known ideas are discarded.
+   **Evidence** (stage `evidence`, goal proven, instead of novelty). For the top third: at least 3 searches
+   each for published results — benchmarks, head-to-head comparisons, reviews, how widely it is used — read
+   them, then `idea` evidence with support (established · partial · unproven), the results with their
+   reported numbers, and the receipts. In this mode the diverge stage collects what the field has shown to
+   work (operators `survey`, `merge`), ranking weighs reported performance, robustness, tool maturity and fit
+   to the data, and the report assembles the best-supported parts into one recommended approach.
 7. **Review and evolve** (stages `review`, `evolve`; optional). Note the recurring weaknesses, then
    improve the survivors — combine compatible ones, sharpen mechanisms, simplify the test, transfer from
    an analogous system — and add the evolved versions as new ideas (operator `evolve:<id>`), so they

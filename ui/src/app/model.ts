@@ -56,12 +56,18 @@ export interface Idea {
   id: string; statement: string; mechanism: string; test: string; falsifier: string; op: string; seeds: string[]; evidence: string[];
   status: "raw" | "merged" | "checked" | "promoted" | "discarded"; mergedInto?: string; novelty?: "not_found_in_search" | "incremental" | "known";
   noveltyReceipts: string[]; closestPrior: string[]; rank?: number; hypothesisId?: string; origin: string; createdAt: string;
+  /** "proven": written in a brainstorm after what works best, checked for evidence instead of novelty. */
+  aim?: string; support?: "established" | "partial" | "unproven";
 }
 export interface BrainstormState {
   id: string; topic: string; reason: string; trigger: "auto" | "user" | "dream"; stage: string; stageNote: string; stagesDone: string[];
   startedAt: string; endedAt?: string; summary?: string; wrapUpRequested: boolean; stopped: boolean;
+  /** novel: new ideas, checked for novelty; proven: what works best, checked for evidence. */
+  goal?: "novel" | "proven";
 }
 export const brainstormStages = ["ground", "diverge", "dedupe", "rank", "novelty", "review", "evolve", "report"];
+/** A brainstorm's stages: after what works best, an evidence check takes the novelty check's place. */
+export const stagesOf = (b: BrainstormState) => (b.goal === "proven" ? brainstormStages.map((s) => (s === "novelty" ? "evidence" : s)) : brainstormStages);
 export const ideaIsLive = (i: Idea) => i.status !== "merged" && i.status !== "discarded" && i.novelty !== "known";
 export interface Attention { stage: string; label?: string; detail: string; workspace: string; needsPerson?: boolean; showsChip?: boolean }
 

@@ -58,3 +58,6 @@
 .idea-details { display: flex; flex-direction: column; gap: 2px; padding-left: calc(22px + var(--s-s)); }
 .idea-detail { display: flex; align-items: baseline; gap: var(--s-s); }
 .idea-detail > :first-child { width: 96px; flex: none; }
+
+/* The topic with the brainstorm's goal (novelty first / what works best). */
+.bs-topic { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

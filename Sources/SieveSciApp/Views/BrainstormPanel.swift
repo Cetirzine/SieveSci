@@ -168,6 +168,7 @@ private struct StageTrack: View {
         case "dedupe": return L("Dedupe")
         case "rank": return L("Rank")
         case "novelty": return L("Novelty")
+        case "evidence": return L("Evidence")
         case "review": return L("Review")
         case "evolve": return L("Evolve")
         default: return L("Report")
@@ -177,7 +178,7 @@ private struct StageTrack: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack(spacing: 3) {
-                ForEach(BrainstormState.stages, id: \.self) { s in
+                ForEach(state.order, id: \.self) { s in
                     let current = s == state.stage && state.endedAt == nil
                     let done = state.stagesDone.contains(s) || (state.endedAt != nil && s == state.stage)
                     VStack(alignment: .leading, spacing: 3) {
@@ -298,13 +299,23 @@ private struct IdeaRow: View {
     var tint: Color {
         if idea.status == .promoted { return Theme.ok }
         if !idea.isLive { return Theme.rule }
-        return idea.novelty == nil ? Theme.ink.opacity(0.35) : Theme.accent
+        let checked = idea.aim == "proven" ? idea.support != nil : idea.novelty != nil
+        return checked ? Theme.accent : Theme.ink.opacity(0.35)
     }
 
     var noveltyText: String {
         if idea.status == .merged { return L10n.f("Same as %@", idea.mergedInto ?? "") }
         if idea.status == .promoted { return L10n.f("Hypothesis %@", idea.hypothesisId ?? "") }
         if idea.status == .discarded && idea.novelty != .known { return L("Set aside") }
+        // After what works best, the check is how well published results back it.
+        if idea.aim == "proven" {
+            switch idea.support {
+            case .none: return L("Not checked")
+            case .established: return L("Established")
+            case .partial: return L("Partly supported")
+            case .unproven: return L("No evidence found")
+            }
+        }
         switch idea.novelty {
         case .none: return L("Not checked")
         case .notFound: return L("No prior work found")

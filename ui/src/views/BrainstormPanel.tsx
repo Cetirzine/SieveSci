@@ -4,7 +4,7 @@
 // ideas are speculation. The user sees what the agent is thinking right now and can wrap up or stop.
 import { memo, useEffect, useState } from "react";
 import { L, L10n } from "../i18n";
-import { useApp, brainstormStages, ideaIsLive, type BrainstormState, type Idea } from "../app/model";
+import { useApp, stagesOf, ideaIsLive, type BrainstormState, type Idea } from "../app/model";
 import * as A from "../app/actions";
 import { ActionButton, BlinkingCursor, Chip, EqualWidthButtons, LabelTab } from "../theme/primitives";
 import { DotActivity, DotStorm } from "../theme/dots";
@@ -30,7 +30,9 @@ export const BrainstormPanel = memo(function BrainstormPanel({ state }: { state:
       <IdeaSieve ideas={ideas} />
       {live && <Thought state={state} />}
       <IdeaList ideas={ideas} />
-      <div className="t-caption tertiary">{L("Ideas are speculation: they count only after a novelty check, an independent review and, for findings, blind verification.")}</div>
+      <div className="t-caption tertiary">{state.goal === "proven"
+        ? L("Ideas are candidates: they count only after an evidence check, an independent review and, for findings, blind verification.")
+        : L("Ideas are speculation: they count only after a novelty check, an independent review and, for findings, blind verification.")}</div>
     </div>
   );
 });
@@ -43,7 +45,10 @@ function Header({ state, live }: { state: BrainstormState; live: boolean }) {
               : <DotActivity size={7} dot={3} gap={1.5} color="var(--rule)" />}
       </span>
       <div className="bs-title">
-        <div className="t-body-strong clip-2">{state.topic}</div>
+        <div className="bs-topic"><span className="t-body-strong clip-2">{state.topic}</span>
+          {/* What the ideas are for, as the user decided before the brainstorm. */}
+          <Chip text={state.goal === "proven" ? L("What works best") : L("Novelty first")} tint={state.goal === "proven" ? "var(--ok)" : "var(--accent)"} />
+        </div>
         {state.reason && live ? <div className="t-meta secondary clip-2">{state.reason}</div>
           : state.summary ? <div className="t-meta secondary">{state.summary}</div> : null}
       </div>
@@ -75,7 +80,7 @@ function Clock({ start, end }: { start: number; end: number | null }) {
   return <span className="t-label secondary bs-clock">{String(Math.floor(secs / 60)).padStart(2, "0")}:{String(secs % 60).padStart(2, "0")}</span>;
 }
 
-const stageTitle = (s: string) => ({ ground: L("Ground"), diverge: L("Diverge"), dedupe: L("Dedupe"), rank: L("Rank"), novelty: L("Novelty"),
+const stageTitle = (s: string) => ({ ground: L("Ground"), diverge: L("Diverge"), dedupe: L("Dedupe"), rank: L("Rank"), novelty: L("Novelty"), evidence: L("Evidence"),
   review: L("Review"), evolve: L("Evolve") } as Record<string, string>)[s] ?? L("Report");
 
 /** The eight stages as segment cells: settled ones filled, the current one rippling, later ones empty. */
@@ -83,7 +88,7 @@ function StageTrack({ state }: { state: BrainstormState }) {
   return (
     <div className="stage-track">
       <div className="stages">
-        {brainstormStages.map((s) => {
+        {stagesOf(state).map((s) => {
           const current = s === state.stage && !state.endedAt;
           const done = state.stagesDone.includes(s) || (!!state.endedAt && s === state.stage);
           return (
@@ -105,7 +110,7 @@ function IdeaSieve({ ideas }: { ideas: Idea[] }) {
   const columns: [string, number, string][] = [
     [L("Generated"), ideas.length, "color-mix(in srgb, var(--ink) 35%, transparent)"],
     [L("Distinct"), distinct.length, "color-mix(in srgb, var(--ink) 60%, transparent)"],
-    [L("Checked"), distinct.filter((i) => i.novelty).length, "color-mix(in srgb, var(--accent) 65%, transparent)"],
+    [L("Checked"), distinct.filter((i) => i.novelty || i.support).length, "color-mix(in srgb, var(--accent) 65%, transparent)"],
     [L("Kept"), distinct.filter(ideaIsLive).length, "var(--accent)"],
     [L("Registered"), ideas.filter((i) => i.status === "promoted").length, "var(--ok)"],
   ];
@@ -184,12 +189,18 @@ function IdeaList({ ideas }: { ideas: Idea[] }) {
 function IdeaRow({ idea }: { idea: Idea }) {
   const [open, setOpen] = useState(false);
   const live = ideaIsLive(idea), promoted = idea.status === "promoted";
-  const tint = promoted ? "var(--ok)" : !live ? "var(--rule)" : !idea.novelty ? "color-mix(in srgb, var(--ink) 35%, transparent)" : "var(--accent)";
+  // After what works best, the check is how well published results back the idea (prior work is wanted).
+  const proven = idea.aim === "proven";
+  const checked = proven ? !!idea.support : !!idea.novelty;
+  const tint = promoted ? "var(--ok)" : !live ? "var(--rule)" : !checked ? "color-mix(in srgb, var(--ink) 35%, transparent)" : "var(--accent)";
   const novelty = idea.status === "merged" ? L10n.f("Same as %@", idea.mergedInto ?? "")
     : promoted ? L10n.f("Hypothesis %@", idea.hypothesisId ?? "")
     : idea.status === "discarded" && idea.novelty !== "known" ? L("Set aside")
+    : proven ? (!idea.support ? L("Not checked") : idea.support === "established" ? L("Established") : idea.support === "partial" ? L("Partly supported") : L("No evidence found"))
     : !idea.novelty ? L("Not checked") : idea.novelty === "not_found_in_search" ? L("No prior work found") : idea.novelty === "incremental" ? L("Incremental") : L("Already published");
-  const noveltyTint = promoted ? "var(--ok)" : idea.novelty === "not_found_in_search" ? "var(--accent)" : idea.novelty === "known" ? "var(--bad)" : "var(--secondary)";
+  const noveltyTint = promoted ? "var(--ok)"
+    : proven ? (idea.support === "established" ? "var(--ok)" : idea.support === "unproven" ? "var(--bad)" : idea.support ? "var(--accent)" : "var(--secondary)")
+    : idea.novelty === "not_found_in_search" ? "var(--accent)" : idea.novelty === "known" ? "var(--bad)" : "var(--secondary)";
   const detail = (k: string, v: string) => <div className="idea-detail" key={k}><span className="t-label upper tertiary">{k}</span><span className="t-meta secondary">{v}</span></div>;
   return (
     <button type="button" className={`idea-row ${promoted ? "promoted" : ""}`} style={{ ["--idea-tint" as string]: tint }} onClick={() => setOpen(!open)} aria-expanded={open}>
@@ -205,7 +216,7 @@ function IdeaRow({ idea }: { idea: Idea }) {
           {idea.test && detail(L("Test"), idea.test)}
           {idea.falsifier && detail(L("Refuted if"), idea.falsifier)}
           {idea.seeds.length > 0 && detail(L("Seeds"), idea.seeds.join(", "))}
-          {idea.closestPrior.length > 0 && detail(L("Closest prior work"), idea.closestPrior.join(", "))}
+          {idea.closestPrior.length > 0 && detail(proven ? L("Published results") : L("Closest prior work"), idea.closestPrior.join(", "))}
           {idea.noveltyReceipts.length > 0 && detail(L("Searches"), idea.noveltyReceipts.join(" "))}
         </span>
       )}

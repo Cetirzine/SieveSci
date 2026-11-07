@@ -1084,3 +1084,11 @@
 "No sandbox on this system" = "此系统无沙盒";
 "Thought" = "已思考";
 "Conversation outline" = "对话步骤";
+"What works best" = "好用优先";
+"Novelty first" = "新颖性优先";
+"Evidence" = "证据";
+"Established" = "已有充分证据";
+"Partly supported" = "部分有据";
+"No evidence found" = "未找到证据";
+"Published results" = "已发表结果";
+"Ideas are candidates: they count only after an evidence check, an independent review and, for findings, blind verification." = "想法只是候选：经过证据核查、独立审查，以及（对结论而言）盲法验证后才算数。";
