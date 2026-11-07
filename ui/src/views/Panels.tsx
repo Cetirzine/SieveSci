@@ -328,7 +328,7 @@ export function ActivityPanel() {
   const agents = Object.values(cards).sort((a, b) => b.started - a.started);
   return (
     <div className="panel stack-m">
-      <Segmented value={filter} onChange={(f) => { setFilter(f); setLimit(PAGE); }}
+      <Segmented fill value={filter} onChange={(f) => { setFilter(f); setLimit(PAGE); }}
                  options={[{ value: "all", label: L("All") }, { value: "literature", label: L("Literature") }, { value: "agents", label: L("Agents & checks") }]} />
       {agents.length > 0 && <>
         <div className="stack-s">

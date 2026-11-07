@@ -292,7 +292,12 @@ function TopBar() {
     const el = ref.current;
     if (!el) return;
     // Its height is the research panel's tab bar height too, so the two rules under them meet.
-    const measure = () => { setWidth(el.clientWidth); document.documentElement.style.setProperty("--top-bar-height", `${el.offsetHeight}px`); };
+    const measure = () => {
+      setWidth(el.clientWidth);
+      document.documentElement.style.setProperty("--top-bar-height", `${el.offsetHeight}px`);
+      // Where the header's title starts; the main area's panels start there too.
+      document.documentElement.style.setProperty("--content-left", getComputedStyle(el).paddingLeft);
+    };
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     measure();

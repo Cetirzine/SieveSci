@@ -146,15 +146,19 @@ struct MemoryTool: Tool {
     Propose a change to your role's long-term memory, which future sessions of your role start with. \
     store: MEMORY (environment, conventions, learned facts), USER (the user's expertise, preferences and \
     standards), LESSONS (research mistakes to avoid, failed approaches and why, data-source quirks). \
-    Every change is a proposal: it must cite the receipts or review it was learned from, and it is screened \
-    and independently reviewed. Learn to do science better — never to pass reviews or avoid checks; such \
-    proposals are rejected. Saying "I'll remember" without this tool does nothing.
+    Every change is a proposal: it must cite what it was learned from — receipt ids (r…), a review, or the \
+    user's own words as "user: <their exact words>" — and it is screened and independently reviewed. When the \
+    user tells you about themselves, their standards or preferences ("reply in Chinese", "novelty is not \
+    required here", "I run jobs on the CAU cluster"), save it in USER quoting them; record environment facts \
+    you established (paths, tools, accounts, conventions) in MEMORY with their receipts. Learn to do science \
+    better — never to pass reviews or avoid checks; such proposals are rejected. Saying "I'll remember" \
+    without this tool does nothing.
     """
     var inputSchema: JSON {
         Schema.object(["action": Schema.stringEnum("Operation", ["add", "replace", "remove", "view", "search"]),
                        "store": Schema.stringEnum("Which store", ["MEMORY", "USER", "LESSONS"]),
                        "text": Schema.string("Entry text (add/replace), one lesson per entry, short; or the words to search for (search)"), "match": Schema.string("Substring identifying the entry (replace/remove)"),
-                       "learned_from": Schema.array("Receipt ids (r…) or review ids this was learned from", items: ["type": "string"])],
+                       "learned_from": Schema.array("Receipt ids (r…), review ids, or \"user: <the user's exact words>\"", items: ["type": "string"])],
                       required: ["action", "store"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
@@ -321,9 +325,11 @@ public enum LearningNudges {
         guard turn > 0, turn % interval == 0 else { return nil }
         return """
         <learning_nudge>
-        If this session produced durable knowledge — a fact about the user or their environment, a lesson from \
-        a mistake or a failed approach, or a workflow that worked and will recur — save it now with `memory` or \
-        `skill_manage`. Skip this if nothing new was learned.
+        If this session produced durable knowledge, save it now: what the user told you about themselves, their \
+        standards or preferences → `memory` USER, quoting them ("user: <their words>"); a fact about the \
+        environment you established (paths, tools, accounts, conventions) → `memory` MEMORY with its receipts; a \
+        lesson from a mistake or a failed approach → LESSONS; a workflow that will recur → `skill_manage`. Skip \
+        this if nothing new was learned.
         </learning_nudge>
         """
     }

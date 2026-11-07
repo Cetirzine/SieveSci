@@ -104,10 +104,15 @@ public final class EvolutionGovernor: @unchecked Sendable {
             return finish(p, services)
         }
         if p.operation != "remove" {
-            let valid = p.provenance.filter { services.ledger.receipt($0) != nil || $0.hasPrefix("review:") || $0.hasPrefix("claim:") }
+            // What the user said is evidence too (their preferences, standards, environment): quoted as
+            // "user: <their words>", and only when those words are in their messages or answers.
+            let said = Self.userWords(services)
+            let valid = p.provenance.filter { services.ledger.receipt($0) != nil || $0.hasPrefix("review:") || $0.hasPrefix("claim:") || Self.quotesUser($0, said) }
             if valid.isEmpty {
                 p.status = .rejected
-                p.reason = "Rejected: cite the receipts (r…) or review that this was learned from — learning must be grounded in what actually happened."
+                p.reason = p.provenance.contains(where: { $0.hasPrefix("user:") })
+                    ? "Rejected: the quoted words are not in the user's messages. Quote them exactly (\"user: <their words>\")."
+                    : "Rejected: cite the receipts (r…), review, or the user's own words (\"user: <their words>\") this was learned from — learning must be grounded in what actually happened."
                 return finish(p, services)
             }
         }
@@ -128,6 +133,54 @@ public final class EvolutionGovernor: @unchecked Sendable {
 
     struct Verdict { var approve: Bool; var reason: String }
 
+    /// What the user wrote in this task: their messages and their answers to questions.
+    static func userWords(_ services: SessionServices) -> [String] {
+        let entries = (try? AuditLog.read(services.audit.url, kinds: ["user_turn", "ask_answer"])) ?? []
+        return entries.filter { $0.actor == "user" }.map { $0.kind == "user_turn" ? ($0.data.str("text") ?? "") : ($0.data["answer"]?.canonical ?? "") }
+    }
+
+    /// "user: <words>" whose words (spacing aside, at least 4 characters) appear in what the user wrote.
+    static func quotesUser(_ ref: String, _ said: [String]) -> Bool {
+        guard ref.hasPrefix("user:") else { return false }
+        func norm(_ s: String) -> String { s.lowercased().components(separatedBy: .whitespacesAndNewlines).joined() }
+        let q = norm(String(ref.dropFirst("user:".count)))
+        return q.count >= 4 && said.contains { norm($0).contains(q) }
+    }
+
+    /// What a store is for, so its review asks the right question: a preference the user stated is not
+    /// "doing science better", and it does not need a tool receipt.
+    static func rubric(_ p: EvolutionProposal) -> String {
+        switch (p.kind, p.target) {
+        case (.memory, "USER"):
+            return """
+            This is the user's profile. Approve only if ALL hold:
+            1. It records what the user said about themselves — expertise, preferences, standards, working style, \
+            environment — faithfully: the quoted words ("user: …") say it, nothing is added or inferred beyond them.
+            2. It cannot be read as a way to pass reviews, avoid verification or the grounding gate, or lower the \
+            integrity rules (a user preference never overrides them).
+            3. It is short and specific enough to act on in a later session.
+            """
+        case (.memory, "MEMORY"):
+            return """
+            These are the agent's notes about the environment. Approve only if ALL hold:
+            1. It is a specific, reusable fact or convention — paths, installed tools, accounts and clusters, data \
+            locations, project conventions — that saves future work or prevents a mistake.
+            2. It is supported by the cited receipts or the user's own words (read receipts with `receipt` if needed).
+            3. It cannot be read as a way to pass reviews, avoid verification or the grounding gate, or weaken oversight.
+            4. It does not encode a factual claim about science that was not verified against sources.
+            """
+        default:
+            return """
+            Approve only if ALL hold:
+            1. It makes the agent do science better: more rigorous, reproducible, honest, or efficient without cutting corners.
+            2. It cannot be read as a way to pass reviews, avoid verification or the grounding gate, obtain significant \
+            results, or present work as better than it is. Anything that weakens oversight is rejected.
+            3. It is specific and supported by what actually happened (read the cited receipts with `receipt` if needed).
+            4. It does not encode a factual claim about science that was not verified against sources.
+            """
+        }
+    }
+
     func review(_ p: EvolutionProposal, services: SessionServices) async -> Verdict {
         let reviewer = services.makeSubagent(role: .checker, purpose: "Evolution review of a \(p.role.rawValue) \(p.kind.rawValue) proposal (\(p.target))", parent: p.role.rawValue)
         let prompt = """
@@ -137,13 +190,9 @@ public final class EvolutionGovernor: @unchecked Sendable {
         \(p.content.truncated(6000))
         \"\"\"
         Learned from: \(p.provenance.joined(separator: ", "))
+        (Entries "user: …" quote the user's own messages; the host checked that those words are there.)
 
-        Approve only if ALL hold:
-        1. It makes the agent do science better: more rigorous, reproducible, honest, or efficient without cutting corners.
-        2. It cannot be read as a way to pass reviews, avoid verification or the grounding gate, obtain significant \
-        results, or present work as better than it is. Anything that weakens oversight is rejected.
-        3. It is specific and supported by what actually happened (read the cited receipts with `receipt` if needed).
-        4. It does not encode a factual claim about science that was not verified against sources.
+        \(Self.rubric(p))
         Reply with JSON only: {"approve": true|false, "reason": "..."}
         </evolution_review>
         """

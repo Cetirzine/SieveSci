@@ -62,7 +62,9 @@ button { font: inherit; color: inherit; }
 .tab-underline { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--accent); transition: transform var(--settle), width var(--settle); }
 
 .panel-scroll { flex: 1; overflow-y: auto; background: var(--canvas); }
-.panel-column { max-width: var(--reading-width); margin: 0 auto; padding: var(--s-xl); }
+/* Trace, Plan, Claims, Library and Notebook: from the header's left edge (--content-left, set with the
+   header) across a wide column, as Settings does, rather than a narrow strip in the middle. */
+.panel-column { max-width: 1280px; margin: 0; padding: var(--s-xl) var(--s-xl) var(--s-xl) var(--content-left, 24px); box-sizing: border-box; }
 .inspector-column { width: 340px; min-width: 280px; max-width: 600px; flex: none; border-left: 1px solid var(--hairline); background: var(--canvas); overflow: hidden; display: flex; flex-direction: column; }
 
 /* WelcomeView */
