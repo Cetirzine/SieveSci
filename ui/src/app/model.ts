@@ -41,9 +41,18 @@ export interface TranscriptItem { id: string; kind: ItemKind; at: number }
 
 export interface ContextMeter { model: string; contextWindow: number; lastPromptTokens: number; lastOutputTokens: number; fill: number; cacheHitRate: number;
   session: { input: number; cacheRead: number; cacheWrite: number; output: number; reasoning: number } }
-export interface PlanStep { id: string; title: string; detail: string; status: string; checkpoint: boolean; criteria: string; evidence: string[]; note: string }
-export interface Hypothesis { id: string; statement: string; prediction: string; falsification: string; status: string }
-export interface ResearchPlan { goal: string; background?: string; stage: string; hypotheses: Hypothesis[]; steps: PlanStep[]; rationale?: string; revisions?: { at: string; rationale: string; changedCriteria: string[]; afterResults: boolean }[] }
+export interface PlanStep { id: string; title: string; detail: string; status: string; checkpoint: boolean; criteria: string; evidence: string[]; note: string; onFailure?: string }
+export interface Hypothesis { id: string; statement: string; prediction: string; falsification: string; status: string; onNegative?: string }
+/** A look back at a result that went against the plan (`result_review`). */
+export interface ResultReview {
+  id: string; at: string; trigger: string; subject: string; expected: string; observed: string; causes: string[]; check: string;
+  decision: "repair" | "adjust" | "pivot" | "stop" | "ask"; followsRule: boolean; servesObjective: string; next: string; receipts: string[]; alternative?: string;
+}
+export interface ResearchPlan {
+  goal: string; background?: string; stage: string; hypotheses: Hypothesis[]; steps: PlanStep[]; rationale?: string;
+  revisions?: { at: string; rationale: string; changedCriteria: string[]; afterResults: boolean }[];
+  objective?: string; reviews?: ResultReview[]; pendingReview?: { trigger: string; subject: string };
+}
 export interface Claim { id: string; statement: string; successCriteria: string; evidence: string[]; dataPaths: string[]; status: string; verdict: string | null; verifierReceipts: string[] }
 export interface Contested { thread: string; kind: string; issue: string; reason: string }
 export interface JobState { id: string; label: string; lines: string[]; running: boolean; unread: number; exitCode?: number; seconds?: number }
@@ -359,7 +368,7 @@ function signalTitle(kind: string): string {
   const t: Record<string, string> = {
     codeHack: "Questionable code", falseCompletion: "Success claimed after a failure", ignoredError: "Error not mentioned",
     scopeShrink: "Scope reduced", syntheticData: "Synthetic data", ungrounded: "Not backed by evidence",
-    harking: "Criteria changed after results", breakthrough: "Strong claim — needs verification", checkpoint: "Checkpoint", ideation: "Idea under review",
+    harking: "Criteria changed after results", omission: "Report leaves out what did not work", breakthrough: "Strong claim — needs verification", checkpoint: "Checkpoint", ideation: "Idea under review",
   };
   return t[kind] ? L(t[kind]) : kind;
 }

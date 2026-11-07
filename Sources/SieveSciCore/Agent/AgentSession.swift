@@ -129,7 +129,15 @@ public final class AgentSession: @unchecked Sendable {
         interventionsThisTurn = 0
         turnRequest = text
         // How much protocol this message needs; a plan written during the turn turns research back on.
-        if role == .main { services.research.turnScale = TurnScale.classify(text) }
+        if role == .main {
+            // Within research already under way (a plan exists), a short message ("继续", "ok, option 2") continues
+            // that research under its rules; only greetings stay chat.
+            var scale = TurnScale.classify(text)
+            if scale != .chat && scale != .research && !services.research.snapshot.steps.isEmpty { scale = .research }
+            services.research.turnScale = scale
+            // The first research request becomes the task's fixed objective, in the user's own words.
+            if !text.hasPrefix("<"), !text.hasPrefix("/") { services.research.recordUserRequest(text, scale: scale) }
+        }
         turnToolCalls.mutate { $0 = 0 }
         delegationHinted.mutate { $0 = [] }
         turnDelegated = false
@@ -225,6 +233,11 @@ public final class AgentSession: @unchecked Sendable {
                 if !notes.isEmpty { results.append(.text(notes.map(\.rendered).joined(separator: "\n"))) }
                 if role == .main, let wrap = services.ideas.drainWrapUp() { results.append(.text(wrap)) }
                 if role == .main, let note = deliverInserts() { results.append(.text(note)) }
+                // A result that went against the plan: say once that a review comes before more analysis.
+                if role == .main {
+                    services.research.checkStall()
+                    if let n = services.research.takeReviewNotice() { results.append(.text(n)) }
+                }
                 if role == .main, let every = KnownModels.spec(for: model)?.stateRefreshEvery, every > 0, steps % every == 0 {
                     results.append(.text(TurnContext.refresh(services: services, request: turnRequest, steps: steps)))
                 }
@@ -531,6 +544,10 @@ public final class AgentSession: @unchecked Sendable {
         }
         if role == .main, case .refuse(let why) = services.research.requirePlan(tool: t.name, input: use.input) {
             services.log("preregistration_gate", actor: "host", ["tool": .string(t.name), "agent": .string(id)])
+            return why
+        }
+        if role == .main, case .refuse(let why) = services.research.requireReview(tool: t.name, input: use.input) {
+            services.log("review_gate", actor: "host", ["tool": .string(t.name), "agent": .string(id)])
             return why
         }
         if role != .main {
@@ -875,6 +892,13 @@ public enum TurnContext {
         if !open.isEmpty { lines.append("open claims: " + open.map { "\($0.id) [\($0.status.rawValue)]" }.joined(separator: ", ")) }
         if let goal = s.goal.current, goal.phase == .active { lines.append("goal: \(goal.objective) (round \(goal.roundsStarted))") }
         if plan.steps.isEmpty, let scale = s.research.turnScale.contextLine { lines.append(scale) }
+        // Changing course: the fixed objective, a review the host waits for, and the last lessons (short).
+        if let o = plan.objective, !o.isEmpty { lines.append("objective (the user's request; fixed): " + o.truncated(240)) }
+        if let p = plan.pendingReview { lines.append("result review needed: \(p.trigger) — record `result_review` before more analysis") }
+        let rv = (plan.reviews ?? []).suffix(3)
+        if !rv.isEmpty {
+            lines.append("learned so far: " + rv.map { "\($0.id) \($0.subject) → \($0.decision.rawValue): \(($0.causes.first ?? $0.observed).truncated(80)); next \($0.next.truncated(80))" }.joined(separator: " | "))
+        }
         let contested = s.deliberation.contested
         if !contested.isEmpty {
             lines.append("contested (do not present as settled): " + contested.map { "\($0.thread) \($0.issue.truncated(80))" }.joined(separator: "; "))

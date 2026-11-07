@@ -7,7 +7,7 @@ public enum BuiltinTools {
          UpdatePlanTool(), ClaimFindingTool(), TodoWriteTool(), GoalTool(), TaskTool(), SkillTool(), SkillEnvTool(), ReceiptTool(), JobOutputTool(), JobWatchTool(), RespondReviewTool(),
          VerifyCitationTool(), DispatchTool(), MemoryTool(), SessionSearchTool(), SessionReadTool(), SkillManageTool(),
          LibrarySearchTool(), ChemLookupTool(), BioDatabaseTool(), BioToolSearchTool(), RepoMapTool(),
-         AskUserTool(), BrainstormTool(), IdeaTool(), IdeationSeedsTool(), SkillInstallTool()]
+         AskUserTool(), BrainstormTool(), IdeaTool(), IdeationSeedsTool(), SkillInstallTool(), ResultReviewTool()]
     }
 }
 
@@ -545,20 +545,26 @@ struct UpdatePlanTool: Tool {
     prior web and literature searches, and a rationale for revisions. Mark steps that need no other step's \
     results `parallel: true` (the rest `depends_on`): SieveSci runs pending parallel steps on workers at once \
     and returns their reports in this call's result. action "step": change one step's status; marking a \
-    checkpoint "done" requires evidence receipt ids and triggers an independent review.
+    checkpoint "done" requires evidence receipt ids and triggers an independent review. Write, before the \
+    analysis, what you will do if a hypothesis comes out negative (`on_negative`) or a step fails \
+    (`on_failure`): following that rule later is not a deviation. action "objective": change the task's \
+    fixed objective — only with the user's own words quoted in `user_quote`.
     """
     var inputSchema: JSON {
         let hyp = Schema.object(["id": Schema.string("H1…"), "statement": Schema.string("Hypothesis"), "prediction": Schema.string("What you expect to observe if true"),
-                                 "falsification": Schema.string("Observation that would refute it"), "status": Schema.stringEnum("Status", ["open", "supported", "refuted", "inconclusive"])],
+                                 "falsification": Schema.string("Observation that would refute it"), "status": Schema.stringEnum("Status", ["open", "supported", "refuted", "inconclusive"]),
+                                 "on_negative": Schema.string("What you will do if it comes out negative or inconclusive (written in advance)")],
                                 required: ["falsification", "id", "prediction", "statement"])
         let step = Schema.object(["id": Schema.string("S1…"), "title": Schema.string("Step"), "detail": Schema.string("How"),
                                   "status": Schema.stringEnum("Status", ["pending", "in_progress", "done", "skipped", "failed"]),
                                   "checkpoint": Schema.bool("Results matter for the conclusion; reviewed when done"), "criteria": Schema.string("Soft acceptance criteria"),
                                   "parallel": Schema.bool("Needs no other step's results: SieveSci runs pending parallel steps on workers at once"),
-                                  "depends_on": Schema.array("Ids of the steps whose results this step needs ([] for none)", items: ["type": "string"])],
+                                  "depends_on": Schema.array("Ids of the steps whose results this step needs ([] for none)", items: ["type": "string"]),
+                                  "on_failure": Schema.string("What you will do if this step fails (written in advance)")],
                                  required: ["id", "title"])
         return Schema.object([
-            "action": Schema.stringEnum("set | step", ["set", "step"]),
+            "action": Schema.stringEnum("set | step | objective", ["set", "step", "objective"]),
+            "objective": Schema.string("objective: the new objective"), "user_quote": Schema.string("objective: the user's words asking for it"),
             "goal": Schema.string("Research goal (set)"), "background": Schema.string("What the searches established, with [@key] (set)"),
             "hypotheses": Schema.array("Hypotheses (set)", items: hyp), "steps": Schema.array("Plan steps (set)", items: step),
             "rationale": Schema.string("Why the plan changed (required for revisions)"),
@@ -572,15 +578,31 @@ struct UpdatePlanTool: Tool {
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         guard ctx.role == .main else { return .error("Only the main agent manages the plan.") }
         let rp = ctx.services.research
+        if input.str("action") == "objective" {
+            // The objective is the user's: it changes only when their own words ask for it.
+            let text = (input.str("objective") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let quote = (input.str("user_quote") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return .error("Give the new objective.") }
+            guard EvolutionGovernor.quotesUser("user:" + quote, EvolutionGovernor.userWords(ctx.services)) else {
+                return .error("The objective is fixed to the user's request. Quote the user's own words asking for the change in `user_quote` "
+                    + "(ask them with `ask_user` first); a change they did not ask for is not allowed.")
+            }
+            rp.changeObjective(text)
+            ctx.services.log("objective_changed", actor: "user", ["objective": .string(text), "quote": .string(quote)])
+            ctx.services.emit(.planChanged(rp.snapshot))
+            return ToolOutput("Objective changed, as the user asked: \(text.truncated(300))")
+        }
         if input.str("action") == "set" {
             let hs: [Hypothesis] = (input["hypotheses"]?.arrayValue ?? []).map {
                 Hypothesis(id: $0.str("id") ?? "H?", statement: $0.str("statement") ?? "", prediction: $0.str("prediction") ?? "",
-                           falsification: $0.str("falsification") ?? "", status: $0.str("status") ?? "open", registeredAt: Date())
+                           falsification: $0.str("falsification") ?? "", status: $0.str("status") ?? "open", registeredAt: Date(),
+                           onNegative: $0.str("on_negative"))
             }
             let ss: [PlanStep] = (input["steps"]?.arrayValue ?? []).map {
                 PlanStep(id: $0.str("id") ?? "S?", title: $0.str("title") ?? "", detail: $0.str("detail") ?? "", status: $0.str("status") ?? "pending",
                          checkpoint: $0.bool("checkpoint") ?? false, criteria: $0.str("criteria") ?? "", evidence: [], note: "",
-                         parallel: $0.bool("parallel"), dependsOn: $0["depends_on"]?.arrayValue?.compactMap(\.stringValue))
+                         parallel: $0.bool("parallel"), dependsOn: $0["depends_on"]?.arrayValue?.compactMap(\.stringValue),
+                         onFailure: $0.str("on_failure"))
             }
             let (d, rev) = rp.setPlan(goal: input.str("goal") ?? "", background: input.str("background") ?? "", hypotheses: hs, steps: ss,
                                       rationale: input.str("rationale") ?? "")

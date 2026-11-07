@@ -346,7 +346,7 @@ function RowContent({ item, stream, showThinking, hovering }: { item: Transcript
         </div>
       );
     case "thinking": return showThinking ? <ThinkingRow text={k.text} started={k.started} ended={k.ended} untimed={k.untimed} /> : null;
-    case "tool": return <ToolRow call={k.call} />;
+    case "tool": return k.call.name === "result_review" && !k.call.isError ? <ReviewCard call={k.call} /> : <ToolRow call={k.call} />;
     case "agent": return <AgentCardView id={k.id} />;
     case "review": {
       const tone = verdictTone(k.verdict);
@@ -520,6 +520,37 @@ function ThinkingRow({ text, started, ended, untimed }: { text: string; started:
         {hasText && <span className={`chev ${expanded ? "open" : ""}`}><Symbol name="chevron.right" size={9} strokeWidth={3} /></span>}
       </button>
       {expanded && hasText && <div className="thinking-text t-body">{text}</div>}
+    </div>
+  );
+}
+
+/** A result review (`result_review`) as the user reads it: what was expected and seen, why, and how the
+ *  work goes on — a change of course in the open, never a silent one. */
+const decisionTone: Record<string, string> = { repair: "var(--secondary)", adjust: "var(--accent)", pivot: "var(--warn)", stop: "var(--bad)", ask: "var(--accent)" };
+const decisionLabel: Record<string, string> = { repair: "Repair and rerun", adjust: "Adjust the method", pivot: "Change course", stop: "Stop and report", ask: "Ask you" };
+function ReviewCard({ call }: { call: ToolCallView }) {
+  const i = call.input as Record<string, unknown>;
+  const str = (k: string) => (typeof i[k] === "string" ? (i[k] as string) : "");
+  const causes = Array.isArray(i.causes) ? (i.causes as unknown[]).filter((c): c is string => typeof c === "string") : [];
+  const decision = str("decision");
+  const tone = decisionTone[decision] ?? "var(--secondary)";
+  return (
+    <div className="review-card" style={{ ["--review-tone" as string]: tone }}>
+      <div className="review-head">
+        <Symbol name="arrow.triangle.branch" size={12} />
+        <span className="t-body-strong">{L("Result review")}</span>
+        {str("subject") && <span className="mono-tiny secondary">{str("subject")}</span>}
+        <span style={{ flex: 1 }} />
+        <span className="review-decision t-label">{L(decisionLabel[decision] ?? decision)}{i.follows_rule === true ? " · " + L("as planned") : ""}</span>
+      </div>
+      <div className="review-grid t-meta">
+        <span className="secondary">{L("Expected")}</span><span>{str("expected")}</span>
+        <span className="secondary">{L("Observed")}</span><span>{str("observed")}</span>
+        {causes.length > 0 && <><span className="secondary">{L("Likely causes")}</span><ol className="review-causes">{causes.map((c, n) => <li key={n}>{c}</li>)}</ol></>}
+        {str("check") && <><span className="secondary">{L("How to tell")}</span><span>{str("check")}</span></>}
+        <span className="secondary">{L("Next")}</span><span>{str("next")}{str("alternative") ? ` (${str("alternative")})` : ""}</span>
+        <span className="secondary">{L("Objective")}</span><span className="secondary">{str("serves_objective")}</span>
+      </div>
     </div>
   );
 }

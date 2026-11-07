@@ -25,6 +25,9 @@ public struct Hypothesis: Codable, Sendable, Equatable, Identifiable {
     public var falsification: String
     public var status: String          // open | supported | refuted | inconclusive
     public var registeredAt: Date
+    /// What to do if the result is negative or inconclusive, written before the analysis (like an
+    /// adaptive trial's pre-specified rule): following it later is not a deviation.
+    public var onNegative: String? = nil
 }
 
 public struct PlanStep: Codable, Sendable, Equatable, Identifiable {
@@ -44,6 +47,8 @@ public struct PlanStep: Codable, Sendable, Equatable, Identifiable {
     public var parallel: Bool? = nil
     /// Steps whose results this one needs (nil: not said; [] declares it needs none).
     public var dependsOn: [String]? = nil
+    /// What to do if this step fails, written in advance (following it later is not a deviation).
+    public var onFailure: String? = nil
 }
 
 extension PlanStep {
@@ -60,6 +65,7 @@ extension PlanStep {
         note = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
         parallel = try c.decodeIfPresent(Bool.self, forKey: .parallel)
         dependsOn = try c.decodeIfPresent([String].self, forKey: .dependsOn)
+        onFailure = try c.decodeIfPresent(String.self, forKey: .onFailure)
     }
 }
 
@@ -77,6 +83,16 @@ public struct ResearchPlan: Codable, Sendable, Equatable {
     public var steps: [PlanStep]
     public var revisions: [PlanRevision]
     public var stage: ResearchStage
+    /// The task's objective in the user's own words, fixed when the first plan is set: every change of
+    /// course must still serve it, and only the user can change it.
+    public var objective: String? = nil
+    /// Looks back at results that went against the plan (`result_review`), oldest first.
+    public var reviews: [ResultReview]? = nil
+    /// A review the host is waiting for before analysis goes on.
+    public var pendingReview: PendingReview? = nil
+    /// Ledger position of the last review: failed runs before it do not count towards a stall (kept
+    /// across restarts, so old failures never trigger a review again).
+    public var reviewMark: Int? = nil
 
     public init(goal: String = "") {
         self.goal = goal
@@ -88,7 +104,7 @@ public struct ResearchPlan: Codable, Sendable, Equatable {
     }
 
     public var markdown: String {
-        var s = "**Goal:** \(goal)\n"
+        var s = (objective.map { "**Objective (fixed):** \($0.truncated(300))\n" } ?? "") + "**Goal:** \(goal)\n"
         if !hypotheses.isEmpty {
             s += "\n**Hypotheses**\n"
             for h in hypotheses { s += "- [\(h.status)] \(h.id): \(h.statement) — predicts: \(h.prediction); falsified if: \(h.falsification)\n" }
@@ -98,6 +114,9 @@ public struct ResearchPlan: Codable, Sendable, Equatable {
             let box = ["done": "☒", "in_progress": "◐", "failed": "✗", "skipped": "⊘"][st.status] ?? "☐"
             let deps = (st.dependsOn ?? []).isEmpty ? "" : "  ← " + st.dependsOn!.joined(separator: ", ")
             s += "\(box) \(st.id) \(st.title)\(st.checkpoint ? "  ⟡ checkpoint" : "")\(st.parallel == true ? "  ∥ parallel" : "")\(deps)\n"
+        }
+        if let rv = reviews, !rv.isEmpty {
+            s += "\n**Reviews**\n" + rv.map { "- \($0.id) \($0.subject.isEmpty ? "" : $0.subject + " ")→ \($0.decision.rawValue): \($0.next.truncated(120))" }.joined(separator: "\n") + "\n"
         }
         return s
     }
@@ -214,10 +233,16 @@ public final class ResearchProtocol: @unchecked Sendable {
         var changed: [String] = []
         for h in hypotheses {
             if let old = plan.hypotheses.first(where: { $0.id == h.id }),
-               old.prediction != h.prediction || old.falsification != h.falsification { changed.append(h.id) }
+               old.prediction != h.prediction || old.falsification != h.falsification || (old.onNegative ?? "") != (h.onNegative ?? "") { changed.append(h.id) }
         }
         for s in steps {
-            if let old = plan.steps.first(where: { $0.id == s.id }), old.criteria != s.criteria { changed.append(s.id) }
+            if let old = plan.steps.first(where: { $0.id == s.id }), old.criteria != s.criteria || (old.onFailure ?? "") != (s.onFailure ?? "") { changed.append(s.id) }
+        }
+        // A hypothesis newly marked refuted or inconclusive is a result to look back at before going on.
+        for h in hypotheses where ["refuted", "inconclusive"].contains(h.status) {
+            if let old = plan.hypotheses.first(where: { $0.id == h.id }), old.status != h.status {
+                requestReviewLocked(trigger: "\(h.id) marked \(h.status)", subject: h.id)
+            }
         }
         let isFirst = plan.steps.isEmpty
         if !isFirst && rationale.trimmingCharacters(in: .whitespacesAndNewlines).count < 15 {
@@ -232,6 +257,11 @@ public final class ResearchProtocol: @unchecked Sendable {
         for i in hs.indices {
             // Registration time is preserved across revisions; it is what makes pre-registration checkable.
             hs[i].registeredAt = plan.hypotheses.first { $0.id == hs[i].id }?.registeredAt ?? Date()
+        }
+        if (plan.objective ?? "").isEmpty {
+            // Inside the lock already: read the stored value, not the locking accessor (NSLock is not re-entrant).
+            let asked = _lastUserRequest.trimmingCharacters(in: .whitespacesAndNewlines)
+            plan.objective = (asked.isEmpty ? goal : asked).truncated(1200)
         }
         plan.goal = goal.isEmpty ? plan.goal : goal
         plan.background = background.isEmpty ? plan.background : background
@@ -257,9 +287,11 @@ public final class ResearchProtocol: @unchecked Sendable {
                 return (.refuse("Receipts \(bad.joined(separator: ", ")) do not exist or did not succeed. Cite successful receipts: \(ledger.all.suffix(8).filter(\.success).map(\.id).joined(separator: ", "))"), nil)
             }
         }
+        let was = plan.steps[i].status
         plan.steps[i].status = status
         plan.steps[i].evidence = evidence
         plan.steps[i].note = note
+        if status == "failed" && was != "failed" { requestReviewLocked(trigger: "\(id) failed", subject: id) }
         if status == "done", ledger.all.contains(where: { Self.analysisTools.contains($0.tool) }) { plan.stage = .analysis }
         else if status == "in_progress" { plan.stage = .execution }
         persist()
@@ -285,7 +317,128 @@ public final class ResearchProtocol: @unchecked Sendable {
 
     public func setHypothesisStatus(_ id: String, _ status: String) {
         lock.lock(); defer { lock.unlock() }
-        if let i = plan.hypotheses.firstIndex(where: { $0.id == id }) { plan.hypotheses[i].status = status; persist() }
+        if let i = plan.hypotheses.firstIndex(where: { $0.id == id }) {
+            let was = plan.hypotheses[i].status
+            plan.hypotheses[i].status = status
+            if ["refuted", "inconclusive"].contains(status) && was != status { requestReviewLocked(trigger: "\(id) marked \(status)", subject: id) }
+            persist()
+        }
+    }
+
+    // MARK: Changing course (result reviews)
+
+    /// The user's latest research request, in their words (set by the main agent each turn): it becomes
+    /// the fixed objective when the first plan is written.
+    private var _lastUserRequest = ""
+    public var lastUserRequest: String {
+        get { lock.withLock { _lastUserRequest } }
+        set { lock.withLock { _lastUserRequest = newValue } }
+    }
+
+    /// A user message as it arrives. The first one that asks for research work becomes the task's fixed
+    /// objective right away ("the original task decides"); later replies ("ok, go with option 2") never
+    /// replace it.
+    public func recordUserRequest(_ text: String, scale: TurnScale) {
+        lock.lock(); defer { lock.unlock() }
+        _lastUserRequest = text
+        guard (plan.objective ?? "").isEmpty, scale == .research || scale == .unclear else { return }
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        plan.objective = t.truncated(1200)
+        persist()
+    }
+    /// The review request not yet shown to the model (shown once, then the gate and context remind).
+    private var unannounced: PendingReview?
+
+    public var pendingReview: PendingReview? { lock.withLock { plan.pendingReview } }
+    public var reviews: [ResultReview] { lock.withLock { plan.reviews ?? [] } }
+    public var objective: String? { lock.withLock { plan.objective } }
+
+    /// Asks for a look back before analysis goes on (a result went against the plan).
+    public func requestReview(trigger: String, subject: String) {
+        lock.lock(); defer { lock.unlock() }
+        requestReviewLocked(trigger: trigger, subject: subject)
+        persist()
+    }
+
+    private func requestReviewLocked(trigger: String, subject: String) {
+        guard plan.pendingReview == nil, !plan.steps.isEmpty || !plan.hypotheses.isEmpty else { return }
+        let p = PendingReview(trigger: trigger, subject: subject)
+        plan.pendingReview = p
+        unannounced = p
+    }
+
+    /// Three failed analysis runs in a row since the last review: the route is stuck.
+    public func checkStall() {
+        lock.lock(); defer { lock.unlock() }
+        guard plan.pendingReview == nil else { return }
+        let runs = ledger.all.dropFirst(plan.reviewMark ?? 0).filter { Self.analysisTools.contains($0.tool) }
+        guard runs.count >= 3, runs.suffix(3).allSatisfy({ !$0.success }) else { return }
+        requestReviewLocked(trigger: "three failed runs in a row", subject: plan.steps.first { $0.status == "in_progress" }?.id ?? "")
+        persist()
+    }
+
+    /// The note the model sees once, right after the result that needs a review.
+    public func takeReviewNotice() -> String? {
+        lock.lock(); defer { lock.unlock() }
+        guard let p = unannounced else { return nil }
+        unannounced = nil
+        return "<result_review_needed>\(p.trigger). Before more analysis, look back with `result_review`: expected vs observed, "
+            + "likely causes, the check that tells them apart, and the decision (repair · adjust · pivot · stop · ask).</result_review_needed>"
+    }
+
+    /// Tools that wait for a pending review: analysis, file writes, workers and claims.
+    public static let gatedByReview: Set<String> = gatedBeforePlan.union(["task", "dispatch", "claim_finding"])
+
+    public func requireReview(tool: String, input: JSON) -> GateDecision {
+        guard let p = pendingReview, Self.gatedByReview.contains(tool) else { return .allow }
+        if tool == "bash", let cmd = input.str("command") ?? input.str("cmd"), Self.isReadOnlyShell(cmd) { return .allow }
+        return .refuse("Result review first (\(p.trigger)): record it with `result_review` — expected vs observed, likely causes, "
+            + "how to tell them apart, and the decision — before running more analysis, writing files or starting workers. "
+            + "Reading and read-only shell stay open.")
+    }
+
+    /// Records a review. The host checks what it can: the receipts exist, the reasoning is filled in,
+    /// a repair is not tried a fourth time on the same thing, and a pivot names where it goes.
+    public func addReview(_ r: ResultReview, ideaExists: (String) -> Bool) -> (GateDecision, ResultReview?) {
+        lock.lock(); defer { lock.unlock() }
+        var r = r
+        let missing = [("expected", r.expected), ("observed", r.observed), ("serves_objective", r.servesObjective), ("next", r.next)]
+            .filter { $0.1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.map(\.0)
+        if !missing.isEmpty { return (.refuse("A review needs: \(missing.joined(separator: ", "))."), nil) }
+        if r.causes.isEmpty && r.decision != .stop { return (.refuse("Name the likely causes, most likely first."), nil) }
+        let bad = r.receipts.filter { ledger.receipt($0) == nil }
+        if !bad.isEmpty { return (.refuse("Receipts \(bad.joined(separator: ", ")) do not exist; cite the runs that show the result."), nil) }
+        let past = plan.reviews ?? []
+        // Bounded repair (AIDE's max_debug_depth): three per item, and three for unnamed ones, so a stuck
+        // route cannot be "repaired" forever.
+        if r.decision == .repair, past.filter({ $0.subject == r.subject && $0.decision == .repair }).count >= 3 {
+            return (.refuse("\(r.subject.isEmpty ? "This" : r.subject) has been repaired three times already. Escalate: adjust, pivot, stop or ask the user."), nil)
+        }
+        if r.decision == .pivot {
+            let alt = (r.alternative ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if alt.isEmpty { return (.refuse("A pivot names where it goes: an idea id from the pool (`idea` list) or \"brainstorm\"."), nil) }
+            if alt != "brainstorm" && !ideaExists(alt) { return (.refuse("No live idea \(alt) in the pool. Name another, or \"brainstorm\"."), nil) }
+        }
+        // A decision is "by the rule" only when the subject has a rule written before.
+        if r.followsRule {
+            let rule = plan.hypotheses.first { $0.id == r.subject }?.onNegative ?? plan.steps.first { $0.id == r.subject }?.onFailure
+            if (rule ?? "").isEmpty { r.followsRule = false }
+        }
+        r.id = "RV\(past.count + 1)"
+        r.at = Date()
+        if r.trigger.isEmpty { r.trigger = plan.pendingReview?.trigger ?? "review" }
+        plan.reviews = past + [r]
+        plan.pendingReview = nil
+        unannounced = nil
+        plan.reviewMark = ledger.count
+        persist()
+        return (.allow, r)
+    }
+
+    /// Changes the task's objective; only with the user's own words (checked by the caller).
+    public func changeObjective(_ text: String) {
+        lock.lock(); plan.objective = text.truncated(1200); persist(); lock.unlock()
     }
 
     public func restore(_ p: ResearchPlan) { lock.lock(); plan = p; persist(); lock.unlock() }

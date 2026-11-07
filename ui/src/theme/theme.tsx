@@ -72,7 +72,7 @@ export function agentName(id: string): string {
 }
 
 const toolNames: Record<string, string> = {
-  bash: "Terminal", python: "Python", read_file: "Read file", write_file: "Write file", edit_file: "Edit file",
+  bash: "Terminal", python: "Python", read_file: "Read file", write_file: "Write file", edit_file: "Edit file", result_review: "Result review",
   glob: "Find files", grep: "Search in files", web_search: "Web search", web_fetch: "Open web page",
   literature_search: "Literature search", paper_fetch: "Add paper", paper_read: "Read paper", paper_code_links: "Paper–code links",
   paper_graph: "Citation graph", library_search: "Search library", bio_db: "Database", chem_lookup: "Chemical lookup",
@@ -132,6 +132,7 @@ export function toolIcon(n: string): string {
     case "bio_db": return "cylinder.split.1x2";
     case "verify_citation": return "checkmark.seal";
     case "update_plan": case "todo_write": case "goal": return "list.bullet.clipboard";
+    case "result_review": return "arrow.triangle.branch";
     case "claim_finding": return "flag";
     case "ask_user": return "questionmark.bubble";
     case "brainstorm": case "idea": case "ideation_seeds": return "lightbulb";

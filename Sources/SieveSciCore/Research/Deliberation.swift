@@ -211,6 +211,7 @@ public final class Deliberation: @unchecked Sendable {
             let status: Claim.Status = v == "verified" ? .verified : (v == "refuted" ? .refuted : .inconclusive)
             services.claims.hostSet(cid, status: status, verdict: "after deliberation \(tid): " + reason)
             services.emit(.claimsChanged(services.claims.snapshot))
+            if status != .verified { services.research.requestReview(trigger: "claim \(cid) \(v) after deliberation", subject: cid) }
         }
         switch pos {
         case "concede":

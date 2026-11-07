@@ -81,6 +81,19 @@ public final class Supervisor: @unchecked Sendable {
             signals.append(IntegritySignal(kind: .ungrounded, severity: 3,
                                            detail: "substantive answer given before web and literature searches were run", location: nil))
         }
+        // A report that leaves out what did not work: the task has reviews, the reply reads like a report,
+        // and none of the reviewed items or a failure is mentioned. Selective reporting is cheating too.
+        let reviews = services.research.reviews
+        if !reviews.isEmpty, text.count > 1500 {
+            let lower = text.lowercased()
+            let mentions = reviews.contains { !$0.subject.isEmpty && text.contains($0.subject) }
+                || ["did not work", "didn't work", "failed", "negative", "refuted", "inconclusive", "未成功", "失败", "没有成功", "否定", "不成立", "负结果"]
+                    .contains { lower.contains($0) }
+            if !mentions {
+                signals.append(IntegritySignal(kind: .omission, severity: 3,
+                    detail: "the report does not mention the results that went against the plan (\(reviews.map(\.id).joined(separator: ", ")))", location: nil))
+            }
+        }
         add(signals)
 
         lock.lock()
@@ -214,7 +227,17 @@ public final class Supervisor: @unchecked Sendable {
                                                              "step": .string(step?.id ?? ""), "checker_agent": .string(checker.id)])
         services.emit(.supervisorReview(kind: kind, verdict: v, body: reply))
         learn(fromReview: verdict, verdict: v, kind: kind, step: step)
-        if v == "pass" { return nil }
+        // The reviewer's view of the route (checkpoints): a pivot or stop, or a block, asks for a result review.
+        let direction = verdict?.str("direction") ?? "continue"
+        let directionLine = direction == "continue" ? "" : "Reviewer's direction: \(direction) — \(verdict?.str("direction_reason") ?? "")"
+        if kind == "checkpoint", ["pivot", "stop"].contains(direction) {
+            services.research.requestReview(trigger: "the reviewer suggests \(direction) after \(step?.id ?? "the checkpoint")", subject: step?.id ?? "")
+        } else if kind == "checkpoint", v == "block" {
+            services.research.requestReview(trigger: "the reviewer blocked \(step?.id ?? "the checkpoint")", subject: step?.id ?? "")
+        }
+        if v == "pass" {
+            return directionLine.isEmpty ? nil : "<supervisor_review kind=\"\(kind)\" verdict=\"pass\">\n\(directionLine)\n</supervisor_review>"
+        }
         let rawIssues = verdict?["issues"]?.arrayValue ?? []
         let issueTexts = rawIssues.map { "[\($0.str("severity") ?? "?")] \($0.str("what") ?? "") (\($0.str("evidence") ?? ""))" }
         let questions = (verdict?["questions"]?.arrayValue ?? []).compactMap(\.stringValue)
@@ -226,6 +249,7 @@ public final class Supervisor: @unchecked Sendable {
         <supervisor_review id="\(tid)" kind="\(kind)" verdict="\(v)">
         \(numbered.isEmpty ? reply.truncated(4000) : "Issues:\n" + numbered.joined(separator: "\n"))
         \(actions.isEmpty ? "" : "Required actions:\n" + actions.joined(separator: "\n"))
+        \(directionLine)
         \(v == "block" ? "Do not continue the analysis or state conclusions until these are resolved." : "")
         \(services.deliberation.instructions(tid))
         </supervisor_review>
@@ -294,6 +318,8 @@ public final class Supervisor: @unchecked Sendable {
         let status: Claim.Status = verdict == "verified" ? .verified : (verdict == "refuted" ? .refuted : .inconclusive)
         let vReceipts = services.ledger.since(mark).filter { $0.role == .verifier }.map(\.id)
         services.claims.hostSet(claim.id, status: status, verdict: (j?.str("reasoning") ?? reply.truncated(2000)) + blindNote, receipts: vReceipts)
+        // A claim that did not hold up is a result to look back at before going on.
+        if status != .verified { services.research.requestReview(trigger: "claim \(claim.id) \(verdict)", subject: claim.id) }
         services.emit(.claimsChanged(services.claims.snapshot))
         services.log("verification", actor: "verifier", ["claim": .string(claim.id), "verdict": .string(verdict), "blinding_enforced": .bool(enforced),
                                                          "report": j ?? .string(reply.truncated(8000)), "receipts": .array(vReceipts.map { .string($0) })])

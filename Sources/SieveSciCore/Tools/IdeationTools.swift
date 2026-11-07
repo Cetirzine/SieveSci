@@ -91,7 +91,8 @@ struct BrainstormTool: Tool {
                        "goal": Schema.stringEnum("start: novel (novelty required) or proven (what works best)", ["novel", "proven"]),
                        "stage": Schema.stringEnum("stage: the step you are entering", BrainstormState.allStages),
                        "note": Schema.string("stage: one line the user sees"),
-                       "summary": Schema.string("end: what came out, in two lines")], required: ["action"])
+                       "summary": Schema.string("end: what came out, in two lines"),
+                       "after_review": Schema.string("start: the result review (RV…) whose pivot asked for this focused re-brainstorm")], required: ["action"])
     }
     func effect(for input: JSON) -> ToolEffect { .readOnly }
     func runsConcurrently(for input: JSON) -> Bool { false }   // changes session state; runs in order
@@ -138,7 +139,15 @@ struct BrainstormTool: Tool {
             let topic = (input.str("topic") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !topic.isEmpty else { return .error("Give the brainstorm a topic.") }
             let goal = input.str("goal").flatMap(BrainstormState.Goal.init(rawValue:))
-            switch led.start(topic: topic, reason: input.str("reason") ?? "", goal: goal) {
+            // A focused re-brainstorm follows a review that chose to pivot to new ideas.
+            var after: String?
+            if let rv = input.str("after_review"), !rv.isEmpty {
+                guard let r = ctx.services.research.reviews.first(where: { $0.id == rv }), r.decision == .pivot, r.alternative == "brainstorm" else {
+                    return .error("\(rv) is not a review that chose to pivot to a brainstorm.")
+                }
+                after = rv
+            }
+            switch led.start(topic: topic, reason: input.str("reason") ?? "", goal: goal, afterReview: after) {
             case .failure(let r): return .error(r.message)
             case .success(let st):
                 ctx.services.log("brainstorm", actor: st.trigger == .auto ? "agent" : "user",

@@ -114,7 +114,18 @@ export function PlanPanel() {
         )}
       </div>
       {!p.goal ? <div className="t-body secondary">{L("No plan yet. The agent searches first, then writes a plan with hypotheses and checkpoints.")}</div> : <>
+        {p.objective && (
+          <div className="stack-xxs" title={L("The user's request. Every change of course must still serve it; only the user changes it.")}>
+            <span className="t-label secondary">{L("Objective (fixed)")}</span>
+            <span className="t-meta">{p.objective}</span>
+          </div>
+        )}
         <div className="plan-goal">{p.goal}</div>
+        {p.pendingReview && (
+          <div className="plan-review-pending t-meta">
+            <Symbol name="arrow.triangle.branch" size={11} /> {L("Result review needed before more analysis:")} {p.pendingReview.trigger}
+          </div>
+        )}
         {p.hypotheses.length > 0 && (
           <div className="stack-m">
             <SectionLabel>{L("Hypotheses")}</SectionLabel>
@@ -123,6 +134,7 @@ export function PlanPanel() {
                 <span className="hstack-xs"><span className="mono-tiny secondary">{h.id}</span><Chip text={L(h.status)} tint="var(--accent)" /></span>
                 <span className="t-body">{h.statement}</span>
                 <span className="t-meta secondary">{L("falsified if:")} {h.falsification}</span>
+                {h.onNegative && <span className="t-meta secondary">{L("if negative:")} {h.onNegative}</span>}
               </div>
             ))}
           </div>
@@ -140,11 +152,32 @@ export function PlanPanel() {
                     {st.checkpoint && <Chip text={L("checkpoint")} tint="var(--accent)" icon="flag.fill" />}
                   </span>
                   {st.evidence.length > 0 && <span className="mono-tiny tertiary">{L("evidence:")} {st.evidence.join(", ")}</span>}
+                  {st.onFailure && <span className="t-caption tertiary">{L("if it fails:")} {st.onFailure}</span>}
                 </span>
               </div>
             );
           })}
         </div>
+        {(p.reviews?.length ?? 0) > 0 && (
+          <div className="stack-s">
+            <SectionLabel>{L("Result reviews")}</SectionLabel>
+            {p.reviews!.map((r) => (
+              <div key={r.id} className="plan-step">
+                <span className="gutter secondary"><Symbol name="arrow.triangle.branch" size={11} /></span>
+                <span className="stack-xxs">
+                  <span className="hstack-xs">
+                    <span className="mono-tiny secondary">{r.id}{r.subject ? " · " + r.subject : ""}</span>
+                    <Chip text={L(r.decision)} tint={r.decision === "stop" ? "var(--bad)" : r.decision === "pivot" ? "var(--warn)" : "var(--accent)"} />
+                    {r.followsRule && <span className="t-caption tertiary">{L("as planned")}</span>}
+                  </span>
+                  <span className="t-meta">{r.observed}</span>
+                  {r.causes[0] && <span className="t-caption secondary">{L("Likely cause:")} {r.causes[0]}</span>}
+                  <span className="t-caption secondary">{L("Next:")} {r.next}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         {(p.revisions?.length ?? 0) > 1 && (
           <div className="stack-s">
             <SectionLabel>{L("Revisions")}</SectionLabel>

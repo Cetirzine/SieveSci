@@ -85,6 +85,9 @@ public struct BrainstormState: Codable, Sendable, Equatable, Identifiable {
     public var evolveRounds: Int?
     /// Optional so brainstorms saved by earlier versions (always novelty-first) still decode.
     public var goal: Goal?
+    /// A focused brainstorm after a result review that chose to pivot (its id): it builds on what the
+    /// review learned and on the task's searches, so it needs fewer ideas and no new grounding round.
+    public var afterReview: String? = nil
 
     /// This brainstorm's stage order.
     public var order: [String] { goal == .proven ? Self.provenStages : Self.stages }
@@ -128,9 +131,11 @@ public final class IdeaLedger: @unchecked Sendable {
 
     // MARK: Episodes
 
-    public func start(topic: String, reason: String, goal: BrainstormState.Goal? = nil) -> Result<BrainstormState, GateRefusal> {
+    public func start(topic: String, reason: String, goal: BrainstormState.Goal? = nil, afterReview: String? = nil) -> Result<BrainstormState, GateRefusal> {
         lock.lock(); defer { lock.unlock() }
         if let c = current, c.endedAt == nil { return .success(c) }
+        // A focused re-brainstorm keeps the earlier brainstorm's goal unless told otherwise.
+        let goal = goal ?? (afterReview != nil ? current?.goal : nil)
         let trigger = requested ?? .auto
         if trigger == .auto && !autoAllowed {
             return .failure(GateRefusal("Autonomous brainstorming is turned off in the user's settings. Continue without it; "
@@ -147,9 +152,11 @@ public final class IdeaLedger: @unchecked Sendable {
         let s = BrainstormState(id: "B" + String(UUID().uuidString.prefix(6)).lowercased(), topic: topic, reason: reason, trigger: trigger,
                                 stage: "ground", stageNote: "", stagesDone: [], startedAt: Date(), endedAt: nil, summary: nil,
                                 wrapUpRequested: false, stopped: false, goal: goal)
-        current = s
+        var focused = s
+        focused.afterReview = afterReview
+        current = focused
         persist()
-        return .success(s)
+        return .success(focused)
     }
 
     public func stage(_ name: String, note: String) -> BrainstormState? {
@@ -203,6 +210,8 @@ public final class IdeaLedger: @unchecked Sendable {
 
     /// Live ideas a brainstorm needs before it may converge (the skill asks for 12–24; this is the floor).
     public static let minIdeasToConverge = 6
+    /// A focused re-brainstorm after a review: fewer, targeted ideas (the earlier pool is still there).
+    public static let minIdeasFocused = 4
     /// Evolve → rank rounds allowed after the first pass.
     public static let maxEvolveRounds = 2
     /// Stages that may be passed over on the way to `report`.
@@ -264,9 +273,12 @@ public final class IdeaLedger: @unchecked Sendable {
             switch st {
             case "ground" where !grounded:
                 return "Grounding is not done: run `web_search` and `literature_search`, fetch the papers that matter and write the evidence brief before generating ideas."
-            case "diverge" where live.count < Self.minIdeasToConverge:
-                return "Only \(live.count) live ideas recorded in this brainstorm; diverge needs at least \(Self.minIdeasToConverge) (aim for 12–24) "
-                    + "from several operators, recorded with `idea` add."
+            case "diverge" where live.count < (c.afterReview == nil ? Self.minIdeasToConverge : Self.minIdeasFocused):
+                return c.afterReview == nil
+                    ? "Only \(live.count) live ideas recorded in this brainstorm; diverge needs at least \(Self.minIdeasToConverge) (aim for 12–24) "
+                        + "from several operators, recorded with `idea` add."
+                    : "Only \(live.count) live ideas in this focused brainstorm; it needs at least \(Self.minIdeasFocused), each built on what review "
+                        + "\(c.afterReview!) learned (invert the assumption that failed; transfer from an analogous system)."
             case "rank" where !live.contains(where: { $0.rank != nil }):
                 return "Rank the live ideas yourself (compare them pairwise on grounding, mechanistic specificity and testability) and record the order with `idea` rank."
             case "novelty" where checked.count < needChecked:

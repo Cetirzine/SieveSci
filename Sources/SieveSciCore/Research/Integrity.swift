@@ -14,6 +14,7 @@ public struct IntegritySignal: Codable, Sendable, Equatable {
         case breakthrough      // strong-claim language → independent verification
         case checkpoint        // plan checkpoint reached
         case ideation          // an idea is about to become a hypothesis: review its novelty check
+        case omission          // a report leaves out results that went against the plan (the reviews)
     }
     public var kind: Kind
     public var severity: Int           // 1 info, 2 warn, 3 high

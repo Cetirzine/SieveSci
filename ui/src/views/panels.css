@@ -87,3 +87,4 @@
 .job-tool.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .job-tool.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
 .job-tool.danger:hover { background: color-mix(in srgb, var(--bad) 10%, transparent); }
+.plan-review-pending { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-left: 2px solid var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); color: var(--warn); }

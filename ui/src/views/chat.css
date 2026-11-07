@@ -222,3 +222,11 @@ span.sandbox-menu.t-meta { display: inline-flex; align-items: center; gap: 4px; 
 /* A web address in a tool's output (a database record's page). */
 .output-link { color: var(--accent); text-decoration: none; }
 .output-link:hover { text-decoration: underline; }
+
+/* A result review: a change of course, shown in the open. */
+.review-card { margin: 6px 0; padding: 10px 12px; border: 1px solid var(--rule); border-left: 3px solid var(--review-tone); background: var(--surface); }
+.review-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--review-tone); }
+.review-head .t-body-strong { color: var(--text); }
+.review-decision { color: var(--review-tone); text-transform: uppercase; letter-spacing: 0.04em; }
+.review-grid { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; user-select: text; }
+.review-causes { margin: 0; padding-left: 18px; }
