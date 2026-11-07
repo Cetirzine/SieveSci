@@ -68,8 +68,21 @@ export function IconButton({ symbol, label, className = "", ...rest }: { symbol:
 export function ActionButton({ kind = "secondary", width, fill, className = "", children, ...rest }:
   { kind?: "primary" | "secondary" | "destructive"; width?: "column" | number; fill?: boolean } & ButtonHTMLAttributes<HTMLButtonElement>) {
   const minWidth = width === "column" ? "var(--c-button-width)" : width;
+  // A click whose handler returns a promise (saving, checking, installing, fetching) shows a spinner and
+  // holds the button until it settles: feedback that something is happening, and no double submits.
+  const [busy, setBusy] = useState(false);
+  const { onClick, disabled, ...others } = rest;
   return (
-    <button type="button" className={`action-button ${kind} ${fill ? "fill" : ""} ${className}`} style={{ minWidth, ...rest.style }} {...rest}>
+    <button type="button" className={`action-button ${kind} ${fill ? "fill" : ""} ${busy ? "busy" : ""} ${className}`} style={{ minWidth, ...rest.style }} {...others}
+            disabled={disabled || busy} aria-busy={busy || undefined}
+            onClick={(e) => {
+              const r = onClick?.(e) as unknown;
+              if (r && typeof (r as Promise<unknown>).then === "function") {
+                setBusy(true);
+                void (r as Promise<unknown>).finally(() => setBusy(false));
+              }
+            }}>
+      {busy && <span className="mini-spinner" aria-hidden />}
       <span className="action-label">{children}</span>
     </button>
   );
@@ -85,7 +98,10 @@ export function SpecField({ title, mono, width, multiline, value, onChange, ...r
   { title?: string; mono?: boolean; width?: number; multiline?: boolean; value: string; onChange: (v: string) => void } & Omit<InputHTMLAttributes<HTMLInputElement>, "onChange" | "value">) {
   const field = multiline
     ? <textarea className={`spec-field multiline ${mono ? "mono" : ""}`} rows={3} value={value} placeholder={rest.placeholder} onChange={(e) => onChange(e.target.value)} />
-    : <input className={`spec-field ${mono ? "mono" : ""}`} value={value} onChange={(e) => onChange(e.target.value)} {...rest} />;
+    : <input className={`spec-field ${mono ? "mono" : ""}`} value={value} onChange={(e) => onChange(e.target.value)} {...rest}
+             // Return while an input method composes (pinyin, kana …) confirms the candidate; it must not
+             // reach the field's own Enter handler (add, save, rename) with half-typed text.
+             onKeyDown={(e) => { if (e.nativeEvent.isComposing || e.keyCode === 229) return; rest.onKeyDown?.(e); }} />;
   if (!title) return <span style={{ width, display: "block" }}>{field}</span>;
   return (
     <div className="spec-row">
@@ -163,15 +179,16 @@ export function ContextMenu({ at, items, close }: { at: { x: number; y: number }
     document.addEventListener("keydown", esc);
     return () => { document.removeEventListener("mousedown", off); document.removeEventListener("keydown", esc); };
   }, [close]);
-  return (
+  // On the page itself (a portal): inside a transformed or animated row, "fixed" would be relative to
+  // that row and the menu would land in the wrong place or under later content.
+  return createPortal(
     <Popup ref={ref} className="menu-list context-menu" role="menu" style={{ left: at.x, top: at.y }}>
       {items.map((it, i) => it === null ? <div key={i} className="menu-divider" /> : (
         <button key={i} type="button" role="menuitem" className={`menu-item ${it.destructive ? "c-bad" : ""}`} onClick={() => { close(); it.run(); }}>
           <span className="menu-check" />{it.label}
         </button>
       ))}
-    </Popup>
-  );
+    </Popup>, document.body);
 }
 
 export function Menu({ label, items, className = "", align = "left", title }:

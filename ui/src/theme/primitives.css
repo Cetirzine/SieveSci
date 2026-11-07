@@ -147,3 +147,8 @@
   .chip { padding: 4px 5px; }
   .menu-item { padding: 7px 8px; }
 }
+
+/* A button whose work is under way (ActionButton with an async handler). */
+.action-button.busy { cursor: progress; gap: 6px; }
+.action-button.busy .action-label { opacity: 0.7; }
+.action-button .mini-spinner { width: 10px; height: 10px; flex: none; }

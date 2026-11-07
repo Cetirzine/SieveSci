@@ -98,7 +98,7 @@ export function AskPrompt({ request }: { request: AskRequest }) {
                 </button>
                 <span style={{ flex: 1 }}><SpecField value={other[q.id] ?? ""} placeholder={q.placeholder ?? L("Your own answer")}
                   onChange={(v) => { setOther({ ...other, [q.id]: v }); if (v && !otherOn[q.id]) { setOtherOn({ ...otherOn, [q.id]: true }); if (q.kind === "single") setPicks({ ...picks, [q.id]: [] }); } }}
-                  onKeyDown={(e) => { if (e.key === "Enter") advance(); }} /></span>
+                  onKeyDown={(e) => { if (e.nativeEvent.isComposing || e.keyCode === 229) return; if (e.key === "Enter") advance(); }} /></span>
               </div>
             )}
           </>

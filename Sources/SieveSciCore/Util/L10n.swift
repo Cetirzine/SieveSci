@@ -56,10 +56,16 @@ public enum L10n {
     }
     static let suite = "app.sievesci.SieveSci"
 
+    /// What "follow the system" means, as the front end resolved it (its web view reads the user's
+    /// languages reliably; Windows' locale API can report English under a Chinese interface, which left
+    /// the engine's notices and statuses in English).
+    nonisolated(unsafe) public static var systemLanguage: String?
+
     /// The concrete language in effect, e.g. "zh-Hans".
     public static var resolved: String {
         if language != .system { return language.rawValue }
         let available = Language.allCases.filter { $0 != .system }.map(\.rawValue)
+        if let s = systemLanguage, available.contains(s) { return s }
         return Bundle.preferredLocalizations(from: available, forPreferences: Locale.preferredLanguages).first ?? "en"
     }
 

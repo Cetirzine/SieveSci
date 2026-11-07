@@ -2,7 +2,7 @@
 // `sievesci serve` through Tauri (desktop) or the dev bridge (browser).
 import { useEffect } from "react";
 import { inTauri, ServeClient, socketTransport, tauriTransport, type Transport } from "./serve";
-import { loadLanguage, setLanguage, type Language } from "./i18n";
+import { loadLanguage, resolvedLanguage, setLanguage, type Language } from "./i18n";
 import { deliver, getState, setState, taskStatus, useApp } from "./app/model";
 import * as A from "./app/actions";
 import { demoScene, loadDemo } from "./app/demo";
@@ -158,7 +158,9 @@ export default function App() {
         const choice = (info.languageChoice && info.languageChoice !== "system" ? info.languageChoice : local ?? "system") as Language;
         await loadLanguage(choice);
         setState({ version: info.version, languageChoice: choice, ...(info.platform ? { platform: info.platform } : {}), sandbox: info.sandbox ?? info.platform !== "windows" });
-        if (local && local !== info.languageChoice) void c.call("language.set", { language: local });
+        // Always tell serve which language "follow the system" came to here, so its notices and statuses
+        // match the interface (Windows' own locale API may say English under a Chinese interface).
+        void c.call("language.set", { language: choice, systemLanguage: resolvedLanguage() });
         await A.refreshConfig();
         void A.loadCommands();
         startAutomaticChecks();

@@ -140,6 +140,7 @@ public final class ServeServer: @unchecked Sendable {
                 throw RPCError(code: -32602, message: "language must be one of " + L10n.Language.allCases.map(\.rawValue).joined(separator: ", "))
             }
             L10n.language = l
+            if let s = p.str("systemLanguage") { L10n.systemLanguage = s }
             return ["language": .string(L10n.resolved), "languageChoice": .string(l.rawValue)]
 
         case "config.get": return configPayload()
