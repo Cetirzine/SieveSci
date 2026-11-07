@@ -1,6 +1,6 @@
 [package]
 name = "sievesci-desktop"
-version = "0.2.5"
+version = "0.2.6"
 description = "SieveSci desktop shell: a window around `sievesci serve`"
 edition = "2021"
 publish = false
