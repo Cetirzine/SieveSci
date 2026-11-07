@@ -1147,3 +1147,7 @@
 "stop" = "停止";
 "Report leaves out what did not work" = "報告漏寫了沒成功的部分";
 "The connection failed (%@); going on in %@ s (%@ of %@)." = "連線失敗（%@）；%@ 秒後繼續（第 %@ / %@ 次）。";
+"Your decisions" = "你的決定";
+"Brainstorm outcome" = "頭腦風暴結論";
+"Show %d earlier" = "顯示更早的 %d 條";
+"What you decided along the way. The agent sees it at every step, also after the context is compacted." = "你一路做出的決定。智能體每一步都看得到，上下文壓縮後也不會丟。";

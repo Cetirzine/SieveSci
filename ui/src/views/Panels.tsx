@@ -4,7 +4,7 @@
 // refetched when an event says it may have changed (`panelTick`).
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { L, L10n } from "../i18n";
-import { useApp, getState, setState, onPlatform, type AgentCard, type FileDiff, type InspectorTab, type JobState } from "../app/model";
+import { useApp, getState, setState, onPlatform, type AgentCard, type FileDiff, type InspectorTab, type JobState, type UserDecision } from "../app/model";
 import * as A from "../app/actions";
 import type { JsonObject } from "../serve";
 import { ActionButton, Box, Chip, EqualWidthButtons, Menu, Popup, SectionLabel, Segmented } from "../theme/primitives";
@@ -113,13 +113,8 @@ export function PlanPanel() {
           </span>
         )}
       </div>
+      <TaskAnchor objective={p.objective} decisions={p.decisions ?? []} />
       {!p.goal ? <div className="t-body secondary">{L("No plan yet. The agent searches first, then writes a plan with hypotheses and checkpoints.")}</div> : <>
-        {p.objective && (
-          <div className="stack-xxs" title={L("The user's request. Every change of course must still serve it; only the user changes it.")}>
-            <span className="t-label secondary">{L("Objective (fixed)")}</span>
-            <span className="t-meta">{p.objective}</span>
-          </div>
-        )}
         <div className="plan-goal">{p.goal}</div>
         {p.pendingReview && (
           <div className="plan-review-pending t-meta">
@@ -193,6 +188,57 @@ export function PlanPanel() {
     </div>
   );
 }
+
+/** What the task answers to, in the user's own words: the fixed objective and what they decided since. A solid
+ *  frame in the tint of the user's chat bubble — settled, and theirs (DESIGN_LANGUAGE.md §2). Shown before any
+ *  plan exists, since the agent keeps both in view from the first message on. */
+function TaskAnchor({ objective, decisions }: { objective?: string; decisions: UserDecision[] }) {
+  const [all, setAll] = useState(false);
+  if (!objective && decisions.length === 0) return null;
+  const shownFrom = all ? 0 : Math.max(0, decisions.length - ANCHOR_RECENT);
+  const shown = decisions.slice(shownFrom);
+  const day = (at: string) => {
+    const d = new Date(at);
+    return isNaN(d.getTime()) ? "" : `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  return (
+    <section className="anchor">
+      {objective && (
+        <div className="anchor-part" title={L("The user's request. Every change of course must still serve it; only the user changes it.")}>
+          <span className="anchor-head"><Symbol name="flag.fill" size={10} strokeWidth={2.2} />{L("Objective (fixed)")}</span>
+          <span className="anchor-objective selectable clip-6">{objective}</span>
+        </div>
+      )}
+      {decisions.length > 0 && (
+        <div className="anchor-part" title={L("What you decided along the way. The agent sees it at every step, also after the context is compacted.")}>
+          <span className="anchor-head"><Symbol name="checkmark.circle.fill" size={10} strokeWidth={2.2} />{L("Your decisions")}<span className="anchor-count">{decisions.length}</span></span>
+          {shownFrom > 0 && (
+            <button className="anchor-more" onClick={() => setAll(true)}>{L10n.f("Show %d earlier", shownFrom)}</button>
+          )}
+          <ol className="anchor-decisions">
+            {shown.map((d, i) => (
+              <li key={shownFrom + i} className="anchor-decision">
+                <span className="anchor-index">{String(shownFrom + i + 1).padStart(2, "0")}</span>
+                <span className="stack-xxs">
+                  <span className="anchor-topic">
+                    <span className="t-meta-strong">{d.topic.toLowerCase() === "brainstorm outcome" ? L("Brainstorm outcome") : d.topic}</span>
+                    <span className="anchor-day">{day(d.at)}</span>
+                  </span>
+                  <span className="t-meta selectable clip-3" title={d.answer}>{d.answer}</span>
+                  {(d.ideas?.length ?? 0) > 0 && <span className="hstack-xs">{d.ideas!.map((id) => <Chip key={id} text={id} tint="var(--accent)" />)}</span>}
+                </span>
+              </li>
+            ))}
+          </ol>
+          {all && decisions.length > ANCHOR_RECENT && <button className="anchor-more" onClick={() => setAll(false)}>{L("Show fewer")}</button>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Decisions listed before the rest fold away (the agent's context shows the same number). */
+const ANCHOR_RECENT = 5;
 
 // MARK: Claims
 

@@ -1147,3 +1147,7 @@
 "stop" = "arrêter";
 "Report leaves out what did not work" = "Le rapport omet ce qui n’a pas marché";
 "The connection failed (%@); going on in %@ s (%@ of %@)." = "La connexion a échoué (%@) ; reprise dans %@ s (%@ sur %@).";
+"Your decisions" = "Vos décisions";
+"Brainstorm outcome" = "Issue du brainstorming";
+"Show %d earlier" = "Afficher %d plus anciennes";
+"What you decided along the way. The agent sees it at every step, also after the context is compacted." = "Ce que vous avez décidé en chemin. L'agent le voit à chaque étape, même après le compactage du contexte.";

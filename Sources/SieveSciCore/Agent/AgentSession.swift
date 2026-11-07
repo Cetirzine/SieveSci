@@ -136,7 +136,11 @@ public final class AgentSession: @unchecked Sendable {
             if scale != .chat && scale != .research && !services.research.snapshot.steps.isEmpty { scale = .research }
             services.research.turnScale = scale
             // The first research request becomes the task's fixed objective, in the user's own words.
-            if !text.hasPrefix("<"), !text.hasPrefix("/") { services.research.recordUserRequest(text, scale: scale) }
+            if !text.hasPrefix("<"), !text.hasPrefix("/") {
+                let had = services.research.objective
+                services.research.recordUserRequest(text, scale: scale)
+                if services.research.objective != had { services.emit(.planChanged(services.research.snapshot)) }
+            }
         }
         turnToolCalls.mutate { $0 = 0 }
         delegationHinted.mutate { $0 = [] }

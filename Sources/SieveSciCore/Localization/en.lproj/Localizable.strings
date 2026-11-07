@@ -1147,3 +1147,7 @@
 "stop" = "stop";
 "Report leaves out what did not work" = "Report leaves out what did not work";
 "The connection failed (%@); going on in %@ s (%@ of %@)." = "The connection failed (%@); going on in %@ s (%@ of %@).";
+"Your decisions" = "Your decisions";
+"Brainstorm outcome" = "Brainstorm outcome";
+"Show %d earlier" = "Show %d earlier";
+"What you decided along the way. The agent sees it at every step, also after the context is compacted." = "What you decided along the way. The agent sees it at every step, also after the context is compacted.";

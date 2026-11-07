@@ -112,6 +112,12 @@ export function loadDemo(scene: string) {
     demoAsk: { tool: "bash", summary: "Rscript analysis/stats.R --site EMX1 --test fisher", input: {}, effect: "executes", rememberPattern: "bash(Rscript analysis/stats.R:*)" },
     plan: {
       goal: "Test whether SpCas9-HF1 lowers off-target editing at EMX1 without losing on-target activity.", stage: "verification",
+      objective: "Does the high-fidelity SpCas9-HF1 variant cut fewer off-target sites at EMX1 than wild-type, and does it keep on-target editing? Use the GUIDE-seq data in data/emx1.",
+      decisions: [
+        { at: "2026-11-06T09:12:00Z", topic: "Scope", answer: "EMX1 only; the other loci can wait." },
+        { at: "2026-11-06T09:40:00Z", topic: "brainstorm outcome", answer: "Six candidate tests checked; you chose the per-site off-target comparison with Fisher's exact test.", ideas: ["I3"] },
+        { at: "2026-11-07T14:05:00Z", topic: "Replicates", answer: "Skip re-sequencing OT3 replicate 2; report it as a limitation." },
+      ],
       hypotheses: [
         { id: "H1", statement: "HF1 reduces indel rates at GUIDE-seq off-target sites by at least 10-fold.", prediction: "OT1–OT3 < 0.5%", falsification: "Any off-target site with rate ≥ 10% of wild-type.", status: "supported" },
         { id: "H2", statement: "On-target activity stays within 5 points of wild-type.", prediction: "|Δ| < 5 points", falsification: "On-target drop > 5 points in either replicate.", status: "open" },

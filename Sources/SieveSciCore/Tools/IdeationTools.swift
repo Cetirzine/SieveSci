@@ -97,6 +97,7 @@ struct AskUserTool: Tool {
             s.research.recordDecision(UserDecision(topic: q.header.isEmpty ? q.question : q.header, answer: parts.joined(separator: "; "),
                                                    ideas: ideas.isEmpty ? nil : ideas))
         }
+        s.emit(.planChanged(s.research.snapshot))
     }
 }
 
@@ -222,6 +223,7 @@ struct BrainstormTool: Tool {
             // The outcome is where the work goes from here: kept beside the objective for the rest of the task.
             if st.trigger != .dream, let sum = st.summary, !sum.isEmpty {
                 ctx.services.research.recordDecision(UserDecision(topic: "brainstorm outcome", answer: sum))
+                ctx.services.emit(.planChanged(ctx.services.research.snapshot))
             }
             var text = "Brainstorm ended. Next, in this order: (1) if the user chose ideas, `idea` promote each one (independent review); "
                 + "(2) set or revise the plan with `update_plan` around the promoted hypotheses — steps that test them, `parallel: true` "

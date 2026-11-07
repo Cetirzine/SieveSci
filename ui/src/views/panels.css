@@ -88,3 +88,26 @@
 .job-tool.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
 .job-tool.danger:hover { background: color-mix(in srgb, var(--bad) 10%, transparent); }
 .plan-review-pending { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-left: 2px solid var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); color: var(--warn); }
+
+/* Task anchor (Plan): the objective and the user's decisions. The user's own words, so a solid frame in the
+   tint of their chat bubble, lighter here because it sits above the plan rather than in the conversation. */
+.anchor { display: flex; flex-direction: column; border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+          background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.anchor-part { display: flex; flex-direction: column; gap: var(--s-xs); padding: 10px var(--s-m); }
+.anchor-part + .anchor-part { border-top: 1px solid color-mix(in srgb, var(--accent) 20%, transparent); }
+.anchor-head { display: inline-flex; align-items: center; gap: 6px; color: var(--accent);
+               font: 500 10.5px/1 var(--mono); letter-spacing: 0.8px; text-transform: uppercase; }
+.anchor-count { margin-left: 2px; padding: 1px 4px; font-variant-numeric: tabular-nums; letter-spacing: 0;
+                border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+.anchor-objective { font: 13px/1.5 var(--sans); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.anchor-decisions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-s); }
+.anchor-decision { display: flex; align-items: baseline; gap: var(--s-s); min-width: 0; }
+.anchor-decision > .stack-xxs { flex: 1; }
+.anchor-decision .t-meta { overflow-wrap: anywhere; }
+.anchor-index { width: 18px; flex: none; font: 11px var(--mono); color: var(--tertiary); font-variant-numeric: tabular-nums; }
+.anchor-topic { display: flex; align-items: baseline; gap: var(--s-s); min-width: 0; }
+.anchor-topic .t-meta-strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.anchor-day { margin-left: auto; flex: none; font: 11px var(--mono); color: var(--tertiary); font-variant-numeric: tabular-nums; }
+.anchor-more { align-self: flex-start; margin-left: 26px; padding: 0; border: 0; background: none; cursor: pointer; color: var(--secondary);
+               font: 500 10.5px/1.4 var(--mono); letter-spacing: 0.4px; text-decoration: underline dotted; text-underline-offset: 3px; }
+.anchor-more:hover { color: var(--accent); }

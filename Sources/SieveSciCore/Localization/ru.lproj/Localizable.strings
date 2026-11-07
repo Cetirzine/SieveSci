@@ -1147,3 +1147,7 @@
 "stop" = "остановиться";
 "Report leaves out what did not work" = "В отчёте не сказано, что не сработало";
 "The connection failed (%@); going on in %@ s (%@ of %@)." = "Соединение не удалось (%@); продолжение через %@ с (%@ из %@).";
+"Your decisions" = "Ваши решения";
+"Brainstorm outcome" = "Итог мозгового штурма";
+"Show %d earlier" = "Показать ещё %d ранних";
+"What you decided along the way. The agent sees it at every step, also after the context is compacted." = "Что вы решили по ходу работы. Агент видит это на каждом шаге, в том числе после сжатия контекста.";

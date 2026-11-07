@@ -48,10 +48,13 @@ export interface ResultReview {
   id: string; at: string; trigger: string; subject: string; expected: string; observed: string; causes: string[]; check: string;
   decision: "repair" | "adjust" | "pivot" | "stop" | "ask"; followsRule: boolean; servesObjective: string; next: string; receipts: string[]; alternative?: string;
 }
+/** Something the user decided along the way (an `ask_user` answer, the brainstorm's outcome), kept with the plan. */
+export interface UserDecision { at: string; topic: string; answer: string; ideas?: string[]; receipt?: string }
 export interface ResearchPlan {
   goal: string; background?: string; stage: string; hypotheses: Hypothesis[]; steps: PlanStep[]; rationale?: string;
   revisions?: { at: string; rationale: string; changedCriteria: string[]; afterResults: boolean }[];
   objective?: string; reviews?: ResultReview[]; pendingReview?: { trigger: string; subject: string };
+  decisions?: UserDecision[];
 }
 export interface Claim { id: string; statement: string; successCriteria: string; evidence: string[]; dataPaths: string[]; status: string; verdict: string | null; verifierReceipts: string[] }
 export interface Contested { thread: string; kind: string; issue: string; reason: string }
