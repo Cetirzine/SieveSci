@@ -1104,3 +1104,6 @@
 "While the agent works, Enter inserts the message into the running turn" = "While the agent works, Enter inserts the message into the running turn";
 "Off: Enter queues the message for after the turn and ⌘/Ctrl+Enter inserts it, read at the agent's next step. On: the other way round." = "Off: Enter queues the message for after the turn and ⌘/Ctrl+Enter inserts it, read at the agent's next step. On: the other way round.";
 "History leaves out generated data in %@; scripts, notes and results are still versioned." = "History leaves out generated data in %@; scripts, notes and results are still versioned.";
+"Added %@ to your PATH. Open a new terminal and run sievesci." = "Added %@ to your PATH. Open a new terminal and run sievesci.";
+"%@ is already on your PATH. Open a new terminal and run sievesci." = "%@ is already on your PATH. Open a new terminal and run sievesci.";
+"Could not change your PATH (%@). Add %@ to it yourself." = "Could not change your PATH (%@). Add %@ to it yourself.";

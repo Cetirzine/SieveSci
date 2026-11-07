@@ -7,7 +7,7 @@ import { useApp, getState, onPlatform, type Config, type ModelInfo, type ModelRe
 import * as A from "../app/actions";
 import type { SettingsPane } from "../app/actions";
 import type { JsonObject } from "../serve";
-import { ActionButton, ActionRow, Chip, CropMarks, IconButton, SectionLabel, Segmented, SpecField } from "../theme/primitives";
+import { ActionButton, ActionRow, Chip, CropMarks, IconButton, Menu, SectionLabel, Segmented, SpecField } from "../theme/primitives";
 import { Symbol, roleName } from "../theme/theme";
 import { RoleGhostIcon } from "../theme/brand";
 import { SieveField } from "../theme/dots";
@@ -103,15 +103,19 @@ function Toggle({ label, on, onChange, disabled }: { label: string; on: boolean;
   );
 }
 
+/** Pop-up button: the value with up/down chevrons, opening the app's own menu. Not a native <select>: its
+ *  list is drawn by the system (white on white in a dark window on Windows, and unlike the rest of the app). */
 function PopUp<T extends string>({ value, options, onChange, label, disabled }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; label?: string; disabled?: boolean }) {
-  return (
-    <span className="popup">
-      <select value={value} aria-label={label} disabled={disabled} onChange={(e) => onChange(e.target.value as T)}>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
+  const current = options.find((o) => o.value === value)?.label ?? value;
+  const face = (
+    <span className="popup-face" aria-label={label}>
+      <span className="popup-value clip">{current}</span>
       <span className="popup-arrows"><Symbol name="chevron.up.chevron.down" size={10} strokeWidth={2.2} /></span>
     </span>
   );
+  if (disabled) return <span className="popup disabled">{face}</span>;
+  return <Menu className="popup" align="right" title={label} label={face}
+               items={options.map((o) => ({ label: o.label, checked: o.value === value, onSelect: () => { if (o.value !== value) onChange(o.value); } }))} />;
 }
 
 function Picker<T extends string>(props: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; disabled?: boolean }) {

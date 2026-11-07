@@ -62,13 +62,16 @@
 .toggle-row.disabled { color: var(--tertiary); cursor: default; }
 
 /* Pop-up button: the value and the up/down chevrons in a small box */
-.popup { position: relative; display: inline-flex; align-items: center; gap: 6px; }
-.popup select { appearance: none; -webkit-appearance: none; border: 0; background: transparent; color: var(--text); font: 13px var(--sans);
-                text-align: right; text-align-last: right; padding: 0 22px 0 0; cursor: pointer; outline: none; max-width: 340px; }
-.popup .popup-arrows { position: absolute; right: 0; top: 50%; width: 16px; height: 18px; margin-top: -9px; display: inline-flex; align-items: center; justify-content: center;
-                       background: color-mix(in srgb, var(--ink) 7%, transparent); pointer-events: none; }
-.popup select:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
-.popup select:disabled { color: var(--tertiary); }
+.popup { position: relative; display: inline-flex; align-items: center; min-width: 0; }
+.popup .menu-label { max-width: 340px; color: var(--text); font: 13px var(--sans); }
+.popup .menu-label:focus-visible { outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+.popup-face { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.popup-value { text-align: right; min-width: 0; }
+.popup .popup-arrows { width: 16px; height: 18px; flex: none; display: inline-flex; align-items: center; justify-content: center;
+                       background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.popup .menu-label:hover .popup-arrows { background: color-mix(in srgb, var(--ink) 14%, transparent); }
+.popup.disabled { color: var(--tertiary); }
+.popup .menu-list { max-height: 60vh; overflow-y: auto; }
 
 
 /* Stepper */

@@ -64,3 +64,12 @@ import Testing
         #expect(!StreamWatch.isDropped(ProviderError.http(status: 400, body: "bad request")))
     }
 }
+
+@Suite struct WindowsPaths {
+    @Test func extendedAndURLFormsBecomePlainPaths() {
+        #expect(Platform.windowsPath(#"\\?\C:\Users\Yue_H\AppData\Local\SieveSci\engine\sievesci.exe"#) == #"C:\Users\Yue_H\AppData\Local\SieveSci\engine\sievesci.exe"#)
+        #expect(Platform.windowsPath("/?/C:/Users/Yue_H/AppData/Local/SieveSci/engine") == #"C:\Users\Yue_H\AppData\Local\SieveSci\engine"#)
+        #expect(Platform.windowsPath("/C:/tools/x.exe") == #"C:\tools\x.exe"#)
+        #expect(Platform.windowsPath(#"D:\data"#) == #"D:\data"#)
+    }
+}

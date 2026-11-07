@@ -17,6 +17,15 @@ public enum Platform {
     /// PATH entries are separated by `;` on Windows.
     public static let pathSeparator: Character = isWindows ? ";" : ":"
 
+    /// A Windows path as people and PATH read it: `C:\Users\…`. Windows can hand a program its own
+    /// location in the extended form `\\?\C:\…`, which a file URL turns into `/?/C:/…`.
+    public static func windowsPath(_ s: String) -> String {
+        var p = s.replacingOccurrences(of: "/", with: "\\")
+        for prefix in ["\\\\?\\", "\\?\\"] where p.hasPrefix(prefix) { p.removeFirst(prefix.count) }
+        if p.hasPrefix("\\"), p.count > 2, p[p.index(p.startIndex, offsetBy: 2)] == ":" { p.removeFirst() }   // "\C:\…"
+        return p
+    }
+
     /// bash for the `bash` tool, background jobs and setup scripts.
     public static var bash: String {
         #if os(Windows)

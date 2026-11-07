@@ -161,7 +161,7 @@ extension ServeServer {
             guard let exe = prof.executable else { throw RPCError(code: -32602, message: "not a CLI agent") }
             return ["message": .string(await AgentInstaller.openSignIn(exe))]
         case "cli.install":
-            return ["message": .string(Self.installCLI())]
+            return ["message": .string(await Self.installCLI())]
 
         case "updates.check":
             return try await Self.latestRelease()
@@ -295,11 +295,14 @@ extension ServeServer {
 
     /// Puts this `sievesci` on the command line: a link in ~/.local/bin (no administrator rights);
     /// on Windows the folder to add to PATH.
-    static func installCLI() -> String {
-        let exe = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+    static func installCLI() async -> String {
         #if os(Windows)
-        return L10n.f("Add %@ to your PATH to run sievesci from a terminal.", exe.deletingLastPathComponent().path)
+        // The engine folder goes on the user's PATH (no administrator rights needed); new terminals see it.
+        let full = Platform.windowsPath(Bundle.main.executablePath ?? CommandLine.arguments[0])
+        let dir = full.split(separator: "\\").dropLast().joined(separator: "\\")
+        return await addToUserPath(dir)
         #else
+        let exe = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
         let bin = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin")
         try? FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         let dst = bin.appendingPathComponent("sievesci")
@@ -308,6 +311,28 @@ extension ServeServer {
         do { try FileManager.default.createSymbolicLink(at: dst, withDestinationURL: exe) } catch { return error.localizedDescription }
         return L10n.f("Linked %@ (make sure ~/.local/bin is on your PATH).", dst.path)
         #endif
+    }
+
+    /// Adds a folder to the Windows user PATH with .NET's own call, which also tells running programs
+    /// (Explorer, so new terminals) that the environment changed.
+    static func addToUserPath(_ dir: String) async -> String {
+        let q = dir.replacingOccurrences(of: "'", with: "''")
+        let script = """
+        $d = '\(q)'; $p = [Environment]::GetEnvironmentVariable('Path', 'User'); \
+        if ((($p -split ';') | ForEach-Object { $_.TrimEnd('\\') }) -contains $d.TrimEnd('\\')) { 'present' } \
+        else { $n = if ([string]::IsNullOrEmpty($p)) { $d } else { $p.TrimEnd(';') + ';' + $d }; \
+        [Environment]::SetEnvironmentVariable('Path', $n, 'User'); 'added' }
+        """
+        do {
+            let r = try await ProcessRunner.run("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], timeout: 60)
+            let out = r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            if r.exitCode == 0, out.hasSuffix("added") { return L10n.f("Added %@ to your PATH. Open a new terminal and run sievesci.", dir) }
+            if r.exitCode == 0, out.hasSuffix("present") { return L10n.f("%@ is already on your PATH. Open a new terminal and run sievesci.", dir) }
+            let why = (r.stderr.isEmpty ? out : r.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
+            return L10n.f("Could not change your PATH (%@). Add %@ to it yourself.", String(why.prefix(200)), dir)
+        } catch {
+            return L10n.f("Could not change your PATH (%@). Add %@ to it yourself.", error.localizedDescription, dir)
+        }
     }
 
     /// The newest release on GitHub (the desktop app installs it from the release page).

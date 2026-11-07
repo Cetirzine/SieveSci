@@ -1104,3 +1104,6 @@
 "While the agent works, Enter inserts the message into the running turn" = "智能体工作时，Enter 把消息插话发送到当前轮次";
 "Off: Enter queues the message for after the turn and ⌘/Ctrl+Enter inserts it, read at the agent's next step. On: the other way round." = "关闭时：Enter 把消息排到这一轮之后，⌘/Ctrl+Enter 插话发送，智能体在下一步就会读到。打开时反过来。";
 "History leaves out generated data in %@; scripts, notes and results are still versioned." = "历史记录不再包含这些文件夹里生成的数据：%@；脚本、笔记和结果照常记录版本。";
+"Added %@ to your PATH. Open a new terminal and run sievesci." = "已把 %@ 加入 PATH。打开一个新的终端，运行 sievesci 即可。";
+"%@ is already on your PATH. Open a new terminal and run sievesci." = "%@ 已经在 PATH 里。打开一个新的终端，运行 sievesci 即可。";
+"Could not change your PATH (%@). Add %@ to it yourself." = "无法修改 PATH（%@）。请手动把 %@ 加入 PATH。";
