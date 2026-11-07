@@ -1110,3 +1110,14 @@
 "All %d models the provider lists are added." = "服务商列出的 %d 个模型都已添加。";
 "Remove from SieveSci (the folder stays)" = "从 SieveSci 中移除（文件夹保留）";
 "A learning proposal from the %@ (%@) awaits your approval in Settings → Memory & learning." = "%@提交了一条学习提案（%@），等待你在“设置 → 记忆与学习”中批准。";
+"Reviewing what the %@ wants to learn (%@)" = "审查%@想学到的内容（%@）";
+"Approved" = "通过";
+"Not approved" = "未通过";
+"Learned (%@ · %@): %@" = "学到一条新经验（%@ · %@）：%@";
+"Waiting for your approval (%@ · %@): %@ Approve or reject it in Settings → Memory & learning." = "一条学习提案等你批准（%@ · %@）：%@ 请在“设置 → 记忆与学习”中批准或拒绝。";
+"Not adopted (%@ · %@): %@" = "没有采纳一条学习提案（%@ · %@）：%@";
+"Undone (%@ · %@): %@" = "已撤销（%@ · %@）：%@";
+"Set aside after poor results (%@ · %@): %@" = "效果不好，已暂停使用（%@ · %@）：%@";
+"LESSONS" = "经验教训";
+"MEMORY" = "记忆";
+"USER" = "关于你";

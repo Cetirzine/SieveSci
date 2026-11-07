@@ -1110,3 +1110,14 @@
 "All %d models the provider lists are added." = "Все %d моделей из списка провайдера уже добавлены.";
 "Remove from SieveSci (the folder stays)" = "Убрать из SieveSci (папка останется)";
 "A learning proposal from the %@ (%@) awaits your approval in Settings → Memory & learning." = "Предложение об обучении от %@ (%@) ждёт вашего одобрения в «Настройки → Память и обучение».";
+"Reviewing what the %@ wants to learn (%@)" = "Проверка того, чему хочет научиться %@ (%@)";
+"Approved" = "Одобрено";
+"Not approved" = "Не одобрено";
+"Learned (%@ · %@): %@" = "Усвоено (%@ · %@): %@";
+"Waiting for your approval (%@ · %@): %@ Approve or reject it in Settings → Memory & learning." = "Ждёт вашего одобрения (%@ · %@): %@ Одобрите или отклоните в «Настройки → Память и обучение».";
+"Not adopted (%@ · %@): %@" = "Не принято (%@ · %@): %@";
+"Undone (%@ · %@): %@" = "Отменено (%@ · %@): %@";
+"Set aside after poor results (%@ · %@): %@" = "Отложено из-за плохих результатов (%@ · %@): %@";
+"LESSONS" = "уроки";
+"MEMORY" = "память";
+"USER" = "о вас";

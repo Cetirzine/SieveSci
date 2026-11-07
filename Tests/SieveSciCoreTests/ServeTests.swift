@@ -169,6 +169,11 @@ private final class SlowProvider: LLMProvider, @unchecked Sendable {
         let opened = try await c.call("workspace.open", ["path": .string(other.path)])
         #expect(opened.str("workspace") == other.standardizedFileURL.path && opened["tasks"]?.arrayValue?.isEmpty == true)
         #expect(try await c.call("config.get")["config"]?["recentWorkspaces"]?.arrayValue?.first?.stringValue == other.standardizedFileURL.path)
+        // Reopening a listed folder keeps the list's order (the sidebar does not reshuffle).
+        _ = try await c.call("workspace.open", ["path": .string(ws.path)])
+        let before = try await c.call("config.get")["config"]?["recentWorkspaces"]?.arrayValue?.compactMap(\.stringValue) ?? []
+        _ = try await c.call("workspace.open", ["path": .string(other.path)])
+        #expect(try await c.call("config.get")["config"]?["recentWorkspaces"]?.arrayValue?.compactMap(\.stringValue) == before)
         await #expect(throws: ServeTestError.self) { try await c.call("workspace.open", ["path": "/no/such/folder"]) }
         await #expect(throws: ServeTestError.self) { try await c.call("secrets.set", ["ref": "X_KEY", "value": "v"]) }
     }

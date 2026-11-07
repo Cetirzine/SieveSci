@@ -181,7 +181,11 @@ public final class ServeServer: @unchecked Sendable {
             lock.withLock { workspace = url }
             // The first task opened here scans the installed skills; start that now, while the list shows.
             Task.detached(priority: .userInitiated) { _ = SkillRegistry(workspace: url) }
-            try updateConfig(["recentWorkspaces": .array(([url.path] + config.recentWorkspaces.filter { $0 != url.path }).prefix(12).map { .string($0) })])
+            // The sidebar keeps its folders where they are: an opened folder already on the list keeps its
+            // place; a new one joins at the top.
+            let listed = config.recentWorkspaces
+            let order = listed.contains(url.path) ? listed : [url.path] + listed
+            try updateConfig(["recentWorkspaces": .array(order.prefix(12).map { .string($0) })])
             return ["workspace": .string(url.path), "tasks": .array(taskList(url))]
         case "tasks.list":
             guard let ws = try? target(p).ws else { return ["tasks": []] }

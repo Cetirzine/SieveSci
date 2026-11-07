@@ -43,7 +43,6 @@ function SidebarView() {
   const folderTasks = useApp((s) => s.folderTasks);
   const backgroundWorkspaces = useApp((s) => s.backgroundWorkspaces);
   const state = useApp((s) => s);
-  const others = recent.filter((p) => p !== workspace);
   const platform = useApp((s) => s.platform);
   // Right-click on a workspace: open, new task, show the folder, or take it off the list (files stay).
   const [folderMenu, setFolderMenu] = useState<{ x: number; y: number; path: string } | null>(null);
@@ -91,17 +90,17 @@ function SidebarView() {
         <IconButton symbol="folder.badge.plus" label={L("Open Workspace…")} onClick={() => void A.chooseWorkspace()} />
       </div>
       <div className="sidebar-scroll">
-        {workspace && (
-          <>
-            <div className="folder-line" title={workspace} onContextMenu={folderMenuAt(workspace)}>
-              {row("folder.fill", basename(workspace), true)}
-              {disclosure(workspace)}
+        {/* Folders stay in their places: the open one is highlighted where it is, not moved to the top. */}
+        {(workspace && !recent.includes(workspace) ? [workspace, ...recent] : recent).map((path) => path === workspace ? (
+          <div key={path}>
+            <div className="folder-line" title={path} onContextMenu={folderMenuAt(path)}>
+              {row("folder.fill", basename(path), true)}
+              {disclosure(path)}
               {newTaskButton(() => void A.startSession())}
             </div>
-            {isFolderOpen(state, workspace) && (tasks.length === 0 ? noTasks : tasks.map((t) => <TaskRow key={t.id} id={t.id} modified={t.modified} />))}
-          </>
-        )}
-        {others.map((path) => (
+            {isFolderOpen(state, path) && (tasks.length === 0 ? noTasks : tasks.map((t) => <TaskRow key={t.id} id={t.id} modified={t.modified} />))}
+          </div>
+        ) : (
           <div key={path}>
             <div className="folder-line" onContextMenu={folderMenuAt(path)}>
               <button type="button" className="hover-row folder-button" title={path} onClick={() => void A.openWorkspace(path)}>

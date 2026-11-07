@@ -55,8 +55,10 @@ public final class AgentSession: @unchecked Sendable {
     public var parentId = "main"
     public var purpose = ""
     private var announced = false
-    /// Host bookkeeping (e.g. reviewing a learning proposal): no card in the conversation, live or reopened.
+    /// Host bookkeeping: no card in the conversation, live or reopened.
     public var quiet = false
+    /// How the card shows this agent's final reply (e.g. a reviewer's JSON verdict in words).
+    public var displayResult: ((String) -> String)?
 
     public init(id: String = UUID().uuidString, role: AgentRole, services: SessionServices, tools: [Tool],
                 lineageKey: String? = nil, writeRoot: URL? = nil, blindedPaths: [String] = [], readableRoots: [String]? = nil,
@@ -114,7 +116,10 @@ public final class AgentSession: @unchecked Sendable {
         }
         defer {
             if role != .main {
-                if !quiet { services.emit(.agentFinished(id: id, role: role, result: transcript.last?.plainText ?? "")) }
+                if !quiet {
+                    let raw = transcript.last?.plainText ?? ""
+                    services.emit(.agentFinished(id: id, role: role, result: displayResult?(raw) ?? raw))
+                }
                 if let c = cliConversation, provider is CLIAgentProvider { CLIAgentProvider.endProcess(conversation: c, profile: provider.profile) }
             }
         }

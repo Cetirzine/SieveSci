@@ -295,10 +295,16 @@ export function EffortSlider({ effort, onChange, compact = false, width }: { eff
         </span>
       </div>
       {!compact && (
+        // Each label centred under its stop (labels differ in width, so spreading them evenly put them
+        // between the stops).
         <div className="effort-labels">
-          {effortStops.map((s, i) => i === maxLevel && i === index
-            ? <GlitchLabel key={i} text={L(s!)} />
-            : <button key={i} type="button" tabIndex={-1} className={`t-label ${i === index ? "c-accent" : "secondary"}`} onClick={() => onChange(s)}>{i === 0 ? L("default") : L(s!)}</button>)}
+          {effortStops.map((s, i) => (
+            <span key={i} className="effort-label-at" style={{ left: THUMB / 2 + i * step }}>
+              {i === maxLevel && i === index
+                ? <GlitchLabel text={L(s!)} />
+                : <button type="button" tabIndex={-1} className={`t-label ${i === index ? "c-accent" : "secondary"}`} onClick={() => onChange(s)}>{i === 0 ? L("default") : L(s!)}</button>}
+            </span>
+          ))}
         </div>
       )}
     </div>

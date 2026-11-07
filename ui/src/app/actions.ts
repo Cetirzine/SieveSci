@@ -198,7 +198,7 @@ export async function openWorkspace(path: string, task?: string, newTask = false
   const moved = other && leaving.running && leaving.taskId && leaving.workspace
     ? { backgroundTasks: [...leaving.backgroundTasks.filter((t) => t !== leaving.taskId), leaving.taskId],
         backgroundWorkspaces: { ...leaving.backgroundWorkspaces, [leaving.taskId]: leaving.workspace } } : {};
-  setState((st) => ({ ...(other ? { ...moved, taskId: "", live: false, streams: { main: [] }, cards: {}, running: false, pendingPermission: null, pendingAsk: null, askQueue: [] } : {}), workspace: r.workspace, config: { ...st.config, recentWorkspaces: [r.workspace, ...st.config.recentWorkspaces.filter((p) => p !== r.workspace)].slice(0, 12) } }));
+  setState((st) => ({ ...(other ? { ...moved, taskId: "", live: false, streams: { main: [] }, cards: {}, running: false, pendingPermission: null, pendingAsk: null, askQueue: [] } : {}), workspace: r.workspace, config: { ...st.config, recentWorkspaces: (st.config.recentWorkspaces.includes(r.workspace) ? st.config.recentWorkspaces : [r.workspace, ...st.config.recentWorkspaces]).slice(0, 12) } }));
   applyTasks(r.tasks);
   await startSession(newTask ? undefined : (task ?? r.tasks[0]?.id));
   void loadCommands();

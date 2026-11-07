@@ -1110,3 +1110,14 @@
 "All %d models the provider lists are added." = "Ya se añadieron los %d modelos que lista el proveedor.";
 "Remove from SieveSci (the folder stays)" = "Quitar de SieveSci (la carpeta se conserva)";
 "A learning proposal from the %@ (%@) awaits your approval in Settings → Memory & learning." = "Una propuesta de aprendizaje del %@ (%@) espera tu aprobación en Ajustes → Memoria y aprendizaje.";
+"Reviewing what the %@ wants to learn (%@)" = "Revisando lo que el %@ quiere aprender (%@)";
+"Approved" = "Aprobado";
+"Not approved" = "No aprobado";
+"Learned (%@ · %@): %@" = "Aprendido (%@ · %@): %@";
+"Waiting for your approval (%@ · %@): %@ Approve or reject it in Settings → Memory & learning." = "Espera tu aprobación (%@ · %@): %@ Apruébala o recházala en Ajustes → Memoria y aprendizaje.";
+"Not adopted (%@ · %@): %@" = "No adoptado (%@ · %@): %@";
+"Undone (%@ · %@): %@" = "Deshecho (%@ · %@): %@";
+"Set aside after poor results (%@ · %@): %@" = "Apartado por malos resultados (%@ · %@): %@";
+"LESSONS" = "lecciones";
+"MEMORY" = "memoria";
+"USER" = "sobre ti";

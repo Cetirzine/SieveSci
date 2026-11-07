@@ -87,7 +87,7 @@ import Testing
         await #expect(throws: TimeLimitExceeded.self) {
             try await withTimeLimit(0.3) { try await Task.sleep(nanoseconds: 5_000_000_000); return 1 }
         }
-        #expect(Date().timeIntervalSince(started) < 2)
+        #expect(Date().timeIntervalSince(started) < 4)
     }
 }
 

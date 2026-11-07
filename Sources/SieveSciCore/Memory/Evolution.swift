@@ -182,9 +182,17 @@ public final class EvolutionGovernor: @unchecked Sendable {
     }
 
     func review(_ p: EvolutionProposal, services: SessionServices) async -> Verdict {
-        // Bookkeeping between agents, not part of the conversation: no card, no verdict JSON in the chat.
-        let reviewer = services.makeSubagent(role: .checker, purpose: "Evolution review of a \(p.role.rawValue) \(p.kind.rawValue) proposal (\(p.target))",
-                                             parent: p.role.rawValue, quiet: true)
+        // Shown in the conversation as a card the user can read: what is being reviewed, and the verdict
+        // in words (not the JSON the host parses), in the user's language.
+        let reviewer = services.makeSubagent(role: .checker,
+                                             purpose: L10n.s("Reviewing what the %@ wants to learn (%@)", L(p.role.rawValue), L(p.target)),
+                                             parent: p.role.rawValue)
+        reviewer.displayResult = { reply in
+            guard let j = Supervisor.parseJSON(reply) else { return reply }
+            let reason = j.str("reason") ?? ""
+            return (j.bool("approve") == true ? "✓ " + L("Approved") : "✗ " + L("Not approved")) + (reason.isEmpty ? "" : " — " + reason)
+        }
+        let language = ["zh-Hans": "Simplified Chinese", "zh-Hant": "Traditional Chinese", "es": "Spanish", "fr": "French", "ru": "Russian"][L10n.resolved] ?? "English"
         let prompt = """
         <evolution_review>
         An agent (role: \(p.role.rawValue)) proposes to change its long-term \(p.kind.rawValue) (\(p.target), \(p.operation)):
@@ -195,7 +203,8 @@ public final class EvolutionGovernor: @unchecked Sendable {
         (Entries "user: …" quote the user's own messages; the host checked that those words are there.)
 
         \(Self.rubric(p))
-        Reply with JSON only: {"approve": true|false, "reason": "..."}
+        Reply with JSON only: {"approve": true|false, "reason": "..."}. Write `reason` in \(language), in one or two plain \
+        sentences a non-specialist can follow: the user reads it in the conversation.
         </evolution_review>
         """
         guard let reply = try? await reviewer.send(prompt)?.plainText, let j = Supervisor.parseJSON(reply) else {
@@ -264,11 +273,17 @@ public final class EvolutionGovernor: @unchecked Sendable {
         services.log("evolution", actor: p.role.rawValue, ["id": .string(p.id), "kind": .string(p.kind.rawValue), "target": .string(p.target),
                                                            "op": .string(p.operation), "status": .string(p.status.rawValue), "reason": .string(p.reason),
                                                            "content_sha256": .string(Hashing.sha256Hex(p.content)), "provenance": .array(p.provenance.map { .string($0) })])
-        // Only what needs the user reaches the chat: one line when a proposal waits for approval. Accepted,
-        // rejected and reverted proposals are in the audit log and in Settings → Memory & learning.
-        if p.status == .pending {
-            services.emit(.notice(L10n.s("A learning proposal from the %@ (%@) awaits your approval in Settings → Memory & learning.", L(p.role.rawValue), p.target)))
+        // One plain line per outcome, so the user can follow what the agents learn and why.
+        let who = L(p.role.rawValue), what = L(p.target), why = p.reason.truncated(300)
+        let line: String
+        switch p.status {
+        case .accepted: line = L10n.s("Learned (%@ · %@): %@", who, what, why)
+        case .pending: line = L10n.s("Waiting for your approval (%@ · %@): %@ Approve or reject it in Settings → Memory & learning.", who, what, why)
+        case .rejected: line = L10n.s("Not adopted (%@ · %@): %@", who, what, why)
+        case .reverted: line = L10n.s("Undone (%@ · %@): %@", who, what, why)
+        case .quarantined: line = L10n.s("Set aside after poor results (%@ · %@): %@", who, what, why)
         }
+        services.emit(.notice(line))
         return p
     }
 

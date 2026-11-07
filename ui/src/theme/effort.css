@@ -30,7 +30,8 @@
 .effort-thumb.split::before { border: 1.5px solid color-mix(in srgb, var(--accent) 80%, transparent); transform: translateX(-2px); }
 .effort-thumb.split::after { border: 1.5px solid color-mix(in srgb, var(--bad) 80%, transparent); transform: translate(2px, 1px); }
 
-.effort-labels { display: flex; justify-content: space-between; align-items: center; }
+.effort-labels { position: relative; height: 14px; }
+.effort-label-at { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; line-height: 14px; }
 .effort-labels button { border: 0; padding: 0; background: transparent; cursor: pointer; }
 
 .effort-popover { position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 60; width: 340px; box-sizing: border-box; padding: var(--s-l);
