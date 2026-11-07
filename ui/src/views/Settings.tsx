@@ -170,7 +170,8 @@ function GeneralSettings() {
   const language = useApp((s) => s.languageChoice);
   const accent = useApp((s) => s.accent);
   const version = useApp((s) => s.version);
-  const [cliMessage, setCliMessage] = useState("");
+  const [cliMessage, setCliMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [cliBusy, setCliBusy] = useState(false);
   const set = (patch: Partial<Config>, typing = false) => void A.updateConfig(patch, typing);
   return (
     <Form>
@@ -214,9 +215,16 @@ function GeneralSettings() {
         {UpdateSettings({ version })}
       </Section>
       <Section label={L("Command line")}>
-        <ActionRow title={L("Command-line tool")} detail={cliMessage || L("`sievesci` runs the same agent headless (scripts, scheduled tasks, SSH).")}>
-          <ActionButton width="column" onClick={async () => { const r = await A.request<{ message: string }>("cli.install"); setCliMessage(r.ok ? r.value.message : r.error); }}>{L("Install")}</ActionButton>
+        <ActionRow title={L("Command-line tool")} detail={L("`sievesci` runs the same agent headless (scripts, scheduled tasks, SSH).")}>
+          <ActionButton width="column" disabled={cliBusy} onClick={async () => {
+            setCliBusy(true); setCliMessage(null);
+            const r = await A.request<{ ok: boolean; message: string }>("cli.install");
+            setCliBusy(false);
+            // The result stays on screen, marked as done or not: it is the only sign the click did anything.
+            setCliMessage(r.ok ? { ok: r.value.ok, text: r.value.message } : { ok: false, text: r.error });
+          }}>{cliBusy ? L("Installing…") : L("Install")}</ActionButton>
         </ActionRow>
+        {cliMessage && <span className={`check-line ${cliMessage.ok ? "c-ok" : "c-warn"}`}><Symbol name={cliMessage.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"} size={12} />{cliMessage.text}</span>}
       </Section>
       <Section label={L("About")}>
         <ActionRow title={"SieveSci " + version} detail={L("Independently developed by 王鹤年, 2026")}>
@@ -767,7 +775,7 @@ const refKey = (r: ModelRef | null | undefined) => (r ? `${r.providerId}\t${r.mo
 const parseRef = (k: string): ModelRef | null => { if (!k) return null; const [providerId, model] = k.split("\t"); return { providerId, model }; };
 const roles = ["main", "worker", "checker", "verifier"] as const;
 
-interface Overview { roles: Record<string, { model: ModelRef | null; reasons: string }>; vision: ModelRef[]; benchmarks: { title: string; asOf: string; source: string }[] }
+interface Overview { roles: Record<string, { model: ModelRef | null; reasons: string }>; vision: ModelRef[]; benchmarks: { title: string; asOf: string; source: string }[]; refreshing?: boolean }
 
 function ModelsSettings() {
   const c = useApp((s) => s.config);
@@ -775,8 +783,24 @@ function ModelsSettings() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [report, setReport] = useState("");
+  const [progress, setProgress] = useState<string[]>([]);
   const rolesKey = JSON.stringify(c.roles) + usable.join(",");
-  useEffect(() => { void A.request<Overview>("models.overview").then((r) => { if (r.ok) setOverview(r.value); }); }, [rolesKey]);
+  const loadOverview = () => A.request<Overview>("models.overview").then((r) => { if (r.ok) setOverview(r.value); return r.ok ? r.value : null; });
+  // The refresh runs in serve: one at a time, results arriving per source. Leaving this page and coming
+  // back joins the refresh under way instead of showing "Refresh" (or starting another).
+  const refresh = async () => {
+    setRefreshing(true); setReport("");
+    const r = await A.request<{ report: string }>("models.refreshCatalogs");
+    setRefreshing(false); setProgress([]);
+    setReport(r.ok ? r.value.report : r.error);
+    void loadOverview();
+  };
+  useEffect(() => { void loadOverview().then((o) => { if (o?.refreshing) void refresh(); }); }, [rolesKey]);
+  useEffect(() => {
+    const f = (p: { line?: string; done?: boolean }) => { if (p.line) setProgress((l) => [...l, p.line!]); };
+    A.catalogRefreshListeners.add(f);
+    return () => { A.catalogRefreshListeners.delete(f); };
+  }, []);
   const refs = useMemo(() => c.providers.filter((p) => usable.includes(p.id)).flatMap((p) => p.models.map((m) => ({ providerId: p.id, model: m }))), [c.providers, usable]);
   const label = (r: ModelRef) => (c.providers.find((p) => p.id === r.providerId)?.displayName ?? r.providerId) + " / " + r.model;
   const refOptions = (none: string) => [{ value: "", label: none }, ...refs.map((r) => ({ value: refKey(r), label: label(r) }))];
@@ -828,14 +852,10 @@ function ModelsSettings() {
           </ActionRow>
         ))}
         <ActionRow title={L("Refresh catalogs and leaderboards")} detail={L("Uses the research agent's model to extract leaderboard rows; every row must appear verbatim on the page.")}>
-          <ActionButton width="column" disabled={refreshing} onClick={async () => {
-            setRefreshing(true);
-            const r = await A.request<{ report: string }>("models.refreshCatalogs");
-            setRefreshing(false);
-            setReport(r.ok ? r.value.report : r.error);
-          }}>{refreshing ? L("Refreshing…") : L("Refresh")}</ActionButton>
+          <ActionButton width="column" disabled={refreshing} onClick={() => void refresh()}>{refreshing ? L("Refreshing…") : L("Refresh")}</ActionButton>
         </ActionRow>
-        {report && <span className="mono-tiny status-text">{report}</span>}
+        {refreshing && progress.length > 0 && <span className="mono-tiny status-text">{progress.join("\n")}</span>}
+        {!refreshing && report && <span className="mono-tiny status-text">{report}</span>}
       </Section>
     </Form>
   );

@@ -27,6 +27,12 @@ jobs:
         with:
           xcode-version: latest-stable
       - run: swift --version
+      # Dependencies' build products kept between runs; only changed modules compile again.
+      - uses: actions/cache@v4
+        with:
+          path: .build
+          key: swift-release-macos-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
+          restore-keys: swift-release-macos-${{ hashFiles('Package.resolved') }}-
       - name: Build the engine
         run: swift build -c release --product sievesci
       - name: Stage the engine
@@ -44,6 +50,10 @@ jobs:
         with:
           node-version: 22
       - uses: dtolnay/rust-toolchain@stable
+      # Compiled crates kept between runs (the Tauri shell is most of the bundle step's time).
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ui/src-tauri -> target
       - run: npm ci
         working-directory: ui
       - name: Updater signing (when the key is configured)
@@ -130,6 +140,10 @@ jobs:
         with:
           node-version: 22
       - uses: dtolnay/rust-toolchain@stable
+      # Compiled crates kept between runs (the Tauri shell is most of the bundle step's time).
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ui/src-tauri -> target
       - run: npm ci
         working-directory: ui
       - name: Updater signing (when the key is configured)

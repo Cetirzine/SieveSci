@@ -18,70 +18,123 @@ public enum CatalogRefresher {
 
     public struct Report: Sendable { public var lines: [String] }
 
-    public static func refreshAll(http: HTTPStreaming = URLSessionStreaming(), extractor: LLMProvider?, extractorModel: String?) async -> Report {
-        var lines: [String] = []
+    /// Refreshes everything at once (the catalogs and every leaderboard in parallel), each source capped
+    /// in time so one slow page or silent model cannot hold the rest. `onLine` gets each result as it lands.
+    public static func refreshAll(http: HTTPStreaming = URLSessionStreaming(), extractor: LLMProvider?, extractorModel: String?,
+                                  perSource: TimeInterval = 120, onLine: (@Sendable (String) -> Void)? = nil) async -> Report {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        do { lines.append("models.dev: " + L10n.s("%@ providers", String(try await ModelsDevCatalog.shared.refresh(http: http)))) }
-        catch { lines.append("models.dev: " + L10n.s("kept cached copy (%@)", error.localizedDescription.truncated(120))) }
-
-        for (file, url) in upstream {
-            do {
-                var r = URLRequest(url: URL(string: url)!)
-                r.timeoutInterval = 60
-                let (s, d) = try await http.send(r)
-                guard s < 300 else { throw ProviderError.http(status: s, body: "") }
-                // Validate with the same parsers the loader uses before replacing anything.
-                if file == "zcode-builtin.json" {
-                    guard try !ModelRules.parse(d).rules.isEmpty else { throw ProviderError.protocolError("no model rules") }
-                } else {
-                    guard try !JSONDecoder().decode([String: [String: ProviderCatalog.Route]].self, from: d).isEmpty else { throw ProviderError.protocolError("empty") }
+        let collected = LockedLines(onLine)
+        await withTaskGroup(of: Void.self) { g in
+            g.addTask {
+                do { collected.add("models.dev: " + L10n.s("%@ providers", String(try await withTimeLimit(perSource) { try await ModelsDevCatalog.shared.refresh(http: http) }))) }
+                catch { collected.add("models.dev: " + L10n.s("kept cached copy (%@)", error.localizedDescription.truncated(120))) }
+            }
+            for (file, url) in upstream {
+                g.addTask {
+                    do {
+                        var r = URLRequest(url: URL(string: url)!)
+                        r.timeoutInterval = 60
+                        let (s, d) = try await http.send(r)
+                        guard s < 300 else { throw ProviderError.http(status: s, body: "") }
+                        // Validate with the same parsers the loader uses before replacing anything.
+                        if file == "zcode-builtin.json" {
+                            guard try !ModelRules.parse(d).rules.isEmpty else { throw ProviderError.protocolError("no model rules") }
+                        } else {
+                            guard try !JSONDecoder().decode([String: [String: ProviderCatalog.Route]].self, from: d).isEmpty else { throw ProviderError.protocolError("empty") }
+                        }
+                        try d.write(to: dir.appendingPathComponent(file))
+                        collected.add("\(file): " + L("updated"))
+                    } catch { collected.add("\(file): " + L10n.s("kept previous (%@)", error.localizedDescription.truncated(120))) }
                 }
-                try d.write(to: dir.appendingPathComponent(file))
-                lines.append("\(file): " + L("updated"))
-            } catch { lines.append("\(file): " + L10n.s("kept previous (%@)", error.localizedDescription.truncated(120))) }
+            }
+            if let extractor, let extractorModel {
+                g.addTask {
+                    _ = await refreshBenchmarks(http: http, extractor: extractor, model: extractorModel, perSource: perSource, onLine: { collected.add($0) })
+                }
+            }
         }
-
-        if let extractor, let extractorModel {
-            lines += await refreshBenchmarks(http: http, extractor: extractor, model: extractorModel)
-        }
-        return Report(lines: lines)
+        return Report(lines: collected.all)
     }
 
-    /// Re-reads each leaderboard page. A model extracts `{"model name": score}` pairs; a row is kept
-    /// only if its score literally appears in the fetched page text, so a hallucinated row cannot
+    /// Re-reads each leaderboard page (all at once). A model extracts `{"model name": score}` pairs; a row
+    /// is kept only if its score literally appears in the fetched page text, so a hallucinated row cannot
     /// enter the snapshot. A benchmark is replaced only when ≥3 rows survive.
-    public static func refreshBenchmarks(http: HTTPStreaming, extractor: LLMProvider, model: String) async -> [String] {
+    public static func refreshBenchmarks(http: HTTPStreaming, extractor: LLMProvider, model: String, perSource: TimeInterval = 120,
+                                         onLine: (@Sendable (String) -> Void)? = nil) async -> [String] {
         var snap = BenchmarkSnapshot.current()
-        var lines: [String] = []
         let fetcher = WebSearchClient(config: WebSearchConfig(), secrets: EnvironmentSecretStore(), http: http)
-        for (id, b) in snap.benchmarks {
-            do {
-                let page = try await fetcher.fetchText(b.source, limit: 120_000)
-                let req = LLMRequest(model: model, system: "You extract leaderboard tables into JSON. Output only JSON.",
-                                     tools: [], messages: [.user("""
-                                     From this leaderboard page, output a JSON object mapping each model name (as written) to its \
-                                     \(b.title) score as a number in percent. Include every row; nothing else.
+        let results = await withTaskGroup(of: (String, Benchmark?, String).self) { g -> [(String, Benchmark?, String)] in
+            for (id, b) in snap.benchmarks {
+                g.addTask {
+                    do {
+                        let nb = try await withTimeLimit(perSource) { () async throws -> Benchmark? in
+                            let page = try await fetcher.fetchText(b.source, limit: 120_000)
+                            let req = LLMRequest(model: model, system: "You extract leaderboard tables into JSON. Output only JSON.",
+                                                 tools: [], messages: [.user("""
+                                                 From this leaderboard page, output a JSON object mapping each model name (as written) to its \
+                                                 \(b.title) score as a number in percent. Include every row; nothing else.
 
-                                     \(page.truncated(60_000))
-                                     """)], maxTokens: 4000, effort: .low, cache: CacheHints(lineageKey: "catalog-refresh", retention: .none))
-                let reply = try await extractor.complete(req).message.plainText
-                guard let obj = Supervisor.parseJSON(reply)?.objectValue else { throw ProviderError.protocolError("no JSON") }
-                var rows: [String: Double] = [:]
-                for (name, v) in obj {
-                    guard let n = v.numberValue, n >= 0, n <= 100 else { continue }
-                    let forms = [String(format: "%.1f", n), String(format: "%.2f", n), n == n.rounded() ? String(Int(n)) : String(n)]
-                    if forms.contains(where: { page.contains($0) }) && page.localizedCaseInsensitiveContains(name.prefix(12)) { rows[name] = n }
+                                                 \(page.truncated(60_000))
+                                                 """)], maxTokens: 4000, effort: .low, cache: CacheHints(lineageKey: "catalog-refresh", retention: .none))
+                            let reply = try await extractor.complete(req).message.plainText
+                            guard let obj = Supervisor.parseJSON(reply)?.objectValue else { throw ProviderError.protocolError("no JSON") }
+                            var rows: [String: Double] = [:]
+                            for (name, v) in obj {
+                                guard let n = v.numberValue, n >= 0, n <= 100 else { continue }
+                                let forms = [String(format: "%.1f", n), String(format: "%.2f", n), n == n.rounded() ? String(Int(n)) : String(n)]
+                                if forms.contains(where: { page.contains($0) }) && page.localizedCaseInsensitiveContains(name.prefix(12)) { rows[name] = n }
+                            }
+                            guard rows.count >= 3 else { return nil }
+                            var nb = b
+                            nb.scores = rows
+                            nb.asOf = ISO8601DateFormatter.string(from: Date(), timeZone: .current, formatOptions: [.withFullDate]) + " (fetched)"
+                            return nb
+                        }
+                        let line = nb.map { "\(b.title): \($0.scores.count) rows" } ?? "\(b.title): kept previous (fewer than 3 verifiable rows)"
+                        onLine?(line)
+                        return (id, nb, line)
+                    } catch {
+                        let line = "\(b.title): kept previous (\(error.localizedDescription.truncated(120)))"
+                        onLine?(line)
+                        return (id, nil, line)
+                    }
                 }
-                guard rows.count >= 3 else { lines.append("\(b.title): kept previous (only \(rows.count) verifiable rows)"); continue }
-                var nb = b
-                nb.scores = rows
-                nb.asOf = ISO8601DateFormatter.string(from: Date(), timeZone: .current, formatOptions: [.withFullDate]) + " (fetched)"
-                snap.benchmarks[id] = nb
-                lines.append("\(b.title): \(rows.count) rows")
-            } catch { lines.append("\(b.title): kept previous (\(error.localizedDescription.truncated(120)))") }
+            }
+            var out: [(String, Benchmark?, String)] = []
+            for await r in g { out.append(r) }
+            return out
         }
+        for (id, nb, _) in results { if let nb { snap.benchmarks[id] = nb } }
         if let d = try? JSONEncoder().encode(snap) { try? d.write(to: BenchmarkSnapshot.refreshedFile) }
-        return lines
+        return results.map(\.2)
+    }
+
+    /// Lines collected from parallel work, each also passed on as it arrives.
+    final class LockedLines: @unchecked Sendable {
+        private let lock = NSLock()
+        private var lines: [String] = []
+        private let onLine: (@Sendable (String) -> Void)?
+        init(_ onLine: (@Sendable (String) -> Void)?) { self.onLine = onLine }
+        func add(_ s: String) { lock.withLock { lines.append(s) }; onLine?(s) }
+        var all: [String] { lock.withLock { lines } }
+    }
+}
+
+/// Runs `op`, giving up after `seconds` (the work is cancelled).
+public struct TimeLimitExceeded: LocalizedError {
+    public let seconds: TimeInterval
+    public var errorDescription: String? { "no answer within \(Int(seconds)) s" }
+}
+
+public func withTimeLimit<T: Sendable>(_ seconds: TimeInterval, _ op: @escaping @Sendable () async throws -> T) async throws -> T {
+    try await withThrowingTaskGroup(of: T.self) { g in
+        g.addTask { try await op() }
+        g.addTask {
+            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            throw TimeLimitExceeded(seconds: seconds)
+        }
+        defer { g.cancelAll() }
+        return try await g.next()!
     }
 }
 

@@ -34,7 +34,8 @@ public enum AgentInstaller {
         #if os(Windows)
         let local = ProcessInfo.processInfo.environment["LOCALAPPDATA"] ?? home + "\\AppData\\Local"
         let roaming = ProcessInfo.processInfo.environment["APPDATA"] ?? home + "\\AppData\\Roaming"
-        return [home + "\\.local\\bin", local + "\\Programs\\OpenAI\\Codex\\bin", roaming + "\\npm"]
+        return [home + "\\.local\\bin", local + "\\agy\\bin", local + "\\Programs\\OpenAI\\Codex\\bin", local + "\\Programs\\claude",
+                roaming + "\\npm"] + Platform.registryPath()
         #else
         return [home + "/.local/bin", home + "/.claude/local", "/opt/homebrew/bin", "/usr/local/bin"]
         #endif

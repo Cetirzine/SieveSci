@@ -47,6 +47,8 @@ public final class ServeServer: @unchecked Sendable {
     /// so two sessions never write one task's audit log and transcript at once.
     var closing: [String: Task<Void, Never>] = [:]
     var currentKey: String?
+    /// The catalog and leaderboard refresh under way (one at a time; a second request joins it).
+    var catalogRefresh: Task<[String], Never>?
     /// Permission request id → the live task asking.
     private var askers: [String: String] = [:]
     private var waiters: [String: CheckedContinuation<PermissionDecision, Never>] = [:]

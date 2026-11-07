@@ -26,6 +26,65 @@ public enum Platform {
         return p
     }
 
+    /// The user's and the machine's PATH as saved now (HKCU\\Environment, then the system key). A running
+    /// program keeps the PATH it started with, so a CLI an installer just added (`agy`, `claude`, `codex`)
+    /// is found here. Read again after 5 s; empty on other platforms.
+    public static func registryPath() -> [String] {
+        #if os(Windows)
+        return registryCache.get {
+            let user = registryValue(#"HKCU\Environment"#, "Path") ?? ""
+            let machine = registryValue(#"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment"#, "Path") ?? ""
+            return (user + ";" + machine).split(separator: ";").map { expandEnvironment(String($0)) }.filter { !$0.isEmpty }
+        }
+        #else
+        return []
+        #endif
+    }
+
+    /// `%USERPROFILE%\\x` → `C:\\Users\\…\\x` (REG_EXPAND_SZ values).
+    static func expandEnvironment(_ s: String, env: [String: String] = ProcessInfo.processInfo.environment) -> String {
+        var out = "", rest = Substring(s)
+        while let a = rest.firstIndex(of: "%"), let b = rest[rest.index(after: a)...].firstIndex(of: "%") {
+            out += rest[..<a]
+            let name = String(rest[rest.index(after: a)..<b])
+            out += env.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value ?? "%\(name)%"
+            rest = rest[rest.index(after: b)...]
+        }
+        return (out + rest).trimmingCharacters(in: .whitespaces)
+    }
+
+    #if os(Windows)
+    final class Cached<T>: @unchecked Sendable {
+        private let lock = NSLock(); private var value: T?; private var at = Date.distantPast; let ttl: TimeInterval
+        init(ttl: TimeInterval) { self.ttl = ttl }
+        func get(_ make: () -> T) -> T {
+            lock.lock(); defer { lock.unlock() }
+            if let v = value, Date().timeIntervalSince(at) < ttl { return v }
+            let v = make(); value = v; at = Date(); return v
+        }
+    }
+    static let registryCache = Cached<[String]>(ttl: 5)
+
+    /// One value from the registry, read with reg.exe.
+    static func registryValue(_ key: String, _ name: String) -> String? {
+        let root = ProcessInfo.processInfo.environment["SystemRoot"] ?? "C:\\Windows"
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: root + "\\System32\\reg.exe")
+        p.arguments = ["query", key, "/v", name]
+        let out = Pipe()
+        p.standardOutput = out; p.standardError = FileHandle.nullDevice; p.standardInput = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return nil }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        // "    Path    REG_EXPAND_SZ    C:\\…;%USERPROFILE%\\…"
+        for line in String(decoding: data, as: UTF8.self).split(whereSeparator: \.isNewline) {
+            guard let r = line.range(of: "REG_EXPAND_SZ") ?? line.range(of: "REG_SZ") else { continue }
+            return line[r.upperBound...].trimmingCharacters(in: .whitespaces)
+        }
+        return nil
+    }
+    #endif
+
     /// bash for the `bash` tool, background jobs and setup scripts.
     public static var bash: String {
         #if os(Windows)

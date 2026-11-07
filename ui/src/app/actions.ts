@@ -585,6 +585,9 @@ export async function switchMainModel(providerId: string, model: string) {
   if (opened) { setState({ live: false }); await startSession(String(opened.task)); }
 }
 
+/** Progress of the catalog and leaderboard refresh (serve's `catalogRefresh`: a `line`, then `done`). */
+export const catalogRefreshListeners = new Set<(p: { line?: string; done?: boolean }) => void>();
+
 /** Output of a CLI agent's installer (serve's `agentInstall` notifications), by provider id. */
 export const agentInstallListeners = new Set<(id: string, lines: string[]) => void>();
 

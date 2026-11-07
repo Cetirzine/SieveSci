@@ -73,3 +73,20 @@ import Testing
         #expect(Platform.windowsPath(#"D:\data"#) == #"D:\data"#)
     }
 }
+
+@Suite struct WindowsEnvironment {
+    @Test func registryPathEntriesExpand() {
+        let env = ["USERPROFILE": #"C:\Users\Yue_H"#, "LocalAppData": #"C:\Users\Yue_H\AppData\Local"#]
+        #expect(Platform.expandEnvironment(#"%USERPROFILE%\.local\bin"#, env: env) == #"C:\Users\Yue_H\.local\bin"#)
+        #expect(Platform.expandEnvironment(#"%LOCALAPPDATA%\agy\bin"#, env: env) == #"C:\Users\Yue_H\AppData\Local\agy\bin"#)
+        #expect(Platform.expandEnvironment("%NOPE%\\x", env: env) == "%NOPE%\\x")
+    }
+
+    @Test func aSilentLeaderboardDoesNotHoldTheRefresh() async throws {
+        let started = Date()
+        await #expect(throws: TimeLimitExceeded.self) {
+            try await withTimeLimit(0.3) { try await Task.sleep(nanoseconds: 5_000_000_000); return 1 }
+        }
+        #expect(Date().timeIntervalSince(started) < 2)
+    }
+}

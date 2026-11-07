@@ -88,6 +88,15 @@ export default function App() {
   }, [scene]);
 
   useEffect(() => { if (!scene) applyAppearance(appearance, accent); }, [scene, appearance, accent]);
+  // Back in the window: look again for what may have changed outside it (a CLI installed from a
+  // terminal, a key set elsewhere), at most every few seconds.
+  useEffect(() => {
+    if (scene) return;
+    let last = 0;
+    const onFocus = () => { if (Date.now() - last > 3000) { last = Date.now(); void A.refreshConfig(); } };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [scene]);
 
   // Menu bar (macOS desktop) and keyboard shortcuts; the menu follows the interface language.
   const languageChoice = useApp((s) => s.languageChoice);
@@ -133,6 +142,7 @@ export default function App() {
           c.onNotification((method, p) => { w.__notes!.push({ method, ...p }); });
         }
         c.onNotification((method, p) => {
+          if (method === "catalogRefresh") { A.catalogRefreshListeners.forEach((f) => f({ line: typeof p.line === "string" ? p.line : undefined, done: p.done === true })); return; }
           if (method === "agentInstall") { A.agentInstallListeners.forEach((f) => f(String(p.id), (p.lines ?? []) as string[])); return; }
           if (method !== "taskStatus") return;
           notifyStage(p);

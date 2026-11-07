@@ -92,11 +92,31 @@ extension ServeServer {
             let bench = BenchmarkSnapshot.current().benchmarks.sorted { $0.key < $1.key }.map { _, b -> JSON in
                 ["title": .string(b.title), "asOf": .string(b.asOf), "source": .string(b.source)]
             }
-            return ["roles": .object(roles), "vision": .array(vision), "benchmarks": .array(bench)]
+            return ["roles": .object(roles), "vision": .array(vision), "benchmarks": .array(bench),
+                    "refreshing": .bool(lock.withLock { catalogRefresh != nil })]
         case "models.refreshCatalogs":
-            let main = try? ConfiguredModels.roleModels(lock.withLock { config }, secrets: secrets).main
-            let r = await CatalogRefresher.refreshAll(extractor: main?.0, extractorModel: main?.1)
-            return ["report": .string(r.lines.joined(separator: "\n"))]
+            // One refresh at a time: opening Settings again (or a second click) joins the one under way.
+            // Each source's result arrives as `catalogRefresh {line}` while it runs, then `{done}`.
+            let cfg = lock.withLock { config }
+            let main = try? ConfiguredModels.roleModels(cfg, secrets: secrets).main
+            let task: Task<[String], Never> = lock.withLock {
+                if let t = catalogRefresh { return t }
+                let t = Task { [weak self] in
+                    await CatalogRefresher.refreshAll(extractor: main?.0, extractorModel: main?.1) { line in
+                        self?.notify("catalogRefresh", ["line": .string(line)])
+                    }.lines
+                }
+                catalogRefresh = t
+                return t
+            }
+            let lines = await task.value
+            let finished = lock.withLock { () -> Bool in
+                guard catalogRefresh == task else { return false }
+                catalogRefresh = nil
+                return true
+            }
+            if finished { notify("catalogRefresh", ["done": true]) }
+            return ["report": .string(lines.joined(separator: "\n"))]
 
         case "connectors.list":
             return ["connectors": .array(ScienceConnectors.all.map { c in
@@ -161,7 +181,8 @@ extension ServeServer {
             guard let exe = prof.executable else { throw RPCError(code: -32602, message: "not a CLI agent") }
             return ["message": .string(await AgentInstaller.openSignIn(exe))]
         case "cli.install":
-            return ["message": .string(await Self.installCLI())]
+            let r = await Self.installCLI()
+            return ["ok": .bool(r.ok), "message": .string(r.message)]
 
         case "updates.check":
             return try await Self.latestRelease()
@@ -295,7 +316,7 @@ extension ServeServer {
 
     /// Puts this `sievesci` on the command line: a link in ~/.local/bin (no administrator rights);
     /// on Windows the folder to add to PATH.
-    static func installCLI() async -> String {
+    static func installCLI() async -> (ok: Bool, message: String) {
         #if os(Windows)
         // The engine folder goes on the user's PATH (no administrator rights needed); new terminals see it.
         let full = Platform.windowsPath(Bundle.main.executablePath ?? CommandLine.arguments[0])
@@ -306,16 +327,16 @@ extension ServeServer {
         let bin = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin")
         try? FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         let dst = bin.appendingPathComponent("sievesci")
-        if dst.resolvingSymlinksInPath().path == exe.resolvingSymlinksInPath().path { return L10n.f("Linked %@ (make sure ~/.local/bin is on your PATH).", dst.path) }
+        if dst.resolvingSymlinksInPath().path == exe.resolvingSymlinksInPath().path { return (true, L10n.f("Linked %@ (make sure ~/.local/bin is on your PATH).", dst.path)) }
         try? FileManager.default.removeItem(at: dst)
-        do { try FileManager.default.createSymbolicLink(at: dst, withDestinationURL: exe) } catch { return error.localizedDescription }
-        return L10n.f("Linked %@ (make sure ~/.local/bin is on your PATH).", dst.path)
+        do { try FileManager.default.createSymbolicLink(at: dst, withDestinationURL: exe) } catch { return (false, error.localizedDescription) }
+        return (true, L10n.f("Linked %@ (make sure ~/.local/bin is on your PATH).", dst.path))
         #endif
     }
 
     /// Adds a folder to the Windows user PATH with .NET's own call, which also tells running programs
     /// (Explorer, so new terminals) that the environment changed.
-    static func addToUserPath(_ dir: String) async -> String {
+    static func addToUserPath(_ dir: String) async -> (ok: Bool, message: String) {
         let q = dir.replacingOccurrences(of: "'", with: "''")
         let script = """
         $d = '\(q)'; $p = [Environment]::GetEnvironmentVariable('Path', 'User'); \
@@ -326,12 +347,12 @@ extension ServeServer {
         do {
             let r = try await ProcessRunner.run("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], timeout: 60)
             let out = r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-            if r.exitCode == 0, out.hasSuffix("added") { return L10n.f("Added %@ to your PATH. Open a new terminal and run sievesci.", dir) }
-            if r.exitCode == 0, out.hasSuffix("present") { return L10n.f("%@ is already on your PATH. Open a new terminal and run sievesci.", dir) }
+            if r.exitCode == 0, out.hasSuffix("added") { return (true, L10n.f("Added %@ to your PATH. Open a new terminal and run sievesci.", dir)) }
+            if r.exitCode == 0, out.hasSuffix("present") { return (true, L10n.f("%@ is already on your PATH. Open a new terminal and run sievesci.", dir)) }
             let why = (r.stderr.isEmpty ? out : r.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
-            return L10n.f("Could not change your PATH (%@). Add %@ to it yourself.", String(why.prefix(200)), dir)
+            return (false, L10n.f("Could not change your PATH (%@). Add %@ to it yourself.", String(why.prefix(200)), dir))
         } catch {
-            return L10n.f("Could not change your PATH (%@). Add %@ to it yourself.", error.localizedDescription, dir)
+            return (false, L10n.f("Could not change your PATH (%@). Add %@ to it yourself.", error.localizedDescription, dir))
         }
     }
 
