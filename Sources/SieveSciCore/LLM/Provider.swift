@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking   // URLError and NSURLErrorDomain on Windows and Linux
+#endif
 
 /// Wire protocol family. Each vendor is reached through its *native* protocol where one exists,
 /// because only the native protocol exposes that vendor's full cache controls and usage fields.
@@ -485,10 +488,22 @@ public enum StreamWatch {
         }
     }
 
-    /// Worth sending again: the endpoint went silent, or closed the stream before its final message.
+    /// Worth sending again: the endpoint went silent, closed the stream before its final message, or the
+    /// connection broke (on Windows and Linux libcurl reports a closed connection as "Empty reply from server").
     public static func isDropped(_ error: Error) -> Bool {
         if case ProviderError.stalled = error { return true }
         if case ProviderError.protocolError(let m) = error { return m.contains("stream ended without a final message") }
-        return false
+        return isTransport(error)
+    }
+
+    /// A network failure rather than an answer: URLSession's errors (as `URLError` on Apple platforms,
+    /// as an NSURLErrorDomain `NSError` from swift-corelibs-foundation) and libcurl's wording.
+    public static func isTransport(_ error: Error) -> Bool {
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain { return ns.code != NSURLErrorCancelled }   // Stop is not a network failure
+        if error is URLError { return true }
+        let t = ns.localizedDescription.lowercased()
+        return ["empty reply from server", "connection reset", "connection was lost", "network connection was lost",
+                "recv failure", "send failure", "timed out", "could not connect", "failed to connect"].contains { t.contains($0) }
     }
 }

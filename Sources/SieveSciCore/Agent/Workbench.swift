@@ -62,7 +62,9 @@ public final class Workbench: @unchecked Sendable {
         // Reproducibility: environment snapshot and a baseline commit of the workspace state.
         Task.detached { [services] in await EnvironmentSnapshot.capture(services: services) }
         await services.git.prepare()
-        if let base = await services.git.snapshot(subject: "baseline before task \(services.taskId)", trailers: ["SieveSci-Task": services.taskId]) {
+        let base = await services.git.snapshot(subject: "baseline before task \(services.taskId)", trailers: ["SieveSci-Task": services.taskId])
+        announceBulkExclusions()
+        if let base {
             services.log("git_commit", actor: "host", ["commit": .string(base.commit), "subject": "baseline"])
         } else if let why = services.git.skippedReason {
             services.emit(.notice(why))
@@ -398,6 +400,17 @@ public final class Workbench: @unchecked Sendable {
 
     public func replaceMain(_ s: AgentSession) { main = s }
 
+    /// Folders of generated data the history just started leaving out: said once, logged.
+    func announceBulkExclusions() {
+        let dirs = services.git.newlyExcluded
+        guard !dirs.isEmpty else { return }
+        let f = NumberFormatter(); f.numberStyle = .decimal
+        let list = dirs.prefix(6).map { "\($0.dir) (\(f.string(from: NSNumber(value: $0.files)) ?? String($0.files)))" }.joined(separator: ", ")
+            + (dirs.count > 6 ? ", …" : "")
+        services.emit(.notice(L10n.s("History leaves out generated data in %@; scripts, notes and results are still versioned.", list)))
+        services.log("git_bulk_excluded", actor: "host", ["dirs": .array(dirs.map { .string($0.dir) }), "files": .array(dirs.map { .int($0.files) })])
+    }
+
     /// Snapshots the turn's file changes into the shadow repository, linking commit ⇄ audit log.
     func commitTurn(prompt: String, auditStart: Int, receiptStart: Int) async {
         let receipts = services.ledger.since(receiptStart).filter { !$0.filesWritten.isEmpty }.map(\.id)
@@ -408,7 +421,8 @@ public final class Workbench: @unchecked Sendable {
             "SieveSci-Receipts": receipts.joined(separator: " "),
             "SieveSci-Audit-Range": "\(auditStart + 1)-\(head.seq)",
             "SieveSci-Audit-Head": head.hash,
-        ]) else { return }
+        ]) else { announceBulkExclusions(); return }
+        announceBulkExclusions()
         services.log("git_commit", actor: "host", ["commit": .string(c.commit), "subject": .string(subject),
                                                    "receipts": .array(receipts.map { .string($0) }),
                                                    "skipped_large": .array(c.skipped.map { .string("\($0.0) \($0.1)") })])

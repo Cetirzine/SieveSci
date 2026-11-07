@@ -157,8 +157,17 @@ final class SubagentRegistry: @unchecked Sendable {
     private let lock = NSLock()
     private var all: [Weak] = []
 
-    func add(_ s: AgentSession) { lock.withLock { all = all.filter { $0.s != nil } + [Weak(s)] } }
-    func cancelAll() { lock.withLock { all.compactMap(\.s) }.forEach { $0.cancel() } }
+    /// Set by Stop until the next turn: a subagent created meanwhile (by a call already under way)
+    /// is stopped as it starts.
+    private var stopped = false
+
+    func add(_ s: AgentSession) {
+        let stop = lock.withLock { all = all.filter { $0.s != nil } + [Weak(s)]; return stopped }
+        if stop { s.cancel() }
+    }
+    func cancelAll() { lock.withLock { stopped = true; return all.compactMap(\.s) }.forEach { $0.cancel() } }
+    func resume() { lock.withLock { stopped = false } }
+    var isStopped: Bool { lock.withLock { stopped } }
 }
 
 extension AgentSession {

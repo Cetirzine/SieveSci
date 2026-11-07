@@ -135,7 +135,7 @@ public enum Retry {
                 last = error
                 let retryable: Bool
                 if let pe = error as? ProviderError { retryable = pe.isRetryable }
-                else { retryable = (error as? URLError) != nil }
+                else { retryable = StreamWatch.isTransport(error) }
                 guard retryable, i < attempts - 1 else { throw error }
                 let delay = min(base * pow(2, Double(i)) + Double.random(in: 0...0.5), 30)
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))

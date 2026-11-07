@@ -131,3 +131,51 @@ final class StepProvider: LLMProvider, @unchecked Sendable {
         #expect(a.takeInserts().isEmpty)
     }
 }
+
+/// Two tool calls in one step; the agent is stopped while the first runs.
+final class TwoCallProvider: LLMProvider, @unchecked Sendable {
+    let profile = ProviderProfile(id: "two", displayName: "two", family: .anthropic, baseURL: "http://localhost", auth: .none, apiKeyRef: "", models: ["m"])
+    let calls = LockedBox(0)
+    var onCall: (@Sendable () -> Void)?
+    func stream(_ request: LLMRequest) -> AsyncThrowingStream<StreamEvent, Error> {
+        calls.mutate { $0 += 1 }
+        onCall?()   // Stop pressed while this reply streams
+        let msg = Message(role: .assistant, blocks: [.toolUse(ToolUse(id: "a", name: "bash", input: ["command": "sleep 2"])),
+                                                     .toolUse(ToolUse(id: "b", name: "glob", input: ["pattern": "*"]))])
+        return AsyncThrowingStream { c in
+            c.yield(.completed(LLMResponse(message: msg, stopReason: .toolUse, usage: Usage(input: 10, output: 2))))
+            c.finish()
+        }
+    }
+}
+
+@Suite struct StopEndsTheTurn {
+    @Test func stopMidStepSkipsTheRestAndReportsTheEnd() async throws {
+        let p = TwoCallProvider()
+        let (s, _) = try makeServices(p)
+        s.permissions.mode = .yolo
+        let finished = LockedBox<[String]>([])
+        s.emit = { e in if case .turnFinished(let id, _) = e { finished.mutate { $0.append(id) } } }
+        let a = AgentSession(id: "main", role: .main, services: s, tools: BuiltinTools.all())
+        p.onCall = { a.cancel() }
+        _ = try? await a.send("go")
+        #expect(finished.value == ["main"], "the front end hears the turn end")
+        #expect(p.calls.value == 1, "no further model call after Stop")
+        #expect(s.subagents.isStopped)
+    }
+
+    @Test func aTurnEndedByAnErrorStillReportsItsEnd() async throws {
+        final class Failing: LLMProvider, @unchecked Sendable {
+            let profile = ProviderProfile(id: "f", displayName: "f", family: .anthropic, baseURL: "http://localhost", auth: .none, apiKeyRef: "", models: ["m"])
+            func stream(_ request: LLMRequest) -> AsyncThrowingStream<StreamEvent, Error> {
+                AsyncThrowingStream { $0.finish(throwing: CancellationError()) }
+            }
+        }
+        let (s, _) = try makeServices(Failing())
+        let finished = LockedBox<[String]>([])
+        s.emit = { e in if case .turnFinished(let id, _) = e { finished.mutate { $0.append(id) } } }
+        let a = AgentSession(id: "main", role: .main, services: s, tools: [])
+        await #expect(throws: (any Error).self) { try await a.send("go") }
+        #expect(finished.value == ["main"])
+    }
+}

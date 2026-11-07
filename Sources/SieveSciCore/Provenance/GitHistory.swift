@@ -17,8 +17,16 @@ public final class GitHistory: @unchecked Sendable {
     /// home or Documents folder rather than a project, and copying it would cost disk and minutes.
     public var maxSnapshotFiles = 20_000
     public var maxSnapshotBytes = 500 * 1024 * 1024
+    /// A folder with more new files than this (fpocket output per structure, AlphaFold downloads,
+    /// per-sample results …) is generated data: it is left out of the history, which keeps versioning
+    /// the scripts, notes, reports and small results around it. Recorded in the shadow repository's
+    /// `info/exclude`, so later snapshots do not list it again.
+    public var bulkDirFiles = 2_000
     /// Why the last snapshot was not taken (shown to the user), nil when it was.
     public private(set) var skippedReason: String?
+    /// Folders the last snapshot newly left out as bulk data, with their file counts (shown once).
+    public private(set) var newlyExcluded: [(dir: String, files: Int)] = []
+    static let bulkHeader = "# SieveSci: generated bulk data, left out of the history (kept automatically)"
     private let lock = NSLock()
     public private(set) var available = false
 
@@ -62,11 +70,20 @@ public final class GitHistory: @unchecked Sendable {
         guard available else { return nil }
         // Candidates: modified/deleted tracked files + new untracked files (respecting .gitignore).
         _ = await git(["add", "-u"])
-        let untracked = (await git(["ls-files", "--others", "--exclude-standard", "-z"]))?.stdout.split(separator: "\0").map(String.init) ?? []
+        var untracked = (await git(["ls-files", "--others", "--exclude-standard", "-z"], timeout: 300))?.stdout.split(separator: "\0").map(String.init) ?? []
         var skipped: [(String, String)] = []
         var toAdd: [String] = []
         var bytes = 0
         skippedReason = nil
+        newlyExcluded = []
+        // Folders of generated data leave the history; the rest of the project stays in it.
+        let bulk = Self.bulkDirectories(untracked, budget: bulkDirFiles)
+        if !bulk.isEmpty {
+            excludeForGood(bulk.map(\.dir))
+            newlyExcluded = bulk
+            let prefixes = bulk.map(\.dir)
+            untracked.removeAll { p in prefixes.contains { p.hasPrefix($0) } }
+        }
         if untracked.count > maxSnapshotFiles {
             skippedReason = L10n.s("History is off for this workspace: it has %@ new files, too many for a project folder. Open the project's own folder instead.", String(untracked.count))
             return nil
@@ -88,6 +105,9 @@ public final class GitHistory: @unchecked Sendable {
         let staged = await git(["diff", "--cached", "--quiet"])
         guard staged?.exitCode == 1 else { return nil }  // 0 = no changes
         var message = subject + "\n\n"
+        if !newlyExcluded.isEmpty {
+            message += "Generated data left out of the history from now on:\n" + newlyExcluded.map { "  \($0.dir)  (\($0.files) files)" }.joined(separator: "\n") + "\n\n"
+        }
         if !skipped.isEmpty {
             message += "Large files not stored (sha256):\n" + skipped.map { "  \($0.0)  \($0.1)" }.joined(separator: "\n") + "\n\n"
         }
@@ -95,6 +115,71 @@ public final class GitHistory: @unchecked Sendable {
         guard let r = await git(["commit", "-q", "--no-verify", "-m", message]), r.exitCode == 0,
               let hash = await git(["rev-parse", "HEAD"])?.stdout.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
         return (hash, skipped)
+    }
+
+    /// The folders that hold the bulk, as few and as deep as possible, so results beside them stay in the
+    /// history. A folder with more than `budget` new files is left out whole when it is a dump: thousands
+    /// of per-item subfolders (fpocket's output per structure) or more than `budget` files of its own.
+    /// Otherwise its biggest subfolders go, largest first, until the rest fits. Paths end in "/".
+    static func bulkDirectories(_ paths: [String], budget: Int, maxDepth: Int = 6, perItemFolders: Int = 100) -> [(dir: String, files: Int)] {
+        guard paths.count > budget else { return [] }
+        var count: [String: Int] = [:], direct: [String: Int] = [:], children: [String: Set<String>] = [:]
+        for p in paths {
+            let parts = p.split(separator: "/", omittingEmptySubsequences: false).dropLast()
+            var dir = ""
+            count[dir, default: 0] += 1
+            for (depth, part) in parts.enumerated() where depth < maxDepth {
+                let child = dir + part + "/"
+                children[dir, default: []].insert(child)
+                count[child, default: 0] += 1
+                dir = child
+            }
+            direct[dir, default: 0] += 1
+        }
+        var out: [(dir: String, files: Int)] = []
+        /// Files of `dir` still in the history after its bulk is left out.
+        func prune(_ dir: String, depth: Int) -> Int {
+            let n = count[dir] ?? 0
+            guard n > budget else { return n }
+            let kids = children[dir] ?? []
+            if !dir.isEmpty && (depth >= maxDepth || kids.count > perItemFolders || (direct[dir] ?? 0) > budget) {
+                out.append((dir, n))
+                return 0
+            }
+            var kept: [(dir: String, files: Int)] = []
+            var remaining = direct[dir] ?? 0
+            for c in kids.sorted() {
+                let r = prune(c, depth: depth + 1)
+                remaining += r
+                if r > 0 { kept.append((c, r)) }
+            }
+            kept.sort { $0.files > $1.files }
+            while remaining > budget, let big = kept.first {
+                kept.removeFirst()
+                out.removeAll { $0.dir.hasPrefix(big.dir) }
+                out.append((big.dir, count[big.dir] ?? big.files))
+                remaining -= big.files
+            }
+            return remaining
+        }
+        _ = prune("", depth: 0)
+        return out
+    }
+
+    /// Adds folders to the shadow repository's exclude list (kept across snapshots).
+    func excludeForGood(_ dirs: [String]) {
+        let url = gitDir.appendingPathComponent("info/exclude")
+        var text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        if !text.contains(Self.bulkHeader) { text += (text.hasSuffix("\n") || text.isEmpty ? "" : "\n") + Self.bulkHeader + "\n" }
+        for d in dirs {
+            // Anchored to the workspace root; characters git reads as patterns are escaped.
+            var line = "/"
+            for ch in d { if "*?[\\".contains(ch) { line.append("\\") }; line.append(ch) }
+            if line.hasPrefix("/#") || line.hasPrefix("/!") { line.insert("\\", at: line.index(after: line.startIndex)) }
+            if !text.split(separator: "\n").contains(Substring(line)) { text += line + "\n" }
+        }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? text.writeReliably(to: url)
     }
 
     public func log(limit: Int = 50) async -> [Commit] {

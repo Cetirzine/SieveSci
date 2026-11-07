@@ -1103,3 +1103,4 @@
 "Insert into the running turn" = "插話傳送到目前輪次";
 "While the agent works, Enter inserts the message into the running turn" = "智慧體工作時，Enter 把訊息插話傳送到目前輪次";
 "Off: Enter queues the message for after the turn and ⌘/Ctrl+Enter inserts it, read at the agent's next step. On: the other way round." = "關閉時：Enter 把訊息排到這一輪之後，⌘/Ctrl+Enter 插話傳送，智慧體在下一步就會讀到。開啟時反過來。";
+"History leaves out generated data in %@; scripts, notes and results are still versioned." = "歷史記錄不再包含這些資料夾裡產生的資料：%@；腳本、筆記和結果照常記錄版本。";

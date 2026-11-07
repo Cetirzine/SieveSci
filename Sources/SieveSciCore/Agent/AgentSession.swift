@@ -116,7 +116,9 @@ public final class AgentSession: @unchecked Sendable {
                 if let c = cliConversation, provider is CLIAgentProvider { CLIAgentProvider.endProcess(conversation: c, profile: provider.profile) }
             }
         }
-        cancelled = false
+        // A new turn clears Stop; a subagent starting while Stop holds (a call already under way) stays stopped.
+        if role == .main { services.subagents.resume() }
+        cancelled = role == .main ? false : services.subagents.isStopped
         interventionsThisTurn = 0
         turnRequest = text
         turnToolCalls.mutate { $0 = 0 }
@@ -187,6 +189,10 @@ public final class AgentSession: @unchecked Sendable {
 
     func loop() async throws -> Message? {
         services.emit(.turnStarted(role: role, agentId: id))
+        // Every started turn reports its end, also when Stop or an error ends it by throwing: front ends
+        // keep showing "running" until they hear it.
+        var reported = false
+        defer { if !reported { services.emit(.turnFinished(agentId: id, stop: .pause)) } }
         var steps = 0
         var last: Message?
         while !cancelled && !Task.isCancelled && steps < maxSteps {
@@ -243,9 +249,11 @@ public final class AgentSession: @unchecked Sendable {
                     continue
                 }
             }
+            reported = true
             services.emit(.turnFinished(agentId: id, stop: resp.stopReason))
             return last
         }
+        reported = true
         services.emit(.turnFinished(agentId: id, stop: cancelled ? .pause : .endTurn))
         return last
     }
@@ -320,6 +328,7 @@ public final class AgentSession: @unchecked Sendable {
             draft?.clear()
             services.log("stream_retry", actor: "host", ["agent": .string(id), "error": .string(error.localizedDescription), "attempt": .int(dropRetry + 1)])
             services.emit(.notice(L("The model stopped responding; asking again.")))
+            try await Task.sleep(nanoseconds: UInt64(2 + 4 * dropRetry) * 1_000_000_000)
             return try await callModel(dropRetry: dropRetry + 1)
         } catch {
             if let draft, let m = draft.message() { append(m) }
@@ -435,6 +444,11 @@ public final class AgentSession: @unchecked Sendable {
     }
 
     func execute(_ use: ToolUse) async -> ContentBlock {
+        // Stopped mid-step: the step's remaining calls do not start (a second `task` call would
+        // otherwise start a worker after Stop).
+        if cancelled || Task.isCancelled {
+            return .toolResult(ToolResult(toolUseId: use.id, content: "Not run: stopped by the user.", isError: true))
+        }
         guard let t = tool(named: use.name) else {
             return .toolResult(ToolResult(toolUseId: use.id, content: "Unknown tool \(use.name).", isError: true))
         }

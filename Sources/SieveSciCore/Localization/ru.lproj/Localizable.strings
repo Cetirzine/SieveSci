@@ -1103,3 +1103,4 @@
 "Insert into the running turn" = "Вставить в текущий ход";
 "While the agent works, Enter inserts the message into the running turn" = "Пока агент работает, Enter вставляет сообщение в текущий ход";
 "Off: Enter queues the message for after the turn and ⌘/Ctrl+Enter inserts it, read at the agent's next step. On: the other way round." = "Выкл.: Enter ставит сообщение в очередь после хода, а ⌘/Ctrl+Enter вставляет его — агент прочтёт на следующем шаге. Вкл.: наоборот.";
+"History leaves out generated data in %@; scripts, notes and results are still versioned." = "История не включает сгенерированные данные в %@; скрипты, заметки и результаты по-прежнему версионируются.";
