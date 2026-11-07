@@ -1146,3 +1146,4 @@
 "pivot" = "改變路線";
 "stop" = "停止";
 "Report leaves out what did not work" = "報告漏寫了沒成功的部分";
+"The connection failed (%@); going on in %@ s (%@ of %@)." = "連線失敗（%@）；%@ 秒後繼續（第 %@ / %@ 次）。";

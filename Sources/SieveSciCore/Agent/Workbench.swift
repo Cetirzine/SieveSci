@@ -338,17 +338,57 @@ public final class Workbench: @unchecked Sendable {
         let receiptStart = services.ledger.count
         defer { Task { await self.commitTurn(prompt: prompt, auditStart: auditStart, receiptStart: receiptStart) } }
         let main = self.main
-        let work = Task { try await main.send(prompt, attachments: blocks); try await self.driveGoal() }
-        stateLock.withLock { running = work }
         defer { stateLock.withLock { running = nil } }
-        do {
-            try await work.value
-        } catch where work.isCancelled || error is CancellationError {
-            services.emit(.notice(L("Interrupted.")))
-        } catch {
-            services.emit(.error(error.localizedDescription))
-            services.log("error", actor: "host", ["message": .string(error.localizedDescription)])
+        // A passing failure (the network, a provider's 429/5xx, a dropped stream) does not end the work: after
+        // a growing wait the agent is told to go on from where it stopped, at most three times (dsh-superagent's
+        // "a worker whose turn failed is told to go on"). Stop ends it, waiting included.
+        var (p, b) = (prompt, blocks)
+        for attempt in 0...Self.passingRetries.count {
+            let work = Task { try await main.send(p, attachments: b); try await self.driveGoal() }
+            stateLock.withLock { running = work }
+            do {
+                try await work.value
+                return
+            } catch where work.isCancelled || error is CancellationError {
+                services.emit(.notice(L("Interrupted.")))
+                return
+            } catch where Self.isPassing(error) && attempt < Self.passingRetries.count && !stateLock.withLock({ stoppedByUser }) {
+                let wait = Self.passingRetries[attempt]
+                services.log("turn_retry", actor: "host", ["error": .string(error.localizedDescription), "attempt": .int(attempt + 1), "wait_s": .int(Int(wait))])
+                services.emit(.notice(L10n.s("The connection failed (%@); going on in %@ s (%@ of %@).", error.localizedDescription.truncated(120),
+                                             String(Int(wait)), String(attempt + 1), String(Self.passingRetries.count))))
+                let pause = Task { try await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+                stateLock.withLock { running = pause }
+                if (try? await pause.value) == nil || stateLock.withLock({ stoppedByUser }) {
+                    services.emit(.notice(L("Interrupted.")))
+                    return
+                }
+                (p, b) = (Self.recoveryNote(error), [])
+            } catch {
+                services.emit(.error(error.localizedDescription))
+                services.log("error", actor: "host", ["message": .string(error.localizedDescription)])
+                return
+            }
         }
+    }
+
+    /// Waits before telling the agent to go on after a passing failure (seconds).
+    static var passingRetries: [Double] = [5, 15, 45]
+
+    /// A failure of the network or the provider that is likely gone in a moment (not a refusal, a bad key or
+    /// a request that is too long, which waiting does not fix).
+    static func isPassing(_ error: Error) -> Bool {
+        if ProviderError.isContextOverflow(error) { return false }
+        if StreamWatch.isDropped(error) { return true }
+        if let p = error as? ProviderError { return p.isRetryable }
+        return false
+    }
+
+    /// The host's message after a passing failure (a host note, so it is never taken for the user's request).
+    static func recoveryNote(_ error: Error) -> String {
+        "<recovery>The last step failed with a passing network or provider error (\(error.localizedDescription.truncated(160))). "
+            + "Go on with the task from where it stopped. Before repeating a step that acts outside the workspace (a download, a "
+            + "submission, a message), check the workspace and the receipts: it may already have happened.</recovery>"
     }
 
     /// Goal driver: while a goal is active, start the next round when the agent goes idle, but only when

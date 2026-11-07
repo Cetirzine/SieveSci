@@ -1146,3 +1146,4 @@
 "pivot" = "pivot";
 "stop" = "stop";
 "Report leaves out what did not work" = "Report leaves out what did not work";
+"The connection failed (%@); going on in %@ s (%@ of %@)." = "The connection failed (%@); going on in %@ s (%@ of %@).";

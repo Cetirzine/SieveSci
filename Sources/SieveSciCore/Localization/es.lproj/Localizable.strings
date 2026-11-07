@@ -1146,3 +1146,4 @@
 "pivot" = "cambiar de rumbo";
 "stop" = "parar";
 "Report leaves out what did not work" = "El informe omite lo que no funcionó";
+"The connection failed (%@); going on in %@ s (%@ of %@)." = "La conexión falló (%@); se sigue en %@ s (%@ de %@).";

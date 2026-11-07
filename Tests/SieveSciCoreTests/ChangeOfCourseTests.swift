@@ -236,3 +236,49 @@ import Testing
         #expect(s.research.snapshot.reviewMark == s.ledger.count - 1, "kept in the saved plan, so a restart does not recount")
     }
 }
+
+/// dsh-superagent's recovery: a passing failure does not end the work; the agent is told to go on.
+@Suite(.serialized) struct PassingFailures {
+    final class Flaky: LLMProvider, @unchecked Sendable {
+        let profile = ProviderProfile(id: "flaky503", displayName: "flaky", family: .anthropic, baseURL: "http://localhost", auth: .none, apiKeyRef: "", models: ["m"])
+        let lock = NSLock()
+        var n = 0
+        var failures: Int
+        var prompts: [String] = []
+        init(failures: Int) { self.failures = failures }
+        func stream(_ request: LLMRequest) -> AsyncThrowingStream<StreamEvent, Error> {
+            let fail: Bool = lock.withLock {
+                n += 1
+                prompts.append(request.messages.last?.plainText ?? "")
+                if failures > 0 { failures -= 1; return true }
+                return false
+            }
+            return AsyncThrowingStream { c in
+                if fail { c.finish(throwing: ProviderError.http(status: 503, body: "overloaded")); return }
+                c.yield(.completed(LLMResponse(message: .assistant("done"), stopReason: .endTurn, usage: Usage(input: 1, output: 1))))
+                c.finish()
+            }
+        }
+    }
+
+    @Test func theTurnGoesOnAfterAPassingFailure() async throws {
+        let p = Flaky(failures: 4)   // Retry.withBackoff is not in this path; the provider fails each first call
+        let (s, _) = try makeServices(p)
+        s.research.groundingRequired = false
+        let b = Workbench(services: s)
+        let saved = Workbench.passingRetries
+        Workbench.passingRetries = [0.05, 0.05, 0.05]
+        defer { Workbench.passingRetries = saved }
+        p.lock.withLock { p.failures = 2 }
+        await b.submit("summarise the data")
+        #expect(p.prompts.contains { $0.contains("<recovery>") }, "the agent was told to go on")
+        #expect(s.research.objective == nil || !(s.research.objective ?? "").contains("<recovery>"), "a host note is never the objective")
+    }
+
+    @Test func refusalsAndBadKeysAreNotRetried() {
+        #expect(!Workbench.isPassing(ProviderError.http(status: 401, body: "bad key")))
+        #expect(!Workbench.isPassing(ProviderError.protocolError("The input (2000000 tokens) is longer than the model's context length")))
+        #expect(Workbench.isPassing(ProviderError.http(status: 429, body: "slow down")))
+        #expect(Workbench.isPassing(ProviderError.stalled(seconds: 300)))
+    }
+}
