@@ -988,7 +988,8 @@ function ScheduleSettings() {
           <div key={t.id} className="lc">
             <div className="stack" style={{ gap: 2, minWidth: 0 }}>
               <span className="clip-2">{t.prompt}</span>
-              <span className="t-caption secondary">{t.when} · {base(t.workspace)}</span>
+              {/* When it runs, and in which workspace folder (full path on hover). */}
+              <span className="t-caption secondary" title={t.workspace}>{t.when} · {L("Runs in")} {base(t.workspace)}</span>
             </div>
             <ActionButton kind="destructive" width="column" onClick={async () => {
               const r = await A.request<{ message: string; schedules: Scheduled[] }>("schedules.remove", { id: t.id });
@@ -1003,7 +1004,7 @@ function ScheduleSettings() {
           <span>{L("Prompt")}</span>
           <SpecField multiline value={prompt} onChange={setPrompt} placeholder={L("e.g. Every morning, find new papers on CRISPR base editing and summarise the three most relevant.")} />
         </div>
-        <ActionRow title={workspace ? L("Runs in") + " " + base(workspace) : L("Open a workspace first.")} detail={message}>
+        <ActionRow title={workspace ? L("Runs in") + " " + base(workspace) : L("Open a workspace first.")} detail={message || workspace || undefined}>
           <ActionButton kind="primary" width="column" disabled={!prompt || !workspace} onClick={async () => {
             if (!workspace) { setMessage(L("Open a workspace first.")); return; }
             const r = await A.request<{ message: string; schedules: Scheduled[] }>("schedules.add", { workspace, when, prompt });
