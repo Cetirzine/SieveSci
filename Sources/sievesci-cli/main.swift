@@ -83,12 +83,34 @@ func makeProvider(_ id: String, _ model: String?) throws -> (LLMProvider, String
 }
 
 setvbuf(stdout, nil, _IONBF, 0)
-/// Keys: environment variables, then those saved by the SieveSci app (macOS Keychain).
-let cliSecrets = KeychainFallbackSecretStore()
+/// Keys: environment variables, then those saved by the SieveSci app — the macOS Keychain, Windows
+/// Credential Manager, or `secrets.json` elsewhere — so the app and the CLI share them.
+let cliSecrets: SecretStore = {
+    #if os(macOS)
+    return KeychainFallbackSecretStore()
+    #else
+    return PlatformSecretStore.shared
+    #endif
+}()
 let dim = "\u{1B}[2m", reset = "\u{1B}[0m", orange = "\u{1B}[38;5;173m", red = "\u{1B}[31m", green = "\u{1B}[32m"
 
-/// Models, search and session settings from the command line, for one task.
+/// Models, search and session settings for one task. Without `--provider`, the app's saved
+/// configuration decides (its providers, role models and keys), as `serve` does; the command line
+/// still sets the mode and the other run options.
 func buildServices(_ o: Options, task: String) throws -> (SessionServices, (LLMProvider, String)) {
+    if !o.providerGiven {
+        var config = AppConfig.load()
+        config.addPresets()
+        if let main = try? ConfiguredModels.roleModels(config, secrets: cliSecrets).main {
+            let services = try ConfiguredModels.services(task: task, workspace: URL(fileURLWithPath: o.workspace), config: config, secrets: cliSecrets)
+            services.permissions.mode = o.mode
+            services.research.groundingRequired = o.grounding
+            if let e = o.effort { services.effort = e }
+            services.delegation.auto = o.autoDelegate
+            if let n = o.maxWorkers { services.delegation.maxParallel = n }
+            return (services, main)
+        }
+    }
     let mainModel = try makeProvider(o.provider, o.model)
     var checker: (LLMProvider, String)?
     if let c = o.checker {

@@ -135,10 +135,20 @@ public enum Scheduler {
 
     /// The headless CLI next to the running executable (app bundle or build dir), else on PATH.
     public static func cliPath() -> String? {
+        #if os(Windows)
+        // The engine is the CLI (`sievesci.exe`), and Windows may report its path as `\\?\C:\…`.
+        let own = Platform.windowsPath(Bundle.main.executablePath ?? CommandLine.arguments.first ?? "")
+        let dir = own.split(separator: "\\").dropLast().joined(separator: "\\")
+        for name in ["sievesci.exe", "sievesci-cli.exe"] {
+            let c = dir + "\\" + name
+            if FileManager.default.fileExists(atPath: c) { return c }
+        }
+        #else
         let exe = URL(fileURLWithPath: CommandLine.arguments.first ?? "").deletingLastPathComponent()
         for c in [exe.appendingPathComponent("sievesci-cli"), exe.appendingPathComponent("sievesci"),
                   exe.deletingLastPathComponent().appendingPathComponent("Resources/sievesci-cli")]
         where FileManager.default.isExecutableFile(atPath: c.path) { return c.path }
+        #endif
         return ProcessRunner.which("sievesci") ?? ProcessRunner.which("sievesci-cli")
     }
 
