@@ -7,7 +7,7 @@ public enum BuiltinTools {
          UpdatePlanTool(), ClaimFindingTool(), TodoWriteTool(), GoalTool(), TaskTool(), SkillTool(), SkillEnvTool(), ReceiptTool(), JobOutputTool(), JobWatchTool(), RespondReviewTool(),
          VerifyCitationTool(), DispatchTool(), MemoryTool(), SessionSearchTool(), SessionReadTool(), SkillManageTool(),
          LibrarySearchTool(), ChemLookupTool(), BioDatabaseTool(), BioToolSearchTool(), RepoMapTool(),
-         AskUserTool(), BrainstormTool(), IdeaTool(), IdeationSeedsTool()]
+         AskUserTool(), BrainstormTool(), IdeaTool(), IdeationSeedsTool(), SkillInstallTool()]
     }
 }
 
