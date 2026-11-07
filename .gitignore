@@ -6,3 +6,6 @@ dist/
 dist-ui/
 diagnostics/
 *.xcodeproj/xcuserdata/
+
+# Per-checkout preview servers
+.claude/launch.json
