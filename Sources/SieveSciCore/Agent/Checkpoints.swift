@@ -80,7 +80,41 @@ public final class SessionStore: @unchecked Sendable {
         }
     }
 
+    /// The whole conversation, as the user saw it (display, export, digests). Compaction marks are skipped.
     public static func load(dir: URL, agent: String) -> [Message] {
+        let dec = JSONDecoder()
+        return lines(dir: dir, agent: agent).compactMap { try? dec.decode(Message.self, from: Data($0.utf8)) }
+    }
+
+    /// What the model had in context when the session stopped: the conversation as of the last
+    /// compaction mark, then everything appended after it. Without this a reopened task sent its whole
+    /// history again — past a 1M-token window after a long run.
+    public static func loadContext(dir: URL, agent: String) -> [Message] {
+        let dec = JSONDecoder()
+        var out: [Message] = []
+        for line in lines(dir: dir, agent: agent) {
+            let data = Data(line.utf8)
+            if let m = try? dec.decode(Message.self, from: data) { out.append(m) }
+            else if let mark = try? dec.decode(CompactionMark.self, from: data) { out = mark.compacted }
+        }
+        return out
+    }
+
+    /// A compaction, written into the transcript file. Not a `Message`, so `load` skips it.
+    struct CompactionMark: Codable { var compacted: [Message]; var epoch: Int }
+
+    public func markCompaction(_ context: [Message], epoch: Int, agent: String, dir: URL) {
+        let url = dir.appendingPathComponent("transcript-\(agent).jsonl")
+        lock.lock(); defer { lock.unlock() }
+        guard let line = try? JSONCodec.canonicalData(encodable: CompactionMark(compacted: context, epoch: epoch)) else { return }
+        if !FileManager.default.fileExists(atPath: url.path) { FileManager.default.createFile(atPath: url.path, contents: nil) }
+        if let fh = try? FileHandle(forWritingTo: url) {
+            fh.appendSafely(line + Data("\n".utf8))
+            try? fh.close()
+        }
+    }
+
+    private static func lines(dir: URL, agent: String) -> [Substring] {
         // A reply that was streaming when the app stopped (quit, crash) is kept as an interrupted reply.
         let partial = dir.appendingPathComponent("transcript-\(agent).partial.json")
         if let d = try? Data(contentsOf: partial), let m = try? JSONDecoder().decode(Message.self, from: d) {
@@ -89,8 +123,7 @@ public final class SessionStore: @unchecked Sendable {
         }
         let url = dir.appendingPathComponent("transcript-\(agent).jsonl")
         guard let s = try? String(contentsOf: url, encoding: .utf8) else { return [] }
-        let dec = JSONDecoder()
-        return s.split(separator: "\n").compactMap { try? dec.decode(Message.self, from: Data($0.utf8)) }
+        return s.split(separator: "\n")
     }
 
     /// The name the user gave a task (Rename). Its presence is the "named by hand" mark: generated

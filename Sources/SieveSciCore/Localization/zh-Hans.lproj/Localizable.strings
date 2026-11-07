@@ -1093,3 +1093,13 @@
 "No evidence found" = "未找到证据";
 "Published results" = "已发表结果";
 "Ideas are candidates: they count only after an evidence check, an independent review and, for findings, blind verification." = "想法只是候选：经过证据核查、独立审查，以及（对结论而言）盲法验证后才算数。";
+"the request was longer than the model's context window" = "请求超出了模型的上下文长度";
+"The model stopped responding; asking again." = "模型没有响应，正在重新发送请求。";
+"Enter inserts now · %@+Enter queues · Esc interrupts" = "Enter 立即插话 · %@+Enter 排队 · Esc 中断";
+"Enter queues · %@+Enter inserts now · Esc interrupts" = "Enter 排队 · %@+Enter 立即插话 · Esc 中断";
+"%@+Enter inserts every queued message now" = "%@+Enter 把排队的消息全部插话发送";
+"Inserting" = "插话";
+"read at the next step" = "下一步读到";
+"Insert into the running turn" = "插话发送到当前轮次";
+"While the agent works, Enter inserts the message into the running turn" = "智能体工作时，Enter 把消息插话发送到当前轮次";
+"Off: Enter queues the message for after the turn and ⌘/Ctrl+Enter inserts it, read at the agent's next step. On: the other way round." = "关闭时：Enter 把消息排到这一轮之后，⌘/Ctrl+Enter 插话发送，智能体在下一步就会读到。打开时反过来。";

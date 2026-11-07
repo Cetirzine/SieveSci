@@ -66,6 +66,7 @@ checklist: `{models: {ready, text}, search: {ready, text}}`.
 | `tasks.list` | `{workspace?}` | `{tasks: [{id, title, modified, running, stage}]}` newest first; `title` is null until the task has one; `stage` is null unless the task is live. |
 | `task.open` | `{workspace?, id?, restart?}` | Opens the task (a new one without `id`) and makes it the open task; the previous one is closed unless it is still working or needs the user. `restart: true` stops a live task first and starts it again on the current configuration (after a model switch). Returns `{task, workspace, title, running, meter, history, plan, claims, ideas, brainstorm, asks, permission, stage, contested, grounding}` (`brainstorm`: the task's current or last brainstorm, or null; `meter`: the lead agent's model and context window; `permission`: the approval one of its agents waits for, or null, so a front end that switched away shows it again). Opening a task that is still being opened waits for that open instead of starting it twice. |
 | `task.send` | `{text, attachments?, task?}` | `{accepted: true}` at once (`attachments`: absolute file paths, sent with the message); the turn streams as `event` notifications and ends with `turnFinished` for agent `main`. Slash commands (`/goal`, `/trace r3`, …) work as in the CLI; their direct output arrives as an `output` notification. Text sent while a turn runs is queued. |
+| `task.insert` | `{task?, text, fromQueue?}` | `{inserted}` Adds the text to the running turn: the agent reads it at its next step (DeepSeek Harness's steering). With no turn running it is sent as an ordinary message (`inserted: false`). `fromQueue` moves a queued message (matched by text) into the turn instead; `false` then means it had already started as its own turn. Delivery is announced by `userInserted`. |
 | `task.stop` | `{task?}` | `{}` Stops the running turn (and its tools and workers), and denies the approval its agents wait for, so the turn ends. |
 | `permission.respond` | `{id, decision: "allow" \| "always" \| "deny", reason?}` | `{}` Answers a `permissionRequested` event (of any live task). |
 | `ask.respond` | `{id, outcome, task?}` | `{}` Answers an `askRequested` event (outcome format below). |
@@ -158,7 +159,9 @@ routes them to the open task or marks a background one in its sidebar.
   `committed {hash, subject, files}`, `jobOutput {job, lines}`, `jobFinished {job, exitCode, seconds}`,
   `jobNotification {notification}`, `deliberation {thread, from, to, kind, text}`,
   `askRequested {request}`, `askResolved {id, outcome}`, `brainstormChanged {state}`, `ideasChanged {ideas}`,
-  `titleChanged {task, title}` (a generated conversation title).
+  `titleChanged {task, title}` (a generated conversation title),
+  `userInserted {agent, text}` (an inserted message reached the agent — at its next step, or as the next turn
+  when the turn it was meant for had ended).
   Text arrives as deltas: append `textDelta` for one `agentId` until a tool, a `thinkingDelta`
   or `turnFinished` for it. `agentId` `main` is the lead agent; others are checkers, verifiers, workers.
 - `taskStatus {task, workspace, running, stage}` — a live task's stage changed (the sidebar chip

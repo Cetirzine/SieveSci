@@ -55,6 +55,7 @@ function Conversation({ items }: { items: TranscriptItem[] }) {
   const lastError = useApp((s) => s.lastError);
   const live = useApp((s) => s.live);
   const queued = useApp((s) => s.queued);
+  const inserting = useApp((s) => s.inserting);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
   const [hiddenTick, setHiddenTick] = useState(0);
@@ -144,10 +145,28 @@ function Conversation({ items }: { items: TranscriptItem[] }) {
       </div>
       <div className="reading-column composer-area">
         {lastError && !live && <SessionSetupCard detail={lastError} />}
+        {inserting.length > 0 && (
+          <div className="inserting">
+            {inserting.map((q, i) => (
+              <div key={i} className="inserting-row">
+                <span className="inserting-label t-mono-tiny">{L("Inserting")}</span>
+                <span className="inserting-text t-meta clip">{q}</span>
+                <span className="t-mono-tiny tertiary">{L("read at the next step")}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {queued.length > 0 && (
           <div className="queued t-meta">
             <Symbol name="plus" size={12} className="secondary" /><span className="secondary">{L("Queued")}:</span>
-            {queued.map((q, i) => <span key={i} className="queued-pill clip">{q.slice(0, 40)}</span>)}
+            {queued.map((q, i) => (
+              <span key={i} className="queued-pill">
+                <span className="clip">{q.slice(0, 40)}</span>
+                {/* DeepSeek Harness's 插话发送: into the running turn instead of after it. */}
+                <button type="button" className="plain queued-insert" title={L("Insert into the running turn")} aria-label={L("Insert into the running turn")}
+                        onClick={() => void A.insertQueued(i)}><Symbol name="arrow.up" size={9} strokeWidth={3} /></button>
+              </span>
+            ))}
           </div>
         )}
         <PromptInput />

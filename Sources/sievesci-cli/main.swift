@@ -216,6 +216,7 @@ func main(_ args: [String] = Array(CommandLine.arguments.dropFirst())) async {
             case .error(let e): print("\(red)Error: \(e)\(reset)")
             case .turnFinished(let a, _) where a == "main": print("")
             case .titleChanged(_, let t): print("\(dim)✻ title · \(t)\(reset)")
+            case .userInserted(_, let t): print("\(dim)↳ inserted · \(t.prefix(200))\(reset)")
             case .toolProgress(_, _, let lines):
                 for l in lines.suffix(20) { print("\(dim)  │ \(l.prefix(200))\(reset)") }
             case .jobOutput(let job, let lines):

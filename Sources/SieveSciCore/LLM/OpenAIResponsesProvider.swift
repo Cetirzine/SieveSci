@@ -117,6 +117,7 @@ public struct OpenAIResponsesProvider: LLMProvider {
                     await QuotaService.shared.recordHeaders(providerId: profile.id, headers: resp.headers)
                     var acc = ResponsesAccumulator(model: model)
                     for try await ev in resp.events {
+                        cont.yield(.alive)   // any SSE event, pings included: the stream is still answering
                         for out in try acc.consume(ev) { cont.yield(out) }
                     }
                     cont.yield(.completed(acc.finish()))

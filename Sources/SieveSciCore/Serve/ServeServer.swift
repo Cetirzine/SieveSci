@@ -197,6 +197,17 @@ public final class ServeServer: @unchecked Sendable {
             // waits until its session has started.
             Task.detached { await l.ready?.value; await l.bench.submit(text, attachments: atts) }
             return ["accepted": true]
+        case "task.insert":
+            // Into the running turn, read at the agent's next step (DeepSeek Harness's steering). With no
+            // turn running the text is sent as an ordinary message; `fromQueue` moves a queued message.
+            let l = try current(p)
+            let text = p.str("text") ?? ""
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw RPCError(code: -32602, message: "text is required") }
+            await l.ready?.value
+            let fromQueue = p["fromQueue"]?.boolValue == true
+            let inserted = l.bench.insert(text, fromQueue: fromQueue)
+            if !inserted && !fromQueue { Task.detached { await l.bench.submit(text) } }
+            return ["inserted": .bool(inserted)]
         case "task.stop":
             // Stop also answers the request on screen: an agent waiting for it would keep the turn alive.
             let l = try current(p)

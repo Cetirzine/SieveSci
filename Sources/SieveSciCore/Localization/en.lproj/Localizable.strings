@@ -1093,3 +1093,13 @@
 "No evidence found" = "No evidence found";
 "Published results" = "Published results";
 "Ideas are candidates: they count only after an evidence check, an independent review and, for findings, blind verification." = "Ideas are candidates: they count only after an evidence check, an independent review and, for findings, blind verification.";
+"the request was longer than the model's context window" = "the request was longer than the model's context window";
+"The model stopped responding; asking again." = "The model stopped responding; asking again.";
+"Enter inserts now · %@+Enter queues · Esc interrupts" = "Enter inserts now · %@+Enter queues · Esc interrupts";
+"Enter queues · %@+Enter inserts now · Esc interrupts" = "Enter queues · %@+Enter inserts now · Esc interrupts";
+"%@+Enter inserts every queued message now" = "%@+Enter inserts every queued message now";
+"Inserting" = "Inserting";
+"read at the next step" = "read at the next step";
+"Insert into the running turn" = "Insert into the running turn";
+"While the agent works, Enter inserts the message into the running turn" = "While the agent works, Enter inserts the message into the running turn";
+"Off: Enter queues the message for after the turn and ⌘/Ctrl+Enter inserts it, read at the agent's next step. On: the other way round." = "Off: Enter queues the message for after the turn and ⌘/Ctrl+Enter inserts it, read at the agent's next step. On: the other way round.";

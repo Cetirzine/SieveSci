@@ -49,6 +49,9 @@ public enum AgentEvent: Sendable {
     /// The conversation got a generated title (`TitleSummarizer`); front ends show it in place of the
     /// first question. Never sent for a conversation the user named.
     case titleChanged(task: String, title: String)
+    /// A message the user inserted during a turn reached the agent (at its next step, or as the next
+    /// turn when the one it was meant for had ended). Front ends show it where it landed.
+    case userInserted(agentId: String, text: String)
 }
 
 public enum LiteratureAction: String, Sendable {

@@ -63,6 +63,7 @@ public enum Refusals {
             case .missingAPIKey(let r): return (.transient, "no API key for \(r)")
             case .cliNotFound(let c): return (.transient, "CLI not found: \(c)")
             case .protocolError(let m): return (.transient, m)
+            case .stalled(let s): return (.transient, "no response for \(s) s")
             case .http(let status, let body):
                 // 400 with a safety/policy body is a refusal; 429/5xx are transient.
                 if status == 400 || status == 403 {

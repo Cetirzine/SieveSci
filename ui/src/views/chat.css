@@ -27,7 +27,14 @@
 .earlier-rows { display: flex; align-items: center; gap: var(--s-s); padding: var(--s-s) 0; color: var(--secondary); font: 500 10.5px/1 var(--mono); letter-spacing: 0.8px; text-transform: uppercase; }
 .earlier-rows i { flex: 1; height: 1px; background: var(--rule); }
 .queued { display: flex; align-items: center; gap: 6px; }
-.queued-pill { padding: 2px 8px; border-radius: 99px; background: var(--surface); max-width: 200px; }
+.queued-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border-radius: 99px; background: var(--surface); max-width: 220px; min-width: 0; }
+.queued-insert { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 99px; color: var(--secondary); flex: none; }
+.queued-insert:hover { background: var(--accent); color: var(--on-accent, #fff); }
+/* Inserted messages the agent has not read yet: the user's bubble, waiting above the composer. */
+.inserting { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.inserting-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding: 5px 10px; border-left: 2px solid var(--accent); background: var(--surface); }
+.inserting-label { color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; flex: none; }
+.inserting-text { flex: 1; min-width: 0; }
 .setup-card { display: flex; gap: var(--s-m); padding: var(--s-m); background: var(--raised); border: 1px dashed var(--rule); }
 .setup-card-icon { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex: none; background: color-mix(in srgb, currentColor 12%, transparent); }
 .setup-card-text { display: flex; flex-direction: column; gap: var(--s-xs); }

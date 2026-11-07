@@ -315,6 +315,8 @@ public enum StreamEvent: Sendable {
     /// spans many model requests (CLI agents), so the context ring moves during a long turn.
     case contextUsage(tokens: Int, window: Int?)
     case completed(LLMResponse)
+    /// The endpoint sent something (a ping or any other event): `complete`'s stall watch resets.
+    case alive
 }
 
 public protocol LLMProvider: Sendable {
@@ -323,13 +325,39 @@ public protocol LLMProvider: Sendable {
 }
 
 extension LLMProvider {
-    /// Collects a stream into its final response (used by subagents and verifiers).
+    /// Collects a stream into its final response. A stream that sends nothing for
+    /// `StreamWatch.stallLimit` seconds is stopped with `ProviderError.stalled` instead of waiting for
+    /// the transport's own 10-minute idle timeout (or forever, when the connection stays open).
+    /// CLI agents run whole turns, tools included, inside one call, so they are not watched.
     public func complete(_ request: LLMRequest, onEvent: (@Sendable (StreamEvent) -> Void)? = nil) async throws -> LLMResponse {
-        var final: LLMResponse?
-        for try await ev in stream(request) {
-            onEvent?(ev)
-            if case .completed(let r) = ev { final = r }
+        let limit = profile.family == .cliAgent ? nil : StreamWatch.stallLimit
+        let seen = StreamWatch.Clock()
+        let events = stream(request)
+        let consumer = Task { () async throws -> LLMResponse? in
+            var final: LLMResponse?
+            for try await ev in events {
+                seen.touch()
+                onEvent?(ev)
+                if case .completed(let r) = ev { final = r }
+            }
+            return final
         }
+        let watchdog = Task {
+            guard let limit else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(min(5, limit / 4) * 1_000_000_000))
+                if seen.idle > limit { seen.stalled = true; consumer.cancel(); return }
+            }
+        }
+        defer { watchdog.cancel() }
+        let final: LLMResponse?
+        do {
+            final = try await withTaskCancellationHandler { try await consumer.value } onCancel: { consumer.cancel() }
+        } catch {
+            if seen.stalled, let limit { throw ProviderError.stalled(seconds: Int(limit)) }
+            throw error
+        }
+        if seen.stalled, let limit { throw ProviderError.stalled(seconds: Int(limit)) }
         guard let final else { throw ProviderError.protocolError("stream ended without a final message") }
         return final
     }
@@ -341,6 +369,8 @@ public enum ProviderError: Error, LocalizedError, Sendable {
     case protocolError(String)
     case refused(String)
     case cliNotFound(String)
+    /// The stream sent nothing for this many seconds (the endpoint stopped answering).
+    case stalled(seconds: Int)
 
     public var errorDescription: String? {
         switch self {
@@ -349,6 +379,7 @@ public enum ProviderError: Error, LocalizedError, Sendable {
         case .protocolError(let m): return "Provider protocol error: \(m)"
         case .refused(let m): return "Model declined: \(m)"
         case .cliNotFound(let m): return "CLI not found: \(m)"
+        case .stalled(let s): return "The model sent nothing for \(s) s; the request was stopped."
         }
     }
 
@@ -422,5 +453,42 @@ public enum ProviderFactory {
         case .gemini: return GeminiProvider(profile: profile, apiKey: try key(), http: http)
         case .cliAgent: return CLIAgentProvider(profile: profile)
         }
+    }
+}
+
+extension ProviderError {
+    /// The provider refused the request as longer than the model's context window (OpenAI, Anthropic,
+    /// DeepSeek, vLLM/SGLang and relay wordings).
+    public static func isContextOverflow(_ error: Error) -> Bool {
+        let t = ((error as? LocalizedError)?.errorDescription ?? String(describing: error)).lowercased()
+        return ["context length", "context_length_exceeded", "context window", "prompt is too long", "input is too long",
+                "maximum context", "too many tokens", "exceeds the maximum number of tokens", "reduce the length"].contains { t.contains($0) }
+    }
+}
+
+/// Watches model streams for silence.
+public enum StreamWatch {
+    /// Seconds without any stream event (text, thinking, tool input, keep-alive pings) before a request is
+    /// given up. Reasoning models stream their thinking or send pings, so five minutes of nothing means
+    /// the endpoint has stopped answering.
+    @TaskLocal public static var stallLimit: TimeInterval = 300
+
+    final class Clock: @unchecked Sendable {
+        private let lock = NSLock()
+        private var last = Date()
+        private var _stalled = false
+        func touch() { lock.withLock { last = Date() } }
+        var idle: TimeInterval { lock.withLock { Date().timeIntervalSince(last) } }
+        var stalled: Bool {
+            get { lock.withLock { _stalled } }
+            set { lock.withLock { _stalled = newValue } }
+        }
+    }
+
+    /// Worth sending again: the endpoint went silent, or closed the stream before its final message.
+    public static func isDropped(_ error: Error) -> Bool {
+        if case ProviderError.stalled = error { return true }
+        if case ProviderError.protocolError(let m) = error { return m.contains("stream ended without a final message") }
+        return false
     }
 }

@@ -120,6 +120,8 @@ export interface Config {
   autoBrainstorm: boolean;
   autoCheckUpdates: boolean;
   autoInstallUpdates: boolean;
+  /** While a turn runs, Enter inserts into it (⌘/Ctrl+Enter queues); off: the other way round. */
+  enterInsertsWhileRunning: boolean;
 }
 
 export const defaultConfig: Config = {
@@ -129,6 +131,7 @@ export const defaultConfig: Config = {
   recentWorkspaces: [], folderOpen: {}, maxReviewsPerSession: 24, maxDeliberationExchanges: 2, autoDelegate: true, maxParallelWorkers: 3,
   sandboxMode: "workspaceWrite", appearance: "system", autoWake: true, notifyJobs: true, notifyTurnFinished: true, notifyPermission: true,
   showThinking: true, autoTitles: true, autoBrainstorm: true, autoCheckUpdates: true, autoInstallUpdates: true,
+  enterInsertsWhileRunning: false,
 };
 
 export interface AppState {
@@ -163,6 +166,8 @@ export interface AppState {
   changedFiles: string[];
   figures: string[];
   queued: string[];
+  /** Messages inserted into the running turn that the agent has not read yet (it does at its next step). */
+  inserting: string[];
   mainTab: MainTab;
   inspectorTab: InspectorTab;
   showInspector: boolean;
@@ -218,7 +223,7 @@ export const initialState: AppState = {
   running: false, runStarted: Date.now(), spinnerVerb: "Sieving",
   pendingPermission: null, demoAsk: null, pendingAsk: null, askQueue: [], openingTask: null, selectedJob: null,
   plan: { goal: "", stage: "scoping", hypotheses: [], steps: [] }, claims: [], contested: [],
-  jobs: {}, jobOrder: [], changedFiles: [], figures: [], queued: [],
+  jobs: {}, jobOrder: [], changedFiles: [], figures: [], queued: [], inserting: [],
   mainTab: "chat", inspectorTab: "files", showInspector: false, showSettingsPage: false, sidebarVisible: true,
   backgroundTasks: [], backgroundWorkspaces: {}, attention: {}, grounding: null,
   modelStatus: { ready: false, text: "" }, searchStatus: { ready: false, text: "" }, lastError: null, version: "", draft: "", commands: [],
@@ -475,6 +480,18 @@ function handle(s: AppState, e: JsonObject) {
     case "ideasChanged": s.ideas = e.ideas as unknown as Idea[]; break;
     // A generated title replaces the row's text in place (names given by hand were skipped by the core).
     case "titleChanged": s.taskTitles = { ...s.taskTitles, [str("task")]: str("title") }; break;
+    case "userInserted": {
+      // An inserted message reached the agent: it leaves the waiting list and joins the conversation
+      // where the agent read it; what the agent says next starts below it.
+      if (str("agent") !== "main") break;
+      const text = str("text");
+      const i = s.inserting.indexOf(text);
+      if (i >= 0) s.inserting = [...s.inserting.slice(0, i), ...s.inserting.slice(i + 1)];
+      closeThinking(s, "main");
+      openText.delete("main");
+      append(s, { type: "user", text, attachments: [] }, "main");
+      break;
+    }
   }
 }
 

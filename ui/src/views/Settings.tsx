@@ -184,6 +184,8 @@ function GeneralSettings() {
           </span>
         </Row>
         <Toggle label={L("Show thinking")} on={c.showThinking} onChange={(v) => set({ showThinking: v })} />
+        <Toggle label={L("While the agent works, Enter inserts the message into the running turn")} on={c.enterInsertsWhileRunning} onChange={(v) => set({ enterInsertsWhileRunning: v })} />
+        <Caption>{L("Off: Enter queues the message for after the turn and ⌘/Ctrl+Enter inserts it, read at the agent's next step. On: the other way round.")}</Caption>
         <Toggle label={L("Generate conversation titles automatically")} on={c.autoTitles} onChange={(v) => set({ autoTitles: v })} />
         <Caption>{L("After the first reply, the worker model names the conversation after its topic. A name you give with Rename is never replaced.")}</Caption>
       </Section>

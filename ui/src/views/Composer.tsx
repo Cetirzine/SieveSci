@@ -15,6 +15,7 @@ export { effortStops, effortName } from "../theme/effort";
 
 export function PromptInput() {
   const running = useApp((s) => s.running);
+  const platform = useApp((s) => s.platform);
   const draft = useApp((s) => s.draft);
   const commands = useApp((s) => s.commands);
   const [text, setText] = useState("");
@@ -58,6 +59,26 @@ export function PromptInput() {
     setText(""); setAttachments([]);
     if (t.trim() || files.length) void A.send(t, files);
   };
+  // While a turn runs (DeepSeek Harness): one Enter queues for after the turn, the other inserts into it,
+  // read at the agent's next step. Files and commands always go the ordinary way.
+  const enterInserts = useApp((s) => s.config.enterInsertsWhileRunning);
+  const queuedCount = useApp((s) => s.queued.length);
+  const mod = platform === "windows" ? "Ctrl" : "⌘";
+  const submit = (accelerated: boolean) => {
+    if (!getState().running) { send(); return; }
+    const t = text.trim();
+    if (!t && accelerated && queuedCount > 0) { void A.insertAllQueued(); return; }
+    const inserts = accelerated !== enterInserts;
+    if (inserts && t && attachments.length === 0 && !t.startsWith("/") && !t.startsWith("!") && !t.startsWith("#")) {
+      setText("");
+      void A.insert(t);
+      return;
+    }
+    send();
+  };
+  const busyHint = enterInserts
+    ? L10n.f("Enter inserts now · %@+Enter queues · Esc interrupts", mod)
+    : L10n.f("Enter queues · %@+Enter inserts now · Esc interrupts", mod);
   const complete = (c: { name: string; args: string }) => {
     const next = `/${c.name}${c.args ? " " : ""}`;
     if (c.args) setText(next); else { setText(""); void A.send(next); }
@@ -94,7 +115,7 @@ export function PromptInput() {
                     e.preventDefault();
                     for (const f of imgs) void A.savePastedImage(f).then((p) => { if (p) setAttachments((a) => [...a, p]); });
                   }}
-                  placeholder={running ? L("Queue a message, or press Esc to interrupt…") : L("Ask a research question, paste a GitHub link, or type / for commands")}
+                  placeholder={running ? (text === "" && queuedCount > 0 ? L10n.f("%@+Enter inserts every queued message now", mod) : busyHint) : L("Ask a research question, paste a GitHub link, or type / for commands")}
                   onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
                   onChange={(e) => { setText(e.target.value); setSelection(0); }}
                   onKeyDown={(e) => {
@@ -104,7 +125,7 @@ export function PromptInput() {
                       e.preventDefault();
                       const c = suggestions[selection];
                       if (c && text !== `/${c.name}`) { complete(c); return; }
-                      send();
+                      submit(e.metaKey || e.ctrlKey);
                     } else if (e.key === "Tab" && suggestions[selection]) { e.preventDefault(); complete(suggestions[selection]); }
                     else if (e.key === "ArrowUp" && suggestions.length) { e.preventDefault(); setSelection(Math.max(0, selection - 1)); }
                     else if (e.key === "ArrowDown" && suggestions.length) { e.preventDefault(); setSelection(Math.min(suggestions.length - 1, selection + 1)); }
@@ -126,7 +147,7 @@ export function PromptInput() {
           <ModelMenu />
           <button type="button" className={`send-button ${canSend || interrupts ? "" : "disabled"}`} disabled={!canSend && !interrupts}
                   title={interrupts ? L("Interrupt (Esc)") : L("Send (Enter)")} aria-label={interrupts ? L("Interrupt (Esc)") : L("Send (Enter)")}
-                  onClick={() => (interrupts ? void A.stop() : send())}>
+                  onClick={() => (interrupts ? void A.stop() : submit(false))}>
             <Symbol name={interrupts ? "stop.fill" : "arrow.up"} size={interrupts ? 10 : 13} strokeWidth={3} style={interrupts ? { fill: "currentColor" } : undefined} />
           </button>
         </div>

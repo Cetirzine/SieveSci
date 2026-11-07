@@ -137,6 +137,7 @@ public struct GeminiProvider: LLMProvider {
                     let resp = try await Retry.withBackoff { try await http.postSSE(.json(url: url, body: body, headers: headers)) }
                     var acc = GeminiAccumulator(model: model)
                     for try await ev in resp.events {
+                        cont.yield(.alive)   // any SSE event, pings included: the stream is still answering
                         for out in try acc.consume(ev) { cont.yield(out) }
                     }
                     cont.yield(.completed(acc.finish()))

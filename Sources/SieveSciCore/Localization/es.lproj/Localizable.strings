@@ -1093,3 +1093,13 @@
 "No evidence found" = "Sin evidencia";
 "Published results" = "Resultados publicados";
 "Ideas are candidates: they count only after an evidence check, an independent review and, for findings, blind verification." = "Las ideas son candidatas: cuentan solo tras una comprobación de evidencia, una revisión independiente y, para los hallazgos, una verificación ciega.";
+"the request was longer than the model's context window" = "la solicitud superaba la ventana de contexto del modelo";
+"The model stopped responding; asking again." = "El modelo dejó de responder; se vuelve a enviar la solicitud.";
+"Enter inserts now · %@+Enter queues · Esc interrupts" = "Enter inserta ahora · %@+Enter pone en cola · Esc interrumpe";
+"Enter queues · %@+Enter inserts now · Esc interrupts" = "Enter pone en cola · %@+Enter inserta ahora · Esc interrumpe";
+"%@+Enter inserts every queued message now" = "%@+Enter inserta ahora todos los mensajes en cola";
+"Inserting" = "Insertando";
+"read at the next step" = "se lee en el siguiente paso";
+"Insert into the running turn" = "Insertar en el turno en curso";
+"While the agent works, Enter inserts the message into the running turn" = "Mientras el agente trabaja, Enter inserta el mensaje en el turno en curso";
+"Off: Enter queues the message for after the turn and ⌘/Ctrl+Enter inserts it, read at the agent's next step. On: the other way round." = "Desactivado: Enter pone el mensaje en cola para después del turno y ⌘/Ctrl+Enter lo inserta, y el agente lo lee en su siguiente paso. Activado: al revés.";

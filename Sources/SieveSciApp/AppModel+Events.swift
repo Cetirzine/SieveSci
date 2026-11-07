@@ -272,6 +272,7 @@ extension AppModel {
         case .brainstormChanged(let b): showBrainstorm(b)
         case .ideasChanged(let i): ideas = i
         case .titleChanged: break   // applied in `route` for every task, open or in the background
+        case .userInserted: break   // the web UI shows inserted messages; this app has no insert gesture
         }
     }
 

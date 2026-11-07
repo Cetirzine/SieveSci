@@ -45,6 +45,9 @@ public struct AppConfig: Codable, Equatable, Sendable {
     public var autoCheckUpdates = true
     /// Download it in the background and install it on quit (or from the sidebar banner).
     public var autoInstallUpdates = true
+    /// While a turn runs, Enter inserts the message into it and ⌘/Ctrl+Enter queues it for after the
+    /// turn; off (the default, as in DeepSeek Harness), the other way round.
+    public var enterInsertsWhileRunning = false
 
     /// The folder for the configuration and other per-user state.
     public static var directory: URL {
@@ -130,5 +133,6 @@ extension AppConfig {
         autoBrainstorm = v(.autoBrainstorm, d.autoBrainstorm)
         autoCheckUpdates = v(.autoCheckUpdates, d.autoCheckUpdates)
         autoInstallUpdates = v(.autoInstallUpdates, d.autoInstallUpdates)
+        enterInsertsWhileRunning = v(.enterInsertsWhileRunning, d.enterInsertsWhileRunning)
     }
 }

@@ -323,7 +323,7 @@ export async function startSession(task?: string) {
     }
     const title = typeof r.title === "string" ? { ...s.taskTitles, [id]: r.title } : s.taskTitles;
     return {
-      taskId: id, live: true, lastError: null, streams: { ...subStreams, main }, cards, jobs: {}, jobOrder: [], changedFiles: [], figures: [], queued: [],
+      taskId: id, live: true, lastError: null, streams: { ...subStreams, main }, cards, jobs: {}, jobOrder: [], changedFiles: [], figures: [], queued: [], inserting: [],
       running: r.running === true, runStarted: Date.now(), backgroundTasks, backgroundWorkspaces, taskTitles: title,
       askQueue: (r.asks ?? []) as unknown as AskRequest[],
       pendingAsk: ((r.asks ?? []) as unknown as AskRequest[])[0] ?? null,
@@ -490,6 +490,46 @@ export async function send(text: string, attachments: string[] = []) {
   const item = { id: `u${Date.now()}`, at: Date.now(), kind: { type: "user" as const, text, attachments: attachments.map((a) => a.split(/[\\/]/).pop() ?? a) } };
   setState({ streams: { ...s.streams, main: [...(s.streams.main ?? []), item] }, ...(s.running ? { queued: [...s.queued, text] } : { running: true, runStarted: Date.now() }) });
   await call("task.send", attachments.length ? { text, attachments } : { text });
+}
+
+/** Inserts a message into the running turn (DeepSeek Harness's steering): the agent reads it at its
+ *  next step. It waits above the composer until then and joins the conversation where it was read
+ *  (`userInserted`). With no turn running it is sent as an ordinary message. */
+export async function insert(text: string) {
+  const t = text.trim();
+  if (!t) return;
+  if (!getState().running) { await send(text); return; }
+  setState((s) => ({ inserting: [...s.inserting, t] }));
+  const r = await call<{ inserted: boolean }>("task.insert", { text: t });
+  // The turn ended as it arrived: serve sent it as an ordinary message, shown like one.
+  if (r && !r.inserted) setState((s) => {
+    const i = s.inserting.indexOf(t);
+    const item = { id: `u${Date.now()}`, at: Date.now(), kind: { type: "user" as const, text: t, attachments: [] } };
+    return { inserting: i < 0 ? s.inserting : [...s.inserting.slice(0, i), ...s.inserting.slice(i + 1)], streams: { ...s.streams, main: [...(s.streams.main ?? []), item] } };
+  });
+}
+
+/** Moves a queued message into the running turn. Its placeholder in the conversation goes; it comes back
+ *  where the agent reads it. One that already started as its own turn stays as it was. */
+export async function insertQueued(index: number) {
+  const s = getState();
+  const text = s.queued[index];
+  if (text === undefined || !s.running) return;
+  const main = s.streams.main ?? [];
+  const at = main.map((m) => m.kind.type === "user" && m.kind.text === text).lastIndexOf(true);
+  const removed = at >= 0 ? main[at] : null;
+  setState({ queued: s.queued.filter((_, i) => i !== index), inserting: [...s.inserting, text.trim()],
+             streams: { ...s.streams, main: at >= 0 ? [...main.slice(0, at), ...main.slice(at + 1)] : main } });
+  const r = await call<{ inserted: boolean }>("task.insert", { text, fromQueue: true });
+  if (r && !r.inserted) setState((st) => ({
+    inserting: st.inserting.filter((x) => x !== text.trim()),
+    streams: removed ? { ...st.streams, main: [...(st.streams.main ?? []), removed] } : st.streams,
+  }));
+}
+
+/** Every queued message into the running turn, oldest first (empty draft + ⌘/Ctrl+Enter). */
+export async function insertAllQueued() {
+  while (getState().running && getState().queued.length > 0) await insertQueued(0);
 }
 
 /** Stop also answers the approval on screen (serve denies it), so the prompt goes too. */

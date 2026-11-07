@@ -71,7 +71,7 @@ public final class Workbench: @unchecked Sendable {
         let (p, m) = services.models.main
         let window = ModelDiscovery.effectiveSettings(model: m, profile: p.profile, discovered: nil).contextWindow
         main = AgentSession(id: "main", role: .main, services: services, tools: services.toolset, contextWindow: window)
-        var restored = SessionStore.load(dir: services.taskDir, agent: "main")
+        var restored = SessionStore.loadContext(dir: services.taskDir, agent: "main")
         // A turn that ended without a saved reply (before drafts existed, or a hard kill) is rebuilt
         // from the audit log, so its work stays visible and in context.
         if restored.last?.role == .user, let m = Self.recoveredReply(audit: services.audit.url) {
@@ -168,6 +168,28 @@ public final class Workbench: @unchecked Sendable {
         }
     }
 
+    // MARK: Inserting during a turn
+
+    /// Adds a message to the running turn (DeepSeek Harness's steering): the agent reads it at its next
+    /// step instead of after the turn. False when no turn is running (the caller sends it as an ordinary
+    /// message instead). `fromQueue` moves a message the user queued earlier (matched by its text) into
+    /// the turn; a message already started as its own turn is left alone.
+    @discardableResult
+    public func insert(_ raw: String, fromQueue: Bool = false) -> Bool {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return false }
+        let accepted: Bool = stateLock.withLock {
+            guard busy else { return false }
+            if fromQueue {
+                guard let i = queued.firstIndex(where: { $0.0.trimmingCharacters(in: .whitespacesAndNewlines) == text }) else { return false }
+                queued.remove(at: i)
+            }
+            main.insert(text)
+            return true
+        }
+        return accepted
+    }
+
     // MARK: Input routing
 
     public enum Routed: Equatable { case handled(String), prompt(String) }
@@ -243,8 +265,12 @@ public final class Workbench: @unchecked Sendable {
                 await turn(p, attachments: a)
                 nameConversation()
             }
-            enum Step { case queued((String, [Attachment])), wake([JobNotification]), idle }
+            enum Step { case missed([String]), queued((String, [Attachment])), wake([JobNotification]), idle }
+            // Under the same lock `insert` takes, so a message inserted as the turn ends is never lost.
             let step: Step = stateLock.withLock {
+                // Inserted messages the turn ended (or was stopped) before reading: the next turn, first.
+                let missed = main.takeInserts()
+                if !missed.isEmpty { return .missed(missed) }
                 if !queued.isEmpty { return .queued(queued.removeFirst()) }
                 let notes = autoWake ? services.jobs.drain(for: "main", adoptOrphans: true) : []
                 if notes.isEmpty { busy = false; return .idle }
@@ -252,6 +278,10 @@ public final class Workbench: @unchecked Sendable {
             }
             let notes: [JobNotification]
             switch step {
+            case .missed(let texts):
+                for t in texts { services.emit(.userInserted(agentId: "main", text: t)) }
+                next = (texts.joined(separator: "\n\n"), [])
+                continue
             case .queued(let q): next = q; continue
             case .idle: return
             case .wake(let n): notes = n

@@ -1093,3 +1093,13 @@
 "No evidence found" = "Доказательств не найдено";
 "Published results" = "Опубликованные результаты";
 "Ideas are candidates: they count only after an evidence check, an independent review and, for findings, blind verification." = "Идеи — это кандидаты: они засчитываются только после проверки доказательств, независимого рецензирования и, для выводов, слепой проверки.";
+"the request was longer than the model's context window" = "запрос превысил контекстное окно модели";
+"The model stopped responding; asking again." = "Модель перестала отвечать; запрос отправлен снова.";
+"Enter inserts now · %@+Enter queues · Esc interrupts" = "Enter — вставить сейчас · %@+Enter — в очередь · Esc — прервать";
+"Enter queues · %@+Enter inserts now · Esc interrupts" = "Enter — в очередь · %@+Enter — вставить сейчас · Esc — прервать";
+"%@+Enter inserts every queued message now" = "%@+Enter — вставить сейчас все сообщения из очереди";
+"Inserting" = "Вставка";
+"read at the next step" = "будет прочитано на следующем шаге";
+"Insert into the running turn" = "Вставить в текущий ход";
+"While the agent works, Enter inserts the message into the running turn" = "Пока агент работает, Enter вставляет сообщение в текущий ход";
+"Off: Enter queues the message for after the turn and ⌘/Ctrl+Enter inserts it, read at the agent's next step. On: the other way round." = "Выкл.: Enter ставит сообщение в очередь после хода, а ⌘/Ctrl+Enter вставляет его — агент прочтёт на следующем шаге. Вкл.: наоборот.";

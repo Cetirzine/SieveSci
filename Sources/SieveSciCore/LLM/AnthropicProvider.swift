@@ -128,6 +128,7 @@ public struct AnthropicProvider: LLMProvider {
                     var acc = AnthropicAccumulator(model: model)
                     acc.requestId = resp.headers["request-id"]
                     for try await ev in resp.events {
+                        cont.yield(.alive)   // any SSE event, pings included: the stream is still answering
                         for out in try acc.consume(ev) { cont.yield(out) }
                     }
                     cont.yield(.completed(try acc.finish()))

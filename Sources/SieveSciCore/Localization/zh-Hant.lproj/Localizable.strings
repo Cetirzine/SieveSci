@@ -1093,3 +1093,13 @@
 "No evidence found" = "未找到證據";
 "Published results" = "已發表結果";
 "Ideas are candidates: they count only after an evidence check, an independent review and, for findings, blind verification." = "想法只是候選：經過證據核查、獨立審查，以及（對結論而言）盲法驗證後才算數。";
+"the request was longer than the model's context window" = "請求超出了模型的上下文長度";
+"The model stopped responding; asking again." = "模型沒有回應，正在重新傳送請求。";
+"Enter inserts now · %@+Enter queues · Esc interrupts" = "Enter 立即插話 · %@+Enter 排隊 · Esc 中斷";
+"Enter queues · %@+Enter inserts now · Esc interrupts" = "Enter 排隊 · %@+Enter 立即插話 · Esc 中斷";
+"%@+Enter inserts every queued message now" = "%@+Enter 把排隊的訊息全部插話傳送";
+"Inserting" = "插話";
+"read at the next step" = "下一步讀到";
+"Insert into the running turn" = "插話傳送到目前輪次";
+"While the agent works, Enter inserts the message into the running turn" = "智慧體工作時，Enter 把訊息插話傳送到目前輪次";
+"Off: Enter queues the message for after the turn and ⌘/Ctrl+Enter inserts it, read at the agent's next step. On: the other way round." = "關閉時：Enter 把訊息排到這一輪之後，⌘/Ctrl+Enter 插話傳送，智慧體在下一步就會讀到。開啟時反過來。";

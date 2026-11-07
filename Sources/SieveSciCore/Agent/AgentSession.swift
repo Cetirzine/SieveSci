@@ -26,6 +26,9 @@ public final class AgentSession: @unchecked Sendable {
     var interventionsThisTurn = 0
     /// What the user asked this turn, restated in long tool loops (`KnownModels.Spec.stateRefreshEvery`).
     var turnRequest = ""
+    /// Messages the user inserted during the turn (DeepSeek Harness's steering), delivered at the next step.
+    private let insertLock = NSLock()
+    private var inserts: [String] = []
     /// Per-call bookkeeping, locked: read-only calls of one step run concurrently on this instance
     /// (`runTools`), and an unlocked dictionary here crashed 0.2.1 (two `respond_review` calls resized
     /// `repeatCounts` at once). Tool calls in the current user turn, and which delegation hints this
@@ -160,6 +163,28 @@ public final class AgentSession: @unchecked Sendable {
 
     // MARK: Loop
 
+    /// Queues a message for this turn's next step.
+    public func insert(_ text: String) { insertLock.withLock { inserts.append(text) } }
+
+    /// Takes the inserted messages not yet delivered.
+    public func takeInserts() -> [String] { insertLock.withLock { defer { inserts = [] }; return inserts } }
+
+    /// The inserted messages as the model reads them, logged as the user's words and shown where they land.
+    func deliverInserts() -> String? {
+        let texts = takeInserts()
+        guard !texts.isEmpty else { return nil }
+        for t in texts {
+            services.log("user_turn", actor: "user", ["text": .string(t.truncated(4000)), "agent": .string(id), "inserted": true])
+            services.emit(.userInserted(agentId: id, text: t))
+        }
+        return Self.insertNote(texts)
+    }
+
+    static func insertNote(_ texts: [String]) -> String {
+        "<user_insert>\nThe user added this while you were working. It comes from the user directly: take it into account from this step on, change course if it asks for that, and otherwise continue the task.\n\n"
+            + texts.joined(separator: "\n\n") + "\n</user_insert>"
+    }
+
     func loop() async throws -> Message? {
         services.emit(.turnStarted(role: role, agentId: id))
         var steps = 0
@@ -167,7 +192,12 @@ public final class AgentSession: @unchecked Sendable {
         while !cancelled && !Task.isCancelled && steps < maxSteps {
             steps += 1
             try await compactIfNeeded()
-            let resp = try await callModel()
+            let resp: LLMResponse
+            do { resp = try await callModel() } catch where ProviderError.isContextOverflow(error) && transcript.count > 2 {
+                // The provider counted more than the estimate allowed: compact now and send once more.
+                try await compact(focus: nil, reason: "context window exceeded", shown: L("the request was longer than the model's context window"))
+                resp = try await callModel()
+            }
             append(resp.message)
             last = resp.message
             services.emit(.assistantMessage(agentId: id, resp.message))
@@ -179,6 +209,7 @@ public final class AgentSession: @unchecked Sendable {
                 let notes = services.jobs.drain(for: id)
                 if !notes.isEmpty { results.append(.text(notes.map(\.rendered).joined(separator: "\n"))) }
                 if role == .main, let wrap = services.ideas.drainWrapUp() { results.append(.text(wrap)) }
+                if role == .main, let note = deliverInserts() { results.append(.text(note)) }
                 if role == .main, let every = KnownModels.spec(for: model)?.stateRefreshEvery, every > 0, steps % every == 0 {
                     results.append(.text(TurnContext.refresh(services: services, request: turnRequest, steps: steps)))
                 }
@@ -190,6 +221,11 @@ public final class AgentSession: @unchecked Sendable {
             }
             if resp.stopReason == .maxTokens {
                 append(Message.user("Your reply was cut off by the output limit. Continue exactly where you stopped."))
+                continue
+            }
+            // The reply ended while the user was adding something: it goes in now, and the turn goes on.
+            if role == .main, !cancelled, let note = deliverInserts() {
+                append(Message.user(note))
                 continue
             }
             // End of turn: deterministic integrity checks, possibly a supervisor review.
@@ -229,7 +265,7 @@ public final class AgentSession: @unchecked Sendable {
         }
     }
 
-    func callModel() async throws -> LLMResponse {
+    func callModel(dropRetry: Int = 0) async throws -> LLMResponse {
         var req = LLMRequest(model: model, system: system, tools: tools.map(\.spec), messages: transcript,
                              maxTokens: min(meter.contextWindow / 4, KnownModels.spec(for: model)?.maxOutput ?? 64_000), effort: services.effort, cache: cache)
         req.host = cliHost
@@ -249,9 +285,14 @@ public final class AgentSession: @unchecked Sendable {
         let meterAtStart = meter
         let userWindow = windowSetByUser
         let thinking = ThinkingClock()
+        let shown = StreamWatch.Clock()   // `stalled` doubles as "something was shown"
         do {
             resp = try await provider.complete(req) { ev in
                 draft?.add(ev)
+                switch ev {
+                case .textDelta, .thinkingDelta, .toolInputDelta: shown.stalled = true
+                default: break
+                }
                 switch ev {
                 case .textDelta(let t): thinking.stop(); emit(.textDelta(agentId: id, t))
                 case .thinkingDelta(let t): thinking.think(); emit(.thinkingDelta(agentId: id, t))
@@ -273,6 +314,13 @@ public final class AgentSession: @unchecked Sendable {
             transcript = adapted
             services.emit(.notice(L("This model does not take images; they are described in text instead.")))
             return try await callModel()
+        } catch where StreamWatch.isDropped(error) && !shown.stalled && dropRetry < 2 && !cancelled {
+            // The endpoint went silent or closed the stream before answering, with nothing shown yet:
+            // the same request again (identical bytes, so the prefix cache still applies).
+            draft?.clear()
+            services.log("stream_retry", actor: "host", ["agent": .string(id), "error": .string(error.localizedDescription), "attempt": .int(dropRetry + 1)])
+            services.emit(.notice(L("The model stopped responding; asking again.")))
+            return try await callModel(dropRetry: dropRetry + 1)
         } catch {
             if let draft, let m = draft.message() { append(m) }
             draft?.clear()
@@ -616,6 +664,9 @@ public final class AgentSession: @unchecked Sendable {
         </session_summary>
         """
         transcript = [Message.user(text)] + tail
+        // Saved, so a reopened task continues from here instead of re-sending the whole history.
+        if role == .main { SessionStore.shared.markCompaction(transcript, epoch: epoch, agent: id, dir: services.taskDir) }
+        meter.lastPromptTokens = Self.estimate(system: system, tools: tools.map(\.spec), transcript)
         services.emit(.notice(L10n.s("Context compacted (%@).", shown ?? L(reason))))
     }
 
@@ -728,7 +779,17 @@ public final class AgentSession: @unchecked Sendable {
     /// Restores a transcript (session resume). The bytes are reused as stored, so a resumed session
     /// hits the same prefix cache it left.
     /// Loads a saved conversation; unanswered tool calls are closed so it can be sent (`TranscriptRepair`).
-    public func restore(_ messages: [Message]) { transcript = TranscriptRepair.repair(messages).messages }
+    public func restore(_ messages: [Message]) {
+        transcript = TranscriptRepair.repair(messages).messages
+        // No request has reported a size yet: estimate it, so the first call after reopening compacts
+        // first when the restored context is already near the window.
+        meter.lastPromptTokens = Self.estimate(system: system, tools: tools.map(\.spec), transcript)
+    }
+
+    static func estimate(system: String, tools: [ToolSpec], _ transcript: [Message]) -> Int {
+        system.utf8.count / 3 + tools.reduce(0) { $0 + ($1.description.utf8.count + $1.inputSchema.canonical.utf8.count) / 3 }
+            + transcript.reduce(0) { $0 + tokens($1) }
+    }
 
     /// Rewind: drops messages after `index` (user-initiated; this necessarily changes the prefix).
     public func truncate(to index: Int) { if index < transcript.count { transcript = Array(transcript.prefix(index)) } }
