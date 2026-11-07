@@ -35,6 +35,8 @@ struct LiveDatabases {
         print("── \(label)\n\(out.text)\n")
         #expect(!out.isError, "\(label): \(out.text)")
         #expect(!out.text.contains(" · ?"), "\(label): a field did not parse")
+        // Every record links to its page, so replies can link what they cite.
+        #expect(out.text.contains("https://"), "\(label): no record link")
     }
 
     @Test func citationGraph() async throws {

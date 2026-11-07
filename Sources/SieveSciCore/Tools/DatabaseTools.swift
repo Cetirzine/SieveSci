@@ -14,7 +14,9 @@ struct BioDatabaseTool: Tool {
     protein), pdb (RCSB structures), alphafold (predicted structure for a UniProt accession), ensembl \
     (genes by symbol or stable id; species default homo_sapiens), chembl (molecules or targets, with \
     bioactivity counts), reactome (pathways), clinicaltrials (ClinicalTrials.gov studies: status, phase, \
-    conditions, interventions, enrollment). Give `query` to search or `id` to fetch one record.
+    conditions, interventions, enrollment). Give `query` to search or `id` to fetch one record. Every \
+    record comes with the link to its page (and AlphaFold also its model file): link the records you \
+    mention, e.g. [PDB 4HHB](https://www.rcsb.org/structure/4HHB).
     """
     static let databases = ["uniprot", "ncbi", "pdb", "alphafold", "ensembl", "chembl", "reactome", "clinicaltrials"]
     var inputSchema: JSON {
@@ -135,15 +137,19 @@ struct BioDatabaseTool: Tool {
                 let authors = (r["authors"]?.arrayValue ?? []).prefix(3).compactMap { $0.str("name") }.joined(separator: ", ")
                 let doi = (r["articleids"]?.arrayValue ?? []).first { $0.str("idtype") == "doi" }?.str("value")
                 return "PMID \(uid) · \(r.str("title") ?? "?") — \(authors) (\(r.str("pubdate") ?? ""), \(r.str("source") ?? ""))\(doi.map { "\n  doi:\($0)" } ?? "")"
+                    + "\n  https://pubmed.ncbi.nlm.nih.gov/\(uid)/"
             case "gds":
-                return "GEO \(r.str("accession") ?? uid) · \(r.str("title") ?? "?") (\(r.str("taxon") ?? ""), \(r.str("gdstype") ?? ""), \(r["n_samples"]?.numberValue.map { String(Int($0)) } ?? "?") samples)\n  \(r.str("summary")?.truncated(300, marker: "…") ?? "")"
+                let acc = r.str("accession") ?? uid
+                return "GEO \(acc) · \(r.str("title") ?? "?") (\(r.str("taxon") ?? ""), \(r.str("gdstype") ?? ""), \(r["n_samples"]?.numberValue.map { String(Int($0)) } ?? "?") samples)\n  \(r.str("summary")?.truncated(300, marker: "…") ?? "")"
+                    + "\n  https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=\(acc)"
             case "sra":
                 let exp = r.str("expxml") ?? ""
                 let title = Grounding.matches(#"<Title>(.*?)</Title>"#, in: exp, group: 1).first ?? "?"
                 let acc = Grounding.matches(#"<Experiment acc="([^"]+)""#, in: exp, group: 1).first ?? uid
-                return "SRA \(acc) · \(title)"
+                return "SRA \(acc) · \(title)\n  https://www.ncbi.nlm.nih.gov/sra/\(acc)"
             default:
                 return "\(db) \(uid) · \(r.str("title") ?? r.str("caption") ?? "?")\(r["slen"]?.numberValue.map { " · \(Int($0)) bp/aa" } ?? "")"
+                    + "\n  https://www.ncbi.nlm.nih.gov/\(db)/\(uid)"
             }
         }
         return (total.map { "\($0) matches; showing \(lines.count)\n" } ?? "") + lines.joined(separator: "\n")
@@ -176,7 +182,9 @@ struct BioDatabaseTool: Tool {
         return (j.arrayValue ?? [j]).prefix(3).map { m in
             "AlphaFold \(m.str("entryId") ?? "?") · \(m.str("uniprotDescription") ?? "") (\(m.str("organismScientificName") ?? ""))\n"
                 + "  model v\(m["latestVersion"]?.numberValue.map { String(Int($0)) } ?? "?") · mean pLDDT \(m["globalMetricValue"]?.numberValue.map { String(format: "%.1f", $0) } ?? "?")\n"
-                + "  \(m.str("pdbUrl") ?? "")"
+                // The entry page (3D viewer, pLDDT, PAE) to link, and the model file to download.
+                + "  https://alphafold.ebi.ac.uk/entry/\(m.str("uniprotAccession") ?? acc)\n"
+                + "  file: \(m.str("pdbUrl") ?? m.str("cifUrl") ?? "")"
         }.joined(separator: "\n")
     }
 
@@ -207,7 +215,8 @@ struct BioDatabaseTool: Tool {
             for t in ts {
                 let tid = t.str("target_chembl_id") ?? "?"
                 let acts = (try? await get("\(base)/activity.json?target_chembl_id=\(tid)&limit=1"))?["page_meta"]?["total_count"]?.numberValue.map { String(Int($0)) } ?? "?"
-                lines.append("ChEMBL \(tid) · \(t.str("pref_name") ?? "?") (\(t.str("target_type") ?? ""), \(t.str("organism") ?? "")) · \(acts) bioactivities")
+                lines.append("ChEMBL \(tid) · \(t.str("pref_name") ?? "?") (\(t.str("target_type") ?? ""), \(t.str("organism") ?? "")) · \(acts) bioactivities"
+                             + "\n  https://www.ebi.ac.uk/chembl/explore/target/\(tid)")
             }
             return (lines.joined(separator: "\n"), [])
         }
@@ -222,6 +231,7 @@ struct BioDatabaseTool: Tool {
             let p = m["molecule_properties"]
             var line = "ChEMBL \(m.str("molecule_chembl_id") ?? "?") · \(m.str("pref_name") ?? "unnamed") · max phase \(m["max_phase"]?.stringValue ?? m["max_phase"]?.numberValue.map { String($0) } ?? "?")"
                 + "\n  \(p?.str("full_molformula") ?? "?") · MW \(p?.str("full_mwt") ?? "?") · InChIKey \(key ?? "?")"
+                + "\n  https://www.ebi.ac.uk/chembl/explore/compound/\(m.str("molecule_chembl_id") ?? "")"
             if let hit = screen.match(smiles: [smiles].compactMap { $0 }, inchikeys: [key].compactMap { $0 }) {
                 line = ChemLookupTool.controlledNote(hit) + "\n" + line
                 hits.append(hit)
@@ -243,7 +253,7 @@ struct BioDatabaseTool: Tool {
         // A UniProt accession maps straight to its pathways through the data service.
         if q.range(of: #"^([OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2})$"#, options: .regularExpression) != nil {
             let ps = try await get("\(base)/data/mapping/UniProt/\(q)/pathways?species=9606").arrayValue ?? []
-            return ps.prefix(limit).map { "Reactome \($0.str("stId") ?? "?") · \($0.str("displayName") ?? "?") (\($0.str("speciesName") ?? ""))" }.joined(separator: "\n")
+            return ps.prefix(limit).map { "Reactome \($0.str("stId") ?? "?") · \($0.str("displayName") ?? "?") (\($0.str("speciesName") ?? ""))\n  https://reactome.org/content/detail/\($0.str("stId") ?? "")" }.joined(separator: "\n")
         }
         let j: JSON
         do { j = try await get("\(base)/search/query?query=\(Self.q(q))&types=Pathway&cluster=true&rows=\(limit)") } catch ProviderError.http(let status, _) where status >= 500 {
@@ -253,7 +263,7 @@ struct BioDatabaseTool: Tool {
         return entries.map { e in
             let name = (e.str("name") ?? "?").replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
             let species = (e["species"]?.arrayValue ?? []).compactMap(\.stringValue).joined(separator: ", ")
-            return "Reactome \(e.str("stId") ?? "?") · \(name) (\(species))"
+            return "Reactome \(e.str("stId") ?? "?") · \(name) (\(species))\n  https://reactome.org/content/detail/\(e.str("stId") ?? "")"
         }.joined(separator: "\n")
     }
 

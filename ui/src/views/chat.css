@@ -208,3 +208,7 @@ span.sandbox-menu.t-meta { display: inline-flex; align-items: center; gap: 4px; 
 .step-mark.user::before { width: 14px; }
 .step-mark:hover::before { width: 18px; opacity: 1; background: var(--secondary); }
 .step-mark.on::before { width: 22px; height: 2px; opacity: 1; background: var(--text); }
+
+/* A web address in a tool's output (a database record's page). */
+.output-link { color: var(--accent); text-decoration: none; }
+.output-link:hover { text-decoration: underline; }

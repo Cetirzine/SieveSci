@@ -381,7 +381,7 @@ function RowContent({ item, stream, showThinking, hovering }: { item: Transcript
           <span className={`gutter c-${tone}`}><Symbol name={n.kind === "failed" ? "exclamationmark.circle.fill" : n.kind === "exited" ? "checkmark.circle.fill" : "bell"} size={11} /></span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="t-meta-strong">{n.text.split("\n")[0]}</div>
-            {expanded && <pre className="code-block t-mono-tiny secondary">{n.text}</pre>}
+            {expanded && <pre className="code-block t-mono-tiny secondary"><Linked text={n.text} /></pre>}
           </div>
           <button type="button" className="link-button t-meta" onClick={(e) => { e.stopPropagation(); A.showJob(String(n.job ?? "")); }}>{L("Log")}</button>
         </div>
@@ -397,6 +397,22 @@ function RowContent({ item, stream, showThinking, hovering }: { item: Transcript
 }
 
 /** Assistant prose; drawn again once formulas can be typeset (KaTeX loads after the first paint). */
+/** Plain text (a tool's output) with its web addresses as links: a database record's page opens with a click. */
+function Linked({ text }: { text: string }) {
+  const parts = useMemo(() => {
+    const out: (string | { url: string })[] = [];
+    let last = 0;
+    for (const m of text.matchAll(/https?:\/\/[^\s<>"'`)\]]+[^\s<>"'`)\].,;:!?]/g)) {
+      if (m.index! > last) out.push(text.slice(last, m.index));
+      out.push({ url: m[0] });
+      last = m.index! + m[0].length;
+    }
+    if (last < text.length) out.push(text.slice(last));
+    return out;
+  }, [text]);
+  return <>{parts.map((p, i) => typeof p === "string" ? p : <a key={i} href={p.url} className="output-link">{p.url}</a>)}</>;
+}
+
 function Markdown({ text }: { text: string }) {
   const math = useApp((s) => s.mathVersion);
   const html = useMemo(() => renderMarkdown(text), [text, math]);
@@ -517,7 +533,7 @@ function ToolRow({ call }: { call: ToolCallView }) {
 }
 
 function ToolOutputView({ call, expanded }: { call: ToolCallView; expanded: boolean }) {
-  if (expanded) return <pre className={`code-block t-mono-tiny ${call.isError ? "c-bad" : "secondary"}`}>{call.output}</pre>;
+  if (expanded) return <pre className={`code-block t-mono-tiny ${call.isError ? "c-bad" : "secondary"}`}><Linked text={call.output} /></pre>;
   if (call.isError) return <div className="t-mono-tiny c-bad clamp-2">{call.output.split("\n").slice(0, 2).join("\n")}</div>;
   return null;
 }

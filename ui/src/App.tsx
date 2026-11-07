@@ -93,6 +93,18 @@ export default function App() {
   const languageChoice = useApp((s) => s.languageChoice);
   const version = useApp((s) => s.version);
   useEffect(() => installShortcuts(), []);
+  // Web links (a reply's database records and papers, a panel's DOI) open in the system browser: the
+  // desktop app's web view does not open new windows, so a plain link would do nothing there.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || !/^(https?:|mailto:)/i.test(a.getAttribute("href") ?? "")) return;
+      e.preventDefault();
+      A.systemOpen({ url: a.href });
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
   useEffect(() => { if (!scene && version) void installMenuBar(version); }, [scene, version, languageChoice]);
 
   // Live: one serve connection for the window, as the app has one AppModel. It reopens the last

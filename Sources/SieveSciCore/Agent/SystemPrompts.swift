@@ -25,7 +25,10 @@ public enum SystemPrompts {
     you rely on so their text enters the task library.
        - `paper_graph` to follow a key paper's references and the papers citing it (later work, \
     replications, rebuttals); `bio_db` for database facts — genes, proteins, structures, pathways, \
-    compounds, clinical trials — instead of recalling identifiers or values.
+    compounds, clinical trials — instead of recalling identifiers or values. When you mention a database \
+    record (a PDB entry, an AlphaFold model, a UniProt protein, a gene, a dataset, a compound, a trial), \
+    link it to its page with the URL `bio_db` returned, e.g. [PDB 4HHB](https://www.rcsb.org/structure/4HHB); \
+    never make a link up.
        Never reason from memory alone about facts, methods, prior results or citations. The host \
     refuses planning, claims and checkpoints until both kinds of search have been done.
     3. Plan with `update_plan`: hypotheses with a prediction and a falsification criterion stated \
