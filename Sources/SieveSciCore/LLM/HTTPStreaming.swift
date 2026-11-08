@@ -35,7 +35,10 @@ public struct URLSessionStreaming: HTTPStreaming {
 
     public func send(_ request: URLRequest) async throws -> (Int, Data) {
         #if canImport(FoundationNetworking)
-        if CurlTransport.prefers(request) { return try await CurlTransport.send(request) }
+        SystemProxy.refresh()
+        if CurlTransport.prefers(request) {
+            do { return try await CurlTransport.send(request) } catch is CurlTransport.LaunchFailed { return try await sessionSend(request) }
+        }
         do { return try await sessionSend(request) } catch where CurlTransport.canTake(after: error, request) {
             let r = try await CurlTransport.send(request)
             CurlTransport.prefer(request)
@@ -47,16 +50,37 @@ public struct URLSessionStreaming: HTTPStreaming {
     }
 
     private func sessionSend(_ request: URLRequest) async throws -> (Int, Data) {
-        let (data, resp) = try await session.data(for: request)
+        #if canImport(FoundationNetworking)
+        // The shared session's 60 s request timeout would cut a long call that asked for more.
+        let s = session === URLSession.shared && request.timeoutInterval > 60 ? Self.longSession : session
+        #else
+        let s = session
+        #endif
+        let (data, resp) = try await s.data(for: request)
         return ((resp as? HTTPURLResponse)?.statusCode ?? 0, data)
     }
 
+    /// Timeouts for model calls, set on the configuration itself: swift-corelibs-foundation (Windows, Linux)
+    /// was seen to cut a streamed reply at about 60 s — the configuration's default — even with the
+    /// request's own timeout raised. Idleness is the stall watch's job, so these are only a backstop.
+    static func longConfiguration() -> URLSessionConfiguration {
+        let c = URLSessionConfiguration.default
+        c.timeoutIntervalForRequest = 3600
+        c.timeoutIntervalForResource = 86_400
+        return c
+    }
+
+    static let longSession = URLSession(configuration: longConfiguration())
+
     public func postSSE(_ request: URLRequest) async throws -> HTTPStreamResponse {
         #if canImport(FoundationNetworking)
+        SystemProxy.refresh()
         // URLSession here has sent a request's headers and then never its body (the server closes after
         // 15 s: "Empty reply from server", on every retry). A failure before any response goes out once
         // more through the system's curl; a host curl answered stays on curl for this run.
-        if CurlTransport.prefers(request) { return try await CurlTransport.postSSE(request) }
+        if CurlTransport.prefers(request) {
+            do { return try await CurlTransport.postSSE(request) } catch is CurlTransport.LaunchFailed { return try await sessionPostSSE(request) }
+        }
         do { return try await sessionPostSSE(request) } catch where CurlTransport.canTake(after: error, request) {
             do {
                 let r = try await CurlTransport.postSSE(request)
@@ -77,10 +101,11 @@ public struct URLSessionStreaming: HTTPStreaming {
         // swift-corelibs-foundation (Windows, Linux) has no URLSession.bytes(for:): a data delegate streams
         // the body as it arrives. (Buffering it whole showed nothing until a reply ended, so a long reply
         // looked like a silent model to the stall watch and was sent again.)
+        let original = request
         var request = request
         request.timeoutInterval = max(request.timeoutInterval, 3600)   // idleness is the stall watch's job
         let stream = DelegateStream()
-        let session = URLSession(configuration: .default, delegate: stream, delegateQueue: nil)
+        let session = URLSession(configuration: Self.longConfiguration(), delegate: stream, delegateQueue: nil)
         let task = session.dataTask(with: request)
         stream.task = task
         task.resume()
@@ -100,7 +125,12 @@ public struct URLSessionStreaming: HTTPStreaming {
                 do {
                     for try await ev in bytes.events { cont.yield(SSEMessage(event: ev.event, data: ev.data)) }
                     cont.finish()
-                } catch { cont.finish(throwing: error) }
+                } catch {
+                    // The stream broke after it began, out of reach of the fallback above: the retry that
+                    // follows (and the rest of the run) goes to this host through curl.
+                    if !Task.isCancelled, CurlTransport.canTake(after: error, original) { CurlTransport.prefer(original) }
+                    cont.finish(throwing: error)
+                }
                 session.finishTasksAndInvalidate()
             }
             cont.onTermination = { _ in t.cancel(); task.cancel(); session.invalidateAndCancel() }

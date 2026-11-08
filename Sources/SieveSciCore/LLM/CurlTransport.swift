@@ -11,8 +11,14 @@ import FoundationNetworking
 /// before any response, the request goes out once more through curl; after curl gets an answer from a
 /// host, that host's requests go through curl for the rest of the run.
 ///
+/// On Windows, requests with a body go through curl from the start: URLSession there also cut every
+/// streamed reply at about 60 s ("Failure when receiving data from the peer", curl 56) after the reply
+/// had begun, which no fallback before the response could catch. Set `SIEVESCI_NO_CURL=1` to keep
+/// everything on URLSession.
+///
 /// The API key never touches the command line or the disk: the URL and headers reach curl as a config
-/// on its standard input. The body is a temporary file, deleted when curl exits.
+/// on its standard input. The body is a temporary file, deleted when curl exits (and, if the engine was
+/// killed first, swept up the next time curl runs).
 enum CurlTransport {
     /// The curl program, if the system has one.
     static let executable: URL? = {
@@ -35,10 +41,29 @@ enum CurlTransport {
         return "\(scheme)://\(host):\(u.port ?? (scheme == "https" ? 443 : 80))"
     }
 
-    /// curl answered this host before: send its requests through curl first.
+    /// curl answered this host before, or (on Windows) the request carries a body: send it through curl first.
     static func prefers(_ request: URLRequest) -> Bool {
-        guard executable != nil, let k = hostKey(request) else { return false }
+        guard executable != nil, enabled, let k = hostKey(request) else { return false }
+        if firstForBodies && request.httpBody?.isEmpty == false { return true }
         return preferred.value.contains(k)
+    }
+
+    /// Requests with a body start on curl: on Windows, where URLSession lost request bodies (0.3.0) and then
+    /// cut long streams at about 60 s (0.3.1). Elsewhere URLSession stays first and curl is the fallback.
+    nonisolated(unsafe) static var firstForBodies = Platform.isWindows
+
+    /// `SIEVESCI_NO_CURL=1` keeps every request on URLSession (to compare the two stacks).
+    static let enabled: Bool = !["1", "true", "yes"].contains((ProcessInfo.processInfo.environment["SIEVESCI_NO_CURL"] ?? "").lowercased())
+
+    /// For the audit log beside a dropped stream: whether the curl path could have carried it.
+    static var status: String {
+        executable == nil ? "unavailable (no system curl; requests stay on URLSession)" : enabled ? (firstForBodies ? "first" : "fallback") : "disabled (SIEVESCI_NO_CURL)"
+    }
+
+    /// curl could not be started (missing, blocked by policy): the caller goes on with URLSession.
+    struct LaunchFailed: Error, LocalizedError {
+        let reason: String
+        var errorDescription: String? { "curl could not be started: \(reason)" }
     }
 
     static func prefer(_ request: URLRequest) {
@@ -52,7 +77,7 @@ enum CurlTransport {
     /// URLSession failed before any response arrived, in a way another HTTP stack may not: a request
     /// with a body, a network-level error, not a Stop.
     static func canTake(after error: Error, _ request: URLRequest) -> Bool {
-        guard executable != nil, hostKey(request) != nil, request.httpBody?.isEmpty == false, !Task.isCancelled else { return false }
+        guard executable != nil, enabled, hostKey(request) != nil, request.httpBody?.isEmpty == false, !Task.isCancelled else { return false }
         if error is ProviderError || error is CancellationError { return false }
         let ns = error as NSError
         if ns.domain == NSURLErrorDomain {
@@ -126,6 +151,8 @@ enum CurlTransport {
             lines.append("data-binary = " + quoted("@" + path))
         }
         if let maxTime { lines.append("max-time = \(Int(maxTime.rounded(.up)))") }
+        // A compressed reply asked for in the headers is decoded by curl, not handed to the SSE parser as is.
+        if (request.allHTTPHeaderFields ?? [:]).keys.contains(where: { $0.lowercased() == "accept-encoding" }) { lines.append("compressed") }
         return lines.joined(separator: "\n") + "\n"
     }
 
@@ -159,6 +186,24 @@ enum CurlTransport {
         return NSError(domain: NSURLErrorDomain, code: urlCode, userInfo: [NSLocalizedDescriptionKey: text])
     }
 
+    // MARK: Temporary files
+
+    static let tempPrefix = "sievesci-curl-"
+
+    /// A request body holds the whole conversation. Directories left by an engine that was killed before curl
+    /// exited are removed the first time curl runs again; an hour's age keeps another engine's live ones.
+    private static let sweepOnce: Void = { sweep(olderThan: 3600) }()
+
+    static func sweep(olderThan age: TimeInterval, in root: URL = FileManager.default.temporaryDirectory) {
+        let fm = FileManager.default
+        guard let items = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        let cutoff = Date().addingTimeInterval(-age)
+        for u in items where u.lastPathComponent.hasPrefix(tempPrefix) {
+            let modified = (try? u.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            if modified < cutoff { try? fm.removeItem(at: u) }
+        }
+    }
+
     // MARK: One curl run
 
     final class Exchange: @unchecked Sendable {
@@ -179,13 +224,18 @@ enum CurlTransport {
         }
 
         static func start(_ request: URLRequest, maxTime: Double?) throws -> Exchange {
-            guard let exe = CurlTransport.executable else { throw ProviderError.cliNotFound("curl") }
-            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("sievesci-curl-\(UUID().uuidString)", isDirectory: true)
-            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            guard let exe = CurlTransport.executable else { throw LaunchFailed(reason: "no curl program") }
+            sweepOnce
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("\(CurlTransport.tempPrefix)\(UUID().uuidString)", isDirectory: true)
+            do { try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true) }
+            catch { throw LaunchFailed(reason: error.localizedDescription) }
             var bodyFile: URL?
             if let body = request.httpBody, !body.isEmpty {
                 let f = dir.appendingPathComponent("body")
-                try body.write(to: f)
+                do { try body.write(to: f) } catch {
+                    try? FileManager.default.removeItem(at: dir)
+                    throw LaunchFailed(reason: error.localizedDescription)
+                }
                 bodyFile = f
             }
             let x = Exchange(dir: dir)
@@ -199,7 +249,7 @@ enum CurlTransport {
             x.process.standardError = stderr
             do { try x.process.run() } catch {
                 try? FileManager.default.removeItem(at: dir)
-                throw error
+                throw LaunchFailed(reason: error.localizedDescription)
             }
             Signals.ignoreBrokenPipes()   // curl gone already: a failed write, not a killed engine
             try? stdin.fileHandleForWriting.write(contentsOf: Data(CurlTransport.config(request, bodyFile: bodyFile, maxTime: maxTime).utf8))

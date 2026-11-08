@@ -36,4 +36,16 @@ import Testing
         #expect(SystemProxy.hasProxy(["HTTPS_PROXY": "http://x:1"]))
         #expect(!SystemProxy.hasProxy(["PATH": "/bin", "https_proxy": ""]))
     }
+
+    @Test func anAdoptedProxyIsReplacedAndRemovedWhenTheSystemChanges() {
+        // Names no library reads, so the test process's own requests are unaffected.
+        let k1 = "SIEVESCI_TEST_PROXY_A", k2 = "SIEVESCI_TEST_PROXY_B"
+        SystemProxy.apply([k1: "http://127.0.0.1:7897", k2: "x"], replacing: [:])
+        #expect(ProcessInfo.processInfo.environment[k1] == "http://127.0.0.1:7897")
+        SystemProxy.apply([k1: "http://127.0.0.1:7890"], replacing: [k1: "http://127.0.0.1:7897", k2: "x"])
+        #expect(ProcessInfo.processInfo.environment[k1] == "http://127.0.0.1:7890")
+        #expect(ProcessInfo.processInfo.environment[k2] == nil, "a proxy switched off is dropped")
+        SystemProxy.apply([:], replacing: [k1: "http://127.0.0.1:7890"])
+        #expect(ProcessInfo.processInfo.environment[k1] == nil)
+    }
 }

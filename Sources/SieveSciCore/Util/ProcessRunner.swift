@@ -168,7 +168,7 @@ public enum ProcessRunner {
         p.executableURL = URL(fileURLWithPath: exe)
         p.arguments = args
         if let cwd { p.currentDirectoryURL = cwd }
-        var e = loginEnvironment
+        var e = SystemProxy.live(loginEnvironment)
         // No proxy from the launch environment or the shell profile: the one set for the computer.
         if !SystemProxy.hasProxy(e) { for (k, v) in SystemProxy.current() { e[k] = v } }
         for (k, v) in env ?? [:] { e[k] = v }

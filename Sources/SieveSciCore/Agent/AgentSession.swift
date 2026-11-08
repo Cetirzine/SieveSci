@@ -363,7 +363,8 @@ public final class AgentSession: @unchecked Sendable {
             // The endpoint went silent or closed the stream before answering, with nothing shown yet:
             // the same request again (identical bytes, so the prefix cache still applies).
             draft?.clear()
-            services.log("stream_retry", actor: "host", ["agent": .string(id), "error": .string(error.localizedDescription), "attempt": .int(dropRetry + 1)])
+            services.log("stream_retry", actor: "host", ["agent": .string(id), "error": .string(error.localizedDescription), "attempt": .int(dropRetry + 1),
+                                                          "curl": .string(CurlTransport.status)])
             services.emit(.notice(L("The model stopped responding; asking again.")))
             try await Task.sleep(nanoseconds: UInt64(2 + 4 * dropRetry) * 1_000_000_000)
             return try await callModel(dropRetry: dropRetry + 1)

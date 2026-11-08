@@ -148,6 +148,11 @@
   /* The trimmed text is shorter than its line box was: the same outer size comes from padding. */
   .chip { padding: 4px 5px; }
   .menu-item { padding: 7px 8px; }
+  /* Never on an element that also clips its overflow: trimmed to cap height and baseline, the clip cut the
+     tops of Chinese characters (taller than capitals) and every descender (y, g, p) — the "跟随系统" in
+     Settings' pop-ups (issue #5). Those trim only the line gap, which keeps every glyph whole. */
+  :is(.action-label, .chip, .menu-label, .menu-item, .lc-label, .hstack > span, .hstack-xs > span, .disclosure-row):is(.clip, .clip-middle),
+  .popup-value, .seg button, .provider-row .names > *, .sheet-list .sheet-row .grow > * { text-box: trim-both text; }
 }
 
 /* A button whose work is under way (ActionButton with an async handler). */

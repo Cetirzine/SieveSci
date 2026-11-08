@@ -13,19 +13,65 @@ public enum SystemProxy {
     static let names = ["https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY", "all_proxy", "ALL_PROXY"]
 
     /// Gives this process the computer's proxy when its environment has none. On Windows and Linux the
-    /// engine's own requests (URLSession over libcurl) read only `https_proxy` and friends, never the
-    /// system setting, so GitHub, arXiv and the vendors' APIs failed with "Connection was reset" where a
-    /// proxy is needed. (On macOS URLSession already follows the system proxy.) Called once at start.
+    /// engine's own requests (URLSession over libcurl, and curl.exe) read only `https_proxy` and friends,
+    /// never the system setting, so GitHub, arXiv and the vendors' APIs failed with "Connection was reset"
+    /// where a proxy is needed. (On macOS URLSession already follows the system proxy.) Called once at start;
+    /// `refresh()` keeps it current afterwards.
     public static func adoptForThisProcess() {
         #if !os(macOS)
-        guard !hasProxy(ProcessInfo.processInfo.environment) else { return }
-        for (k, v) in current() {
-            #if os(Windows)
-            _ = _putenv_s(k, v)
-            #else
-            setenv(k, v, 1)
-            #endif
-        }
+        guard !hasProxy(ProcessInfo.processInfo.environment) else { return }   // the user's own export: theirs to change
+        apply(current(), replacing: [:])
+        #endif
+    }
+
+    /// Follows the system setting after start: a proxy switched off (or Clash quit) is dropped, one switched
+    /// on is taken up, for this process's requests and the programs it starts. Only variables this process set
+    /// itself change; read at most every 10 s. Called before requests and child processes.
+    public static func refresh() {
+        #if !os(macOS)
+        guard let was = adopted.value else { return }
+        let now = current()
+        if now != was { apply(now, replacing: was) }
+        #endif
+    }
+
+    /// A child's environment with the proxy as it is now, when the proxy is the one this process adopted:
+    /// an environment captured at start (`ProcessRunner.loginEnvironment`) would keep the old one.
+    public static func live(_ base: [String: String]) -> [String: String] {
+        #if os(macOS)
+        return base
+        #else
+        refresh()
+        guard let now = adopted.value else { return base }
+        var e = base
+        for k in names + ["no_proxy", "NO_PROXY"] { e[k] = nil }
+        for (k, v) in now { e[k] = v }
+        return e
+        #endif
+    }
+
+    /// What `adoptForThisProcess` put in the environment; nil when the environment's proxy is the user's.
+    private static let adopted = LockedValue<[String: String]?>(nil)
+
+    static func apply(_ env: [String: String], replacing previous: [String: String]) {
+        for k in previous.keys where env[k] == nil { unset(k) }
+        for (k, v) in env where previous[k] != v { set(k, v) }
+        adopted.mutate { $0 = env }
+    }
+
+    private static func set(_ k: String, _ v: String) {
+        #if os(Windows)
+        _ = _putenv_s(k, v)
+        #else
+        setenv(k, v, 1)
+        #endif
+    }
+
+    private static func unset(_ k: String) {
+        #if os(Windows)
+        _ = _putenv_s(k, "")   // an empty value removes the variable
+        #else
+        unsetenv(k)
         #endif
     }
 

@@ -107,4 +107,45 @@ struct CurlTransportTests {
         #expect(h?.1["x-request-id"] == "a:b")
         #expect(h?.1.count == 2)
     }
+
+    @Test func onWindowsRequestsWithABodyStartOnCurl() {
+        guard CurlTransport.executable != nil, CurlTransport.enabled else { return }
+        let was = CurlTransport.firstForBodies
+        defer { CurlTransport.firstForBodies = was; CurlTransport.reset() }
+        CurlTransport.reset()
+        let post = URLRequest.json(url: URL(string: "https://api.deepseek.com/chat/completions")!, body: Data("{}".utf8), headers: [:])
+        let get = URLRequest(url: URL(string: "https://api.deepseek.com/models")!)
+        CurlTransport.firstForBodies = true
+        #expect(CurlTransport.prefers(post))
+        #expect(!CurlTransport.prefers(get), "a GET stays on URLSession until curl is needed for the host")
+        CurlTransport.firstForBodies = false
+        #expect(!CurlTransport.prefers(post))
+    }
+
+    @Test func compressedRepliesAreDecodedByCurl() {
+        let plain = URLRequest.json(url: URL(string: "https://h/x")!, body: Data("{}".utf8), headers: [:])
+        #expect(!CurlTransport.config(plain, bodyFile: nil, maxTime: nil).contains("\ncompressed"))
+        let gz = URLRequest.json(url: URL(string: "https://h/x")!, body: Data("{}".utf8), headers: ["Accept-Encoding": "gzip"])
+        #expect(CurlTransport.config(gz, bodyFile: nil, maxTime: nil).contains("\ncompressed\n"))
+    }
+
+    @Test func leftoverBodiesAreSweptButLiveOnesStay() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("sweep-\(UUID().uuidString)")
+        let old = root.appendingPathComponent(CurlTransport.tempPrefix + "old"), fresh = root.appendingPathComponent(CurlTransport.tempPrefix + "new")
+        let other = root.appendingPathComponent("someone-else")
+        for d in [old, fresh, other] { try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true) }
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-7200)], ofItemAtPath: old.path)
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-7200)], ofItemAtPath: other.path)
+        CurlTransport.sweep(olderThan: 3600, in: root)
+        #expect(!FileManager.default.fileExists(atPath: old.path))
+        #expect(FileManager.default.fileExists(atPath: fresh.path))
+        #expect(FileManager.default.fileExists(atPath: other.path))
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    @Test func modelCallsAreNotCutAtTheDefaultSixtySeconds() {
+        let c = URLSessionStreaming.longConfiguration()
+        #expect(c.timeoutIntervalForRequest >= 3600)
+        #expect(c.timeoutIntervalForResource >= 86_400)
+    }
 }
