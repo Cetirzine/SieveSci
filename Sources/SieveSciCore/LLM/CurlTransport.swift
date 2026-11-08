@@ -194,10 +194,10 @@ enum CurlTransport {
     /// exited are removed the first time curl runs again; an hour's age keeps another engine's live ones.
     private static let sweepOnce: Void = { sweep(olderThan: 3600) }()
 
-    static func sweep(olderThan age: TimeInterval, in root: URL = FileManager.default.temporaryDirectory) {
+    static func sweep(olderThan age: TimeInterval, in root: URL = FileManager.default.temporaryDirectory, now: Date = Date()) {
         let fm = FileManager.default
         guard let items = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
-        let cutoff = Date().addingTimeInterval(-age)
+        let cutoff = now.addingTimeInterval(-age)
         for u in items where u.lastPathComponent.hasPrefix(tempPrefix) {
             let modified = (try? u.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
             if modified < cutoff { try? fm.removeItem(at: u) }

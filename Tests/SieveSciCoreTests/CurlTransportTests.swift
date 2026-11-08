@@ -79,6 +79,10 @@ struct CurlTransportTests {
         #expect(!CurlTransport.canTake(after: ProviderError.http(status: 500, body: ""), withBody))
         #expect(!CurlTransport.canTake(after: CancellationError(), withBody))
 
+        // The fallback alone (on Windows, requests with a body start on curl anyway).
+        let first = CurlTransport.firstForBodies
+        CurlTransport.firstForBodies = false
+        defer { CurlTransport.firstForBodies = first }
         CurlTransport.reset()
         #expect(!CurlTransport.prefers(withBody))
         CurlTransport.prefer(withBody)
@@ -130,16 +134,16 @@ struct CurlTransportTests {
     }
 
     @Test func leftoverBodiesAreSweptButLiveOnesStay() throws {
+        // Ages come from `now` (Windows refuses to back-date a directory).
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("sweep-\(UUID().uuidString)")
-        let old = root.appendingPathComponent(CurlTransport.tempPrefix + "old"), fresh = root.appendingPathComponent(CurlTransport.tempPrefix + "new")
+        let a = root.appendingPathComponent(CurlTransport.tempPrefix + "a"), b = root.appendingPathComponent(CurlTransport.tempPrefix + "b")
         let other = root.appendingPathComponent("someone-else")
-        for d in [old, fresh, other] { try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true) }
-        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-7200)], ofItemAtPath: old.path)
-        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-7200)], ofItemAtPath: other.path)
+        for d in [a, b, other] { try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true) }
         CurlTransport.sweep(olderThan: 3600, in: root)
-        #expect(!FileManager.default.fileExists(atPath: old.path))
-        #expect(FileManager.default.fileExists(atPath: fresh.path))
-        #expect(FileManager.default.fileExists(atPath: other.path))
+        #expect(FileManager.default.fileExists(atPath: a.path) && FileManager.default.fileExists(atPath: b.path), "live ones stay")
+        CurlTransport.sweep(olderThan: 3600, in: root, now: Date().addingTimeInterval(7200))
+        #expect(!FileManager.default.fileExists(atPath: a.path) && !FileManager.default.fileExists(atPath: b.path), "leftovers go")
+        #expect(FileManager.default.fileExists(atPath: other.path), "nothing else is touched")
         try? FileManager.default.removeItem(at: root)
     }
 
