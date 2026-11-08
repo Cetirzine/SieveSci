@@ -345,18 +345,35 @@ public final class IdeaLedger: @unchecked Sendable {
         persist()
     }
 
+    /// Successful searches run since an idea was written, oldest first: what a novelty or evidence verdict
+    /// may rest on. `extra` admits more tools (`bio_db` for evidence).
+    func searchesSince(_ idea: Idea, ledger: EvidenceLedger, extra: Set<String> = []) -> [String] {
+        let tools = ResearchProtocol.webSearchTools.union(ResearchProtocol.literatureTools).union(extra)
+        return ledger.all.filter { $0.success && tools.contains($0.tool) && $0.startedAt >= idea.createdAt.addingTimeInterval(-1) }.map(\.id)
+    }
+
+    /// The searches a verdict rests on: the cited ones that qualify, or — none cited — every qualifying
+    /// search the host saw since the idea was written. (A model that left `receipts` out was refused 47
+    /// times in a row with "Valid so far: none" while it kept searching.) The checker reads them at promotion.
+    func qualifying(_ cited: [String], since idea: Idea, ledger: EvidenceLedger, extra: Set<String> = []) -> (valid: [String], seen: [String]) {
+        let seen = searchesSince(idea, ledger: ledger, extra: extra)
+        return (cited.isEmpty ? seen : cited.filter(seen.contains), seen)
+    }
+
+    static func notEnough(_ kind: String, _ id: String, valid: [String], seen: [String], what: String) -> String {
+        "A \(kind) verdict needs at least \(minNoveltySearches) successful searches (\(what)) run after \(id) was written, cited in `receipts`. "
+            + "Valid so far: \(valid.isEmpty ? "none" : valid.joined(separator: ", ")). "
+            + (seen.isEmpty ? "No search has succeeded since \(id) was written: search first, then record the verdict."
+               : "Searches since \(id) was written: \(seen.suffix(12).joined(separator: ", ")) (\(seen.count)) — cite those that are about \(id), or search more.")
+    }
+
     /// Records a novelty verdict. The searches must exist, have succeeded, and postdate the idea.
     public func setNovelty(_ id: String, _ verdict: Idea.Novelty, prior: [String], receipts: [String], ledger: EvidenceLedger) -> Result<Idea, GateRefusal> {
         guard let idea = snapshot.first(where: { $0.id == id }) else { return .failure(GateRefusal("No idea \(id).")) }
-        let searchTools = ResearchProtocol.webSearchTools.union(ResearchProtocol.literatureTools)
-        let valid = receipts.filter { r in
-            guard let rc = ledger.receipt(r) else { return false }
-            return rc.success && searchTools.contains(rc.tool) && rc.startedAt >= idea.createdAt.addingTimeInterval(-1)
-        }
+        let (valid, seen) = qualifying(receipts, since: idea, ledger: ledger)
         if verdict != .known && valid.count < Self.minNoveltySearches {
-            return .failure(GateRefusal("A novelty verdict needs at least \(Self.minNoveltySearches) successful searches (web_search, literature_search, paper_graph …) "
-                + "run after \(id) was written; cite their receipt ids. Valid so far: \(valid.isEmpty ? "none" : valid.joined(separator: ", ")). "
-                + "Search synonyms, the mechanism, the method and the organism, read the closest papers, then record the verdict."))
+            return .failure(GateRefusal(Self.notEnough("novelty", id, valid: valid, seen: seen, what: "web_search, literature_search, paper_graph …")
+                + " Search synonyms, the mechanism, the method and the organism, read the closest papers, then record the verdict."))
         }
         if verdict == .incremental && prior.isEmpty || verdict == .known && prior.isEmpty {
             return .failure(GateRefusal("Name the prior work ([@key] or a URL) that makes \(id) \(verdict.rawValue)."))
@@ -375,14 +392,9 @@ public final class IdeaLedger: @unchecked Sendable {
     /// must have succeeded and postdate the idea; established or partial support names the results.
     public func setSupport(_ id: String, _ verdict: Idea.Support, results: [String], receipts: [String], ledger: EvidenceLedger) -> Result<Idea, GateRefusal> {
         guard let idea = snapshot.first(where: { $0.id == id }) else { return .failure(GateRefusal("No idea \(id).")) }
-        let searchTools = ResearchProtocol.webSearchTools.union(ResearchProtocol.literatureTools)
-        let valid = receipts.filter { r in
-            guard let rc = ledger.receipt(r) else { return false }
-            return rc.success && (searchTools.contains(rc.tool) || rc.tool == "bio_db") && rc.startedAt >= idea.createdAt.addingTimeInterval(-1)
-        }
+        let (valid, seen) = qualifying(receipts, since: idea, ledger: ledger, extra: ["bio_db"])
         if valid.count < Self.minNoveltySearches {
-            return .failure(GateRefusal("An evidence verdict needs at least \(Self.minNoveltySearches) successful searches (benchmarks, reviews, "
-                + "comparisons, leaderboards) run after \(id) was written; cite their receipt ids. Valid so far: \(valid.isEmpty ? "none" : valid.joined(separator: ", "))."))
+            return .failure(GateRefusal(Self.notEnough("evidence", id, valid: valid, seen: seen, what: "benchmarks, reviews, comparisons, leaderboards")))
         }
         if verdict != .unproven && results.isEmpty {
             return .failure(GateRefusal("Name the published results ([@key] or a URL, with the reported numbers) that support \(id)."))

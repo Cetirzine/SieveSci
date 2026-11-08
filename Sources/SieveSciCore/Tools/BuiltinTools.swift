@@ -362,7 +362,10 @@ struct WebSearchTool: Tool {
                                       + "\n\nSearch digest (verify against the sources before relying on it):\n" + r.summary.truncated(6000))
                 }
                 errors.append("native search returned no results")
-            } catch { errors.append("native: \(error.localizedDescription.truncated(200))") }
+            } catch {
+                if Self.wasStopped(error) { return ToolOutput("Web search stopped before it answered.", isError: true) }
+                errors.append("native: \(error.localizedDescription.truncated(200))")
+            }
         }
         do {
             var hits = try await s.webSearch.search(q, count: 8)
@@ -374,9 +377,25 @@ struct WebSearchTool: Tool {
                 return ToolOutput(fallback + hits.enumerated().map { "\($0.offset + 1). \($0.element.title)\n   \($0.element.url)\($0.element.published.map { " (\($0))" } ?? "")\n   \($0.element.snippet.truncated(400, marker: "…"))" }.joined(separator: "\n"))
             }
             errors.append("\(backend.rawValue): no results")
-        } catch { errors.append("\(s.webSearch.effectiveBackend.rawValue): \(error.localizedDescription.truncated(200))") }
-        // A search that finds nothing is not grounding; it fails so it cannot satisfy the gate.
-        return ToolOutput("Web search failed: " + errors.joined(separator: "; ") + ". Configure a search provider in Settings → Web search.", isError: true)
+        } catch {
+            if Self.wasStopped(error) { return ToolOutput("Web search stopped before it answered.", isError: true) }
+            errors.append("\(s.webSearch.effectiveBackend.rawValue): \(error.localizedDescription.truncated(200))")
+        }
+        // A search that finds nothing is not grounding; it fails so it cannot satisfy the gate. Settings are
+        // suggested only when a key or an account is the problem — "cancelled" or a timeout is not fixed there.
+        let joined = errors.joined(separator: "; ")
+        let account = ["401", "403", "unauthor", "forbidden", "api key", "no key", "quota", "subscription", "invalid key"].contains { joined.lowercased().contains($0) }
+        let nothing = errors.allSatisfy { $0.hasSuffix("no results") }
+        return ToolOutput("Web search failed: " + joined + (account ? ". Check the search provider's key in Settings → Web search."
+                                                            : nothing ? ". Nothing was found: try other words, fewer terms or a broader query."
+                                                            : ". The search service did not answer: try again in a moment, or with other words."), isError: true)
+    }
+
+    /// Stop, or a request cancelled with its turn: not a search failure to report or to fix in Settings.
+    static func wasStopped(_ error: Error) -> Bool {
+        if error is CancellationError || Task.isCancelled { return true }
+        let ns = error as NSError
+        return ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled || ns.localizedDescription.lowercased() == "cancelled"
     }
 }
 

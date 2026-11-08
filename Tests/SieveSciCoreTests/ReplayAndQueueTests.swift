@@ -93,3 +93,31 @@ import Testing
         #expect(results.count == 1, "the call keeps a result")
     }
 }
+
+/// Task 2026-11-08-828832: `idea evidence` was refused 47 times ("Valid so far: none") because the model
+/// never passed `receipts`, while the searches it needed had run.
+@Suite struct VerdictReceipts {
+    @Test func searchesSinceTheIdeaCountWhenNoneAreCited() throws {
+        let (s, _) = try makeServices()
+        let added = s.ideas.add([Idea(id: "", statement: "Tiered negatives change the ranking", mechanism: "m", test: "t", falsifier: "f", op: "free",
+                                      seeds: [], evidence: [], status: .raw, mergedInto: nil, novelty: nil, noveltyReceipts: [], closestPrior: [],
+                                      rank: nil, review: nil, reviewFingerprint: nil, hypothesisId: nil, note: nil, origin: "session", createdAt: Date(), aim: "proven")])
+        let id = try #require(added.first?.id)
+        // Too few searches: the refusal names the ones that already count.
+        let r1 = s.ledger.record(tool: "web_search", args: ["query": "a"], output: ToolOutput("hits"), role: .main, startedAt: Date(), duration: 0)
+        if case .failure(let g) = s.ideas.setSupport(id, .partial, results: ["@x"], receipts: [], ledger: s.ledger) {
+            #expect(g.message.contains(r1.id) && g.message.contains("receipts"))
+        } else { Issue.record("one search was enough") }
+        for q in ["b", "c"] { s.ledger.record(tool: "literature_search", args: ["query": .string(q)], output: ToolOutput("hits"), role: .main, startedAt: Date(), duration: 0) }
+        // None cited: the host takes the searches it saw.
+        guard case .success(let i) = s.ideas.setSupport(id, .partial, results: ["@x"], receipts: [], ledger: s.ledger) else { Issue.record("refused"); return }
+        #expect(i.noveltyReceipts.count == 3)
+        // Cited ones must still be real searches since the idea.
+        if case .success = s.ideas.setSupport(id, .partial, results: ["@x"], receipts: ["r999", "r998", "r997"], ledger: s.ledger) { Issue.record("made-up receipts passed") }
+    }
+
+    @Test func aStoppedSearchIsNotAConfigurationProblem() {
+        #expect(WebSearchTool.wasStopped(NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)))
+        #expect(!WebSearchTool.wasStopped(NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut)))
+    }
+}

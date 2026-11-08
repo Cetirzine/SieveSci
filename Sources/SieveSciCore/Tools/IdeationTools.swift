@@ -275,7 +275,7 @@ struct IdeaTool: Tool {
                               "order": Schema.array("rank: idea ids, best first", items: ["type": "string"]),
                               "verdict": Schema.stringEnum("novelty verdict", ["not_found_in_search", "incremental", "known"]),
                               "closest_prior": Schema.array("novelty: closest prior work", items: ["type": "string"]),
-                              "receipts": Schema.array("novelty: receipt ids of the searches", items: ["type": "string"]),
+                              "receipts": Schema.array("novelty and evidence: receipt ids (r…) of the ≥3 searches run after the idea was written that the verdict rests on; left out, the host takes every search it saw since then", items: ["type": "string"]),
                               "prediction": Schema.string("promote: the prediction the hypothesis makes")],
                              required: ["action"])
     }

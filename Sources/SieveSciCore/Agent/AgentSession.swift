@@ -574,6 +574,16 @@ public final class AgentSession: @unchecked Sendable {
         if [3, 5, 8].contains(repeats) {
             text += "\n<repeat_notice>You have made this exact call \(repeats) times. Read the previous result, then change approach or finish — repeating it will not give a different answer.</repeat_notice>"
             services.log("repeat_guard", actor: "host", ["agent": .string(id), "tool": .string(use.name), "count": .int(repeats)])
+        } else if !receipt.success {
+            // The same refusal again and again, with arguments that differ a little each time (the exact-call
+            // count above never fires): say so, so the model reads the refusal instead of retrying it.
+            let errKey = "error|" + use.name + "|" + (output.text.split(separator: "\n").first.map(String.init) ?? "").prefix(160)
+            var same = 0
+            repeatCounts.mutate { $0[errKey, default: 0] += 1; same = $0[errKey] ?? 0 }
+            if [3, 5, 8, 13].contains(same) {
+                text += "\n<repeat_notice>`\(use.name)` has returned this same error \(same) times. It says what is missing: do that (change the arguments or the approach) instead of calling it again as before.</repeat_notice>"
+                services.log("repeat_guard", actor: "host", ["agent": .string(id), "tool": .string(use.name), "count": .int(same), "same_error": true])
+            }
         }
         return .toolResult(ToolResult(toolUseId: use.id, content: text, isError: !receipt.success, images: output.images))
     }
