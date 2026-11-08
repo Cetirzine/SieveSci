@@ -226,14 +226,7 @@ public final class SessionStore: @unchecked Sendable {
     }
 
     /// The user's own words in a message (host context blocks left out).
-    static func userWords(_ m: Message) -> String? {
-        for b in m.blocks {
-            if let t = b.text?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty, !t.hasPrefix("<"), !t.hasPrefix("[tool result") {
-                return t.components(separatedBy: "\n<").first ?? t
-            }
-        }
-        return nil
-    }
+    static func userWords(_ m: Message) -> String? { HostContext.ownWords(m) }
 
     /// What a conversation asked and concluded: each question and the reply that closed it, bounded.
     public static func digest(task: String, in workspace: URL, maxChars: Int = 6000) -> String {
@@ -300,7 +293,10 @@ public final class SessionStore: @unchecked Sendable {
         for m in msgs {
             for b in m.blocks {
                 switch b {
-                case .text(let t): out += (m.role == .user ? "\n> " + t.replacingOccurrences(of: "\n", with: "\n> ") : "\n" + t) + "\n"
+                // The user's words only: the session's context, skills, memory and the host's notes stay out.
+                case .text(let t) where m.role == .user:
+                    if let own = HostContext.ownWords(t) { out += "\n> " + own.replacingOccurrences(of: "\n", with: "\n> ") + "\n" }
+                case .text(let t): out += "\n" + t + "\n"
                 case .toolUse(let tu): out += "\n⏺ **\(tu.name)** `\(tu.input.canonical.truncated(300))`\n"
                 case .toolResult(let tr): out += "\n```\n\(tr.content.truncated(3000))\n```\n"
                 case .thinking(let th) where !th.text.isEmpty: out += "\n<details><summary>thinking</summary>\n\n\(th.text)\n</details>\n"

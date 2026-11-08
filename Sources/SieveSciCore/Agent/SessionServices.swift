@@ -60,6 +60,20 @@ public final class SessionServices: @unchecked Sendable {
     public let ledger: EvidenceLedger
     public let audit: AuditLog
     public let research: ResearchProtocol
+    /// What the user typed, by the prompt it expanded into (a slash command, @mentions): the transcript
+    /// keeps the prompt the model read; the log and the replay show the user's own words.
+    let typed = LockedValue<[String: String]>([:])
+
+    func noteTyped(_ input: String, expandedTo prompt: String) {
+        guard input != prompt else { return }
+        typed.mutate { $0[prompt] = input }
+    }
+
+    func takeTyped(_ prompt: String) -> String? {
+        var out: String?
+        typed.mutate { out = $0.removeValue(forKey: prompt) }
+        return out
+    }
     public let claims: ClaimLedger
     public let library: LiteratureLibrary
     public let notebook: LabNotebook

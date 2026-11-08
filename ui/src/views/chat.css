@@ -30,9 +30,10 @@
 .queued-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border-radius: 99px; background: var(--surface); max-width: 220px; min-width: 0; }
 .queued-insert { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 99px; color: var(--secondary); flex: none; }
 .queued-insert:hover { background: var(--accent); color: var(--on-accent, #fff); }
+.queued-remove:hover { background: var(--bad); }
 /* Inserted messages the agent has not read yet: the user's bubble, waiting above the composer. */
 .inserting { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
-.inserting-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding: 5px 10px; border-left: 2px solid var(--accent); background: var(--surface); }
+.inserting-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 5px 10px; border-left: 2px solid var(--accent); background: var(--surface); }
 .inserting-label { color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; flex: none; }
 .inserting-text { flex: 1; min-width: 0; }
 .setup-card { display: flex; gap: var(--s-m); padding: var(--s-m); background: var(--raised); border: 1px dashed var(--rule); }
@@ -163,7 +164,12 @@
 
 /* PromptInput */
 .prompt-input { display: flex; flex-direction: column; gap: var(--s-s); }
-.slash-list { padding: var(--s-xs); background: var(--raised); border: 1px solid var(--separator); border-radius: 3px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08); }
+.slash-list { padding: var(--s-xs); background: var(--raised); border: 1px solid var(--separator); border-radius: 3px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+              max-height: min(320px, 45vh); overflow-y: auto; overscroll-behavior: contain; scroll-padding: 28px 0 30px; }
+.slash-group { padding: 8px 10px 3px; }
+.slash-group:first-child { padding-top: 4px; }
+.slash-count { position: sticky; bottom: calc(-1 * var(--s-xs)); margin: 4px calc(-1 * var(--s-xs)) calc(-1 * var(--s-xs)); padding: 5px 14px;
+               background: var(--raised); border-top: 1px solid var(--hairline); color: var(--tertiary); font: 10.5px/1.2 var(--mono); letter-spacing: 0.4px; }
 .slash-item { display: flex; align-items: center; gap: var(--s-s); padding: 5px 10px; border-radius: 2px; cursor: pointer; }
 .slash-item.selected { background: color-mix(in srgb, var(--accent) 11%, transparent); }
 .slash-item.selected .t-mono-small { color: var(--accent); }
@@ -198,6 +204,8 @@ span.sandbox-menu.t-meta { display: inline-flex; align-items: center; gap: 4px; 
 .usage-provider { display: flex; flex-direction: column; gap: 4px; }
 .usage-meter-line { display: flex; justify-content: space-between; gap: 8px; }
 .usage-refresh { display: flex; justify-content: flex-end; }
+.usage-compact { display: flex; align-items: center; gap: var(--s-m); }
+.usage-compact .t-caption { flex: 1; min-width: 0; line-height: 1.45; }
 .usage-bar i { display: block; height: 100%; }
 .usage-grid { display: grid; grid-template-columns: max-content max-content; column-gap: 14px; row-gap: 3px; }
 .stats-line { display: flex; align-items: center; justify-content: center; gap: var(--s-s); }
@@ -230,3 +238,10 @@ span.sandbox-menu.t-meta { display: inline-flex; align-items: center; gap: 4px; 
 .review-decision { color: var(--review-tone); text-transform: uppercase; letter-spacing: 0.04em; }
 .review-grid { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; user-select: text; }
 .review-causes { margin: 0; padding-left: 18px; }
+
+/* A reviewer's reply to the host (verdict, position): one quiet line; the card below says it in words (#9). */
+.protocol-reply { display: flex; flex-direction: column; gap: 6px; }
+.protocol-line { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--secondary); font: 12px var(--sans); }
+.protocol-reply .review-raw { max-height: 320px; overflow: auto; padding: 8px 10px; border: 1px dashed var(--rule); }
+/* Unparsed review text, first lines only until "Show all". */
+.review-raw-short { max-height: 7.6em; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent); mask-image: linear-gradient(to bottom, #000 70%, transparent); }

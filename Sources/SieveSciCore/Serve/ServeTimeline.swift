@@ -16,6 +16,13 @@ extension ServeServer {
             if let m = e.data.str("message"), let s = e.data["thinking_seconds"]?.doubleValue { thought[m] = s }
         }
 
+        // What the user typed, where the transcript holds what it expanded into (a slash command's prompt,
+        // @mentions inlined): recorded as `shown` since 0.3.3.
+        var typed: [String: String] = [:]
+        for e in audit where e.kind == "user_turn" && e.actor == "user" {
+            if let shown = e.data.str("shown"), let text = e.data.str("text") { typed[text] = shown }
+        }
+
         var results: [String: ToolResult] = [:]
         for m in msgs { for b in m.blocks { if case .toolResult(let r) = b { results[r.toolUseId] = r } } }
 
@@ -26,9 +33,11 @@ extension ServeServer {
         for m in msgs {
             for b in m.blocks {
                 switch b {
+                case .text(let t) where m.role == .user && HostContext.insertedText(t) != nil:
+                    out.append(["kind": "user", "text": .string(HostContext.insertedText(t)!)])
                 case .text(let t) where m.role == .user && !HostContext.isHostBlock(t):
                     let own = HostContext.userText(t)
-                    if !own.isEmpty, !own.hasPrefix("[tool result") { out.append(["kind": "user", "text": .string(own)]) }
+                    if !own.isEmpty, !own.hasPrefix("[tool result") { out.append(["kind": "user", "text": .string(typed[own.truncated(4000)] ?? own)]) }
                 case .thinking(let t) where m.role == .assistant && !t.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty:
                     out.append(["kind": "thinking", "text": .string(t.text), "seconds": thought[m.id].map { .double($0) } ?? .null])
                 case .text(let t) where m.role == .assistant && !t.isEmpty:

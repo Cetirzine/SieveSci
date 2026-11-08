@@ -12,7 +12,7 @@ import { Symbol, roleName } from "../theme/theme";
 import { RoleGhostIcon } from "../theme/brand";
 import { SieveField } from "../theme/dots";
 import { EffortSlider } from "../theme/effort";
-import { checkForUpdates, download, onUpdate, restart, updateState, type UpdateState } from "../app/updates";
+import { checkForUpdates, download, onUpdate, releasePage, restart, updateState, type UpdateState } from "../app/updates";
 import "./settings.css";
 
 const panes: { id: SettingsPane; title: () => string; icon: string }[] = [
@@ -254,7 +254,8 @@ function UpdateRow({ version }: { version: string }) {
     <div className="lc">
       <div className="stack" style={{ gap: 3 }}>
         <span className="hstack">{L("Installed version")} <span className="mono-small secondary">{version}</span></span>
-        {status && <span className={`mono-tiny ${st.kind === "failed" ? "c-bad" : "secondary"}`}>{status}</span>}
+        {status && <span className={`mono-tiny ${st.kind === "failed" ? "c-bad" : "secondary"}`} title={st.kind === "failed" ? st.detail : undefined}>{status}</span>}
+        {st.kind === "failed" && <span><button className="link-button" onClick={() => A.systemOpen({ url: releasePage })}>{L("Release page")}</button></span>}
       </div>
       {st.kind === "ready" ? <ActionButton kind="primary" width="column" onClick={() => void restart()}>{L("Restart")}</ActionButton>
         : st.kind === "available" ? <ActionButton kind="primary" width="column" onClick={() => void download()}>{L("Install")}</ActionButton>

@@ -6,21 +6,61 @@ import Foundation
 /// Text the host adds to user turns (memory, skills index, per-turn context, attachments …). It is
 /// part of what the model reads, never part of what the user typed, so transcripts hide it.
 public enum HostContext {
-    static let prefixes = ["<context>", "<long_term_memory", "<memory", "<available_skills>", "<hook_context>",
-                           "<attachment", "<file path=", "<other_conversations", "<conversation id=", "<session_summary", "<skill name=", "<environment", "<job_notification"]
+    /// Every block the host writes into a user message, by tag: what the session starts with, notes added
+    /// to a turn, and notes riding along with tool results. Replays, rewind points and compaction show
+    /// none of them as the user's words. A new kind of note goes here (issue #10: `state_refresh` and
+    /// `brainstorm_wrap_up` were missing, so a reopened task showed them as messages from the user).
+    static let tags = ["context", "long_term_memory", "memory", "available_skills", "hook_context", "attachment", "file",
+                       "other_conversations", "conversation", "session_summary", "skill", "environment", "job_notification",
+                       "state_refresh", "brainstorm_wrap_up", "recovery", "result_review_needed", "step_budget", "hook_feedback",
+                       "supervisor_review", "review_request", "delegation_hint", "host_delegation", "planning_note",
+                       "worker_report", "goal_round", "ask_answer", "user_insert"]
 
     public static func isHostBlock(_ text: String) -> Bool {
         let t = text.drop { $0 == " " || $0 == "\n" }
-        return prefixes.contains { t.hasPrefix($0) }
+        guard t.hasPrefix("<") else { return false }
+        return tags.contains { tag in
+            guard t.dropFirst().hasPrefix(tag) else { return false }
+            let next = t.dropFirst(tag.count + 1).first
+            return next == nil || next == ">" || next == " " || next == "\n" || next == "_" || tag == "memory"
+        }
     }
 
-    /// The user's own words from a user-turn text block (host blocks appended to it removed).
+    /// The user's own words from a user-turn text block (host blocks appended to it removed: the turn
+    /// context, a hook's note, a planning note, files and conversations an @mention inlined).
     public static func userText(_ text: String) -> String {
         var t = text
-        for tag in ["hook_context", "context"] {
-            t = t.replacingOccurrences(of: "(?s)\\n*<\(tag)>.*?</\(tag)>", with: "", options: .regularExpression)
+        for tag in tags where tag != "user_insert" {
+            t = t.replacingOccurrences(of: "(?s)\\n*<\(tag)(\\s[^>]*)?>.*?</\(tag)>", with: "", options: .regularExpression)
         }
         return t.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The user's own words in one text block of a user message: what they typed (host blocks removed) or
+    /// inserted while a turn ran; nil for a block the host wrote.
+    public static func ownWords(_ text: String) -> String? {
+        if let inserted = insertedText(text) { return inserted }
+        guard !isHostBlock(text) else { return nil }
+        let own = userText(text)
+        return own.isEmpty || own.hasPrefix("[tool result") ? nil : own
+    }
+
+    /// The user's own words in a message, nil when it holds none (a tool result, a host note, the session's context).
+    public static func ownWords(_ m: Message) -> String? {
+        guard m.role == .user else { return nil }
+        let parts = m.blocks.compactMap { $0.text.flatMap(ownWords) }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
+    }
+
+    /// What the user typed while a turn ran, from the note that carried it to the model (`AgentSession.insertNote`).
+    public static func insertedText(_ text: String) -> String? {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.hasPrefix("<user_insert>"), t.hasSuffix("</user_insert>") else { return nil }
+        var body = String(t.dropFirst("<user_insert>".count).dropLast("</user_insert>".count))
+        // The first paragraph tells the model what this is; the rest is the user's.
+        if let r = body.range(of: "\n\n") { body = String(body[r.upperBound...]) }
+        let own = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        return own.isEmpty ? nil : own
     }
 }
 
@@ -130,6 +170,28 @@ public final class Workbench: @unchecked Sendable {
     public var isRunning: Bool { stateLock.lock(); defer { stateLock.unlock() }; return busy }
     /// A title call is in flight (a headless run waits for it before exiting).
     public var isNamingConversation: Bool { stateLock.withLock { titling } }
+    /// Compacts the lead agent's context now (`/compact`, the context panel's button — #8). Never while a
+    /// turn runs: the turn is still appending to the transcript compaction replaces.
+    public func compactNow(focus: String?) async -> (ok: Bool, message: String) {
+        let started: Bool = stateLock.withLock {
+            guard !busy else { return false }
+            busy = true
+            return true
+        }
+        guard started else { return (false, L("A turn is running: compact when it ends.")) }
+        defer {
+            // A message sent meanwhile was queued behind the compaction: it runs now.
+            let waiting: Bool = stateLock.withLock { busy = false; return !queued.isEmpty }
+            if waiting { Task { await self.runTurn(nil) } }
+        }
+        do {
+            try await main.compact(focus: focus, reason: "manual", shown: L("on request"))
+            return (true, L("Compacted."))
+        } catch {
+            return (false, L10n.s("Compaction failed: %@", error.localizedDescription))
+        }
+    }
+
     public var queuedPrompts: [String] { stateLock.lock(); defer { stateLock.unlock() }; return queued.map(\.0) }
 
     /// Starts a turn for pending job notifications if the agent is idle.
@@ -181,19 +243,38 @@ public final class Workbench: @unchecked Sendable {
     /// message instead). `fromQueue` moves a message the user queued earlier (matched by its text) into
     /// the turn; a message already started as its own turn is left alone.
     @discardableResult
-    public func insert(_ raw: String, fromQueue: Bool = false) -> Bool {
+    public func insert(_ raw: String, fromQueue: Bool = false, index: Int? = nil) -> Bool {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return false }
         let accepted: Bool = stateLock.withLock {
             guard busy else { return false }
             if fromQueue {
-                guard let i = queued.firstIndex(where: { $0.0.trimmingCharacters(in: .whitespacesAndNewlines) == text }) else { return false }
+                guard let i = queuedIndex(text, near: index) else { return false }
                 queued.remove(at: i)
             }
             main.insert(text)
             return true
         }
         return accepted
+    }
+
+    /// Takes a queued message out without sending it (#7). `index` picks among identical texts; the text
+    /// must still match, so a queue that moved on in the meantime never loses the wrong message.
+    @discardableResult
+    public func discardQueued(_ raw: String, index: Int? = nil) -> Bool {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return stateLock.withLock {
+            guard let i = queuedIndex(text, near: index) else { return false }
+            queued.remove(at: i)
+            return true
+        }
+    }
+
+    /// The queued message with this text: the one at `index` when it matches, else the first. Call with the lock held.
+    private func queuedIndex(_ text: String, near index: Int?) -> Int? {
+        func matches(_ i: Int) -> Bool { queued[i].0.trimmingCharacters(in: .whitespacesAndNewlines) == text }
+        if let index, queued.indices.contains(index), matches(index) { return index }
+        return queued.indices.first(where: matches)
     }
 
     // MARK: Input routing
@@ -209,6 +290,7 @@ public final class Workbench: @unchecked Sendable {
         case .handled(let msg):
             if !msg.isEmpty { onOutput(msg) }
         case .prompt(let p):
+            services.noteTyped(input, expandedTo: p)
             stateLock.withLock { stoppedByUser = false }
             services.goal.userReplied()
             await runTurn(p, attachments: attachments)

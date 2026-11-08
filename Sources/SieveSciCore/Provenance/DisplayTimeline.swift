@@ -5,12 +5,7 @@ import Foundation
 /// as a question and a reply with nothing between. This fills them in, for display only.
 public enum DisplayTimeline {
     static func isUserTurn(_ m: Message) -> Bool {
-        guard m.role == .user else { return false }
-        return m.blocks.contains { b in
-            guard let t = b.text, !HostContext.isHostBlock(t) else { return false }
-            let own = HostContext.userText(t)
-            return !own.isEmpty && !own.hasPrefix("[tool result")
-        }
+        HostContext.ownWords(m) != nil   // an inserted message counts: it is logged as a user turn too
     }
 
     /// The only audit entries `merge` uses; the rest of a long log is never decoded.
@@ -22,7 +17,8 @@ public enum DisplayTimeline {
         // Tool calls of the main agent, grouped by the user turn they followed.
         var turns: [[AuditLog.Entry]] = []
         for e in audit {
-            if e.kind == "user_turn" && e.actor == "user" { turns.append([]) }
+            // Host-started turns were logged as the user's before 0.3.3: they open no turn here either.
+            if e.kind == "user_turn" && e.actor == "user" && !HostContext.isHostBlock(e.data.str("text") ?? "") { turns.append([]) }
             else if e.kind == "tool_call" && e.actor == "main" && !turns.isEmpty { turns[turns.count - 1].append(e) }
         }
         var out: [Message] = []

@@ -511,20 +511,61 @@ export async function insert(text: string) {
 
 /** Moves a queued message into the running turn. Its placeholder in the conversation goes; it comes back
  *  where the agent reads it. One that already started as its own turn stays as it was. */
+/** Where the chat shows the bubble of the queued message at `index`: queued bubbles come last, in queue
+ *  order, so among identical texts it is the one with as many like it after it as the queue has. */
+function queuedBubble(main: TranscriptItem[], queued: string[], index: number): number {
+  const text = queued[index];
+  const same = main.map((m, i) => (m.kind.type === "user" && m.kind.text === text ? i : -1)).filter((i) => i >= 0);
+  const after = queued.slice(index + 1).filter((q) => q === text).length;
+  return same[same.length - 1 - after] ?? -1;
+}
+
 export async function insertQueued(index: number) {
   const s = getState();
   const text = s.queued[index];
   if (text === undefined || !s.running) return;
   const main = s.streams.main ?? [];
-  const at = main.map((m) => m.kind.type === "user" && m.kind.text === text).lastIndexOf(true);
+  const at = queuedBubble(main, s.queued, index);
   const removed = at >= 0 ? main[at] : null;
   setState({ queued: s.queued.filter((_, i) => i !== index), inserting: [...s.inserting, text.trim()],
              streams: { ...s.streams, main: at >= 0 ? [...main.slice(0, at), ...main.slice(at + 1)] : main } });
-  const r = await call<{ inserted: boolean }>("task.insert", { text, fromQueue: true });
+  const r = await call<{ inserted: boolean }>("task.insert", { text, fromQueue: true, index });
   if (r && !r.inserted) setState((st) => ({
     inserting: st.inserting.filter((x) => x !== text.trim()),
     streams: removed ? { ...st.streams, main: [...(st.streams.main ?? []), removed] } : st.streams,
   }));
+}
+
+/** Takes back an inserted message before the agent's next step reads it. */
+export async function retractInsert(text: string) {
+  const r = await call<{ removed: boolean }>("task.uninsert", { text });
+  if (r?.removed) setState((st) => {
+    const i = st.inserting.indexOf(text);
+    return i < 0 ? {} : { inserting: [...st.inserting.slice(0, i), ...st.inserting.slice(i + 1)] };
+  });
+}
+
+/** Compacts the conversation now (the context panel's button, #8; the same as `/compact`). The result
+ *  arrives as a notice; the context ring follows with the `usage` event. */
+export async function compactNow(focus?: string) {
+  const r = await call<{ ok: boolean; message: string }>("task.compact", focus ? { focus } : {});
+  if (r && !r.ok) deliver({ type: "notice", text: r.message });
+}
+
+/** Takes a queued message back: it is never sent, and its bubble goes (#7). */
+export async function removeQueued(index: number) {
+  const s = getState();
+  const text = s.queued[index];
+  if (text === undefined) return;
+  const main = s.streams.main ?? [];
+  const at = queuedBubble(main, s.queued, index);
+  const removed = at >= 0 ? main[at] : null;
+  setState({ queued: s.queued.filter((_, i) => i !== index),
+             streams: { ...s.streams, main: at >= 0 ? [...main.slice(0, at), ...main.slice(at + 1)] : main } });
+  const r = await call<{ removed: boolean; queued: string[] }>("task.unqueue", { text, index });
+  // Already on its way (the turn ended meanwhile): the bubble comes back, as the message was sent.
+  if (r && !r.removed && removed) setState((st) => ({ streams: { ...st.streams, main: [...(st.streams.main ?? []), removed] } }));
+  if (r) setState({ queued: r.queued });
 }
 
 /** Every queued message into the running turn, oldest first (empty draft + ⌘/Ctrl+Enter). */

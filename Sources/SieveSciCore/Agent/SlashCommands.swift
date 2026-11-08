@@ -127,8 +127,7 @@ public enum SlashCommands {
                 L10n.s("Prefix: %@ tools, system prompt fingerprint %@", String(bench.main.tools.count), bench.main.system.stableHash),
             ].joined(separator: "\n"))
         case "compact":
-            do { try await bench.main.compact(focus: args.isEmpty ? nil : args, reason: "manual", shown: L("on request")); return ok(L("Compacted.")) }
-            catch { return ok(L10n.s("Compaction failed: %@", error.localizedDescription)) }
+            return ok(await bench.compactNow(focus: args.isEmpty ? nil : args).message)
         case "effort":
             if let e = Effort(rawValue: args) { s.effort = e; return ok(L10n.s("Effort → %@. (Changing effort mid-session can reset part of the cache on some vendors.)", e.rawValue)) }
             return ok(L10n.s("Effort: %@. Options: low medium high xhigh max", s.effort?.rawValue ?? L("model default")))
@@ -348,9 +347,8 @@ public enum SlashCommands {
             return ok(L10n.s("Exported to %@", url.path))
         case "rewind":
             let n = Int(args) ?? 1
-            let userTurns = bench.main.transcript.indices.filter { i in
-                bench.main.transcript[i].role == .user && bench.main.transcript[i].blocks.contains { $0.text != nil }
-            }
+            // The user's own turns: a host note riding with tool results is not a place to rewind to.
+            let userTurns = bench.main.transcript.indices.filter { HostContext.ownWords(bench.main.transcript[$0]) != nil }
             guard userTurns.count >= n, let target = userTurns.dropLast(n - 1).last else { return ok(L("Nothing to rewind.")) }
             let files = s.checkpoints.rewind(toTurn: target)
             bench.main.truncate(to: target)
@@ -362,7 +360,7 @@ public enum SlashCommands {
                 + ". Use the skill “brainstorm” (load it with the skill tool first) and start with `brainstorm` start so I can watch.")
         case "clarify":
             return .prompt("Use the skill “clarify” (load it with the skill tool first) for this request: "
-                + (args.isEmpty ? (bench.main.transcript.last { $0.role == .user }?.plainText ?? "") : args))
+                + (args.isEmpty ? (bench.main.transcript.lazy.reversed().compactMap(HostContext.ownWords).first ?? "") : args))
         case "ideas":
             if args == "dream" {
                 let inbox = DreamInbox.load(s.workspace)

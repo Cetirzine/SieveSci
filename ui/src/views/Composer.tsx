@@ -1,12 +1,12 @@
 // The composer, ported from Sources/SieveSciApp/Views/PromptInput.swift: PromptInput (slash
 // completion, attachments, Esc to interrupt), SandboxMenu, ModelMenu with ContextRing and
 // UsagePopover, StatsLine; and the composer's effort control (EffortMenu / EffortMiniGauge).
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { L, L10n } from "../i18n";
 import { useApp, setState, getState } from "../app/model";
 import * as A from "../app/actions";
 import { inTauri } from "../serve";
-import { Menu, Popup, SectionLabel } from "../theme/primitives";
+import { ActionButton, Menu, Popup, SectionLabel } from "../theme/primitives";
 import { Symbol } from "../theme/theme";
 import { EffortMiniGauge, EffortSlider, GlitchLabel, effortName } from "../theme/effort";
 import { relative } from "./Settings";
@@ -47,9 +47,19 @@ export function PromptInput() {
     el.style.height = `${Math.min(180, Math.max(22, el.scrollHeight))}px`;
   }, [text]);
 
-  const suggestions = text.startsWith("/") && !text.includes(" ")
-    ? commands.filter((c) => { const q = text.slice(1).toLowerCase(); return !q || c.name.toLowerCase().startsWith(q) || c.name.toLowerCase().includes(q); }).slice(0, 12)
-    : [];
+  // Every command, by group (no cap: 54 built in, plus the workspace's own and invocable skills — #6).
+  // Names that start with what was typed come first within their group.
+  const query = text.startsWith("/") && !text.includes(" ") ? text.slice(1).toLowerCase() : null;
+  const suggestions = useMemo(() => {
+    if (query === null) return [];
+    const groups = ["Session", "Model", "Modes", "Research", "Extensions", "Custom", "Skills"];
+    for (const c of commands) { const g = c.group ?? ""; if (!groups.includes(g)) groups.push(g); }
+    const hits = commands.filter((c) => !query || c.name.toLowerCase().includes(query));
+    const rank = (c: { name: string; group?: string }) => groups.indexOf(c.group ?? "") * 2 + (c.name.toLowerCase().startsWith(query) ? 0 : 1);
+    return hits.map((c, i) => ({ c, i })).sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i).map((x) => x.c);
+  }, [commands, query]);
+  const list = useRef<HTMLDivElement>(null);
+  useEffect(() => { list.current?.querySelector(".slash-item.selected")?.scrollIntoView({ block: "nearest" }); }, [selection, suggestions.length]);
   const canSend = text.trim() !== "" || attachments.length > 0;
   const interrupts = running && text === "";
 
@@ -87,15 +97,22 @@ export function PromptInput() {
   return (
     <div className="prompt-input">
       {suggestions.length > 0 && (
-        <div className="slash-list">
+        <div className="slash-list" ref={list}>
           {suggestions.map((c, i) => (
-            <div key={c.name} className={`slash-item ${i === selection ? "selected" : ""}`} onMouseDown={(e) => { e.preventDefault(); complete(c); }}>
-              <span className="t-mono-small">/{c.name}</span>
-              {c.args && <span className="t-mono-tiny tertiary">{c.args}</span>}
-              <span style={{ flex: 1, minWidth: 12 }} />
-              <span className="t-meta secondary clip">{L(c.summary)}</span>
-            </div>
+            <Fragment key={c.name}>
+              {c.group && (i === 0 || suggestions[i - 1].group !== c.group) && (
+                <div className="slash-group"><SectionLabel>{L(c.group)}</SectionLabel></div>
+              )}
+              <div className={`slash-item ${i === selection ? "selected" : ""}`} onMouseDown={(e) => { e.preventDefault(); complete(c); }}
+                   onMouseMove={() => { if (i !== selection) setSelection(i); }}>
+                <span className="t-mono-small">/{c.name}</span>
+                {c.args && <span className="t-mono-tiny tertiary">{c.args}</span>}
+                <span style={{ flex: 1, minWidth: 12 }} />
+                <span className="t-meta secondary clip">{L(c.summary)}</span>
+              </div>
+            </Fragment>
           ))}
+          <div className="slash-count">{query ? L10n.f("%d of %d commands", suggestions.length, commands.length) : L10n.f("%d commands · type to filter", commands.length)}</div>
         </div>
       )}
       <div className={`composer-box ${focused ? "focused" : ""}`} onClick={() => area.current?.focus()}>
@@ -221,6 +238,7 @@ function ContextRing({ fill }: { fill: number }) {
 
 function ModelMenu() {
   const meter = useApp((s) => s.meter);
+  const running = useApp((s) => s.running);
   const providers = useApp((s) => s.config.providers);
   const usable = useApp((s) => s.usable);
   const quotas = useApp((s) => s.quotas);
@@ -254,6 +272,13 @@ function ModelMenu() {
           <SectionLabel>{L("Context")}</SectionLabel>
           <div className="t-mono-small">{meter.lastPromptTokens.toLocaleString()} / {meter.contextWindow.toLocaleString()} {L("tokens")} ({Math.round(meter.fill * 100)}%)</div>
           <div className="usage-bar"><i style={{ width: `${Math.round(meter.fill * 100)}%`, background: meter.fill > 0.85 ? "var(--bad)" : "var(--accent)" }} /></div>
+          {/* Compacting by hand (#8): at a change of phase, before the window fills on its own. */}
+          <div className="usage-compact">
+            <span className="t-caption secondary">{running
+              ? L("Available when the turn ends.")
+              : L("Summarise the conversation so far to free the context. The next request starts a new prompt cache. /compact <focus> keeps one topic in detail.")}</span>
+            <ActionButton width="column" disabled={running || meter.lastPromptTokens === 0} onClick={() => A.compactNow()}>{L("Compact")}</ActionButton>
+          </div>
           <div className="h-hairline" />
           <SectionLabel>{L("This session")}</SectionLabel>
           <div className="usage-grid t-mono-small">

@@ -212,9 +212,26 @@ public final class ServeServer: @unchecked Sendable {
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw RPCError(code: -32602, message: "text is required") }
             await l.ready?.value
             let fromQueue = p["fromQueue"]?.boolValue == true
-            let inserted = l.bench.insert(text, fromQueue: fromQueue)
+            let inserted = l.bench.insert(text, fromQueue: fromQueue, index: p.int("index"))
             if !inserted && !fromQueue { Task.detached { await l.bench.submit(text) } }
             return ["inserted": .bool(inserted)]
+        case "task.compact":
+            // The context panel's button (#8): the same as `/compact [focus]`, refused while a turn runs.
+            let l = try current(p)
+            await l.ready?.value
+            let focus = p.str("focus").flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+            let r = await l.bench.compactNow(focus: focus)
+            return ["ok": .bool(r.ok), "message": .string(r.message)]
+        case "task.uninsert":
+            // An inserted message taken back before the agent's next step read it.
+            let l = try current(p)
+            return ["removed": .bool(l.bench.main.retractInsert(p.str("text") ?? ""))]
+        case "task.unqueue":
+            // A queued message taken back before it was sent (#7).
+            let l = try current(p)
+            let text = p.str("text") ?? ""
+            let removed = l.bench.discardQueued(text, index: p.int("index"))
+            return ["removed": .bool(removed), "queued": .array(l.bench.queuedPrompts.map { .string($0) })]
         case "task.stop":
             // Stop also answers the request on screen: an agent waiting for it would keep the turn alive.
             let l = try current(p)

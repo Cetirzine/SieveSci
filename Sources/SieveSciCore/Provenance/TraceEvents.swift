@@ -73,7 +73,7 @@ public enum Trace {
             case "error":
                 return TraceEvent(id: e.seq, at: e.time, actor: "host", kind: "error", text: String((d.str("message") ?? "").prefix(200)), isError: true, category: .work)
             case "user_turn" where e.actor == "user":
-                return TraceEvent(id: e.seq, at: e.time, actor: "user", kind: "user", text: String((d.str("text") ?? "").prefix(160)), isError: false, category: .work)
+                return TraceEvent(id: e.seq, at: e.time, actor: "user", kind: "user", text: String((d.str("shown") ?? d.str("text") ?? "").prefix(160)), isError: false, category: .work)
             default:
                 return nil
             }

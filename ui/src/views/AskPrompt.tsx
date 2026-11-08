@@ -86,7 +86,8 @@ export function AskPrompt({ request }: { request: AskRequest }) {
                     <span className="row-center gap-6"><span className="t-body-strong">{o.label}</span>
                       {o.recommended && <Chip text={L("Recommended")} tint="var(--accent)" />}{idea && <Chip text={idea} />}</span>
                     {o.description && <span className="t-meta secondary">{o.description}</span>}
-                    {o.evidence.length > 0 && <span className="row-center gap-4">{o.evidence.slice(0, 6).map((e) => <span key={e} className="t-mono-tiny c-accent">{e.startsWith("@") || e.startsWith("r") ? e : "@" + e}</span>)}</span>}
+                    {o.evidence.length > 0 && <span className="row-center gap-4">{o.evidence.slice(0, 6).map((e) => <span key={e} className="t-mono-tiny c-accent">{e.startsWith("@") || e.startsWith("r") ? e : "@" + e}</span>)}
+                      {o.evidence.length > 6 && <span className="t-mono-tiny tertiary" title={o.evidence.slice(6).join(", ")}>+{o.evidence.length - 6}</span>}</span>}
                   </span>
                 </button>
               );

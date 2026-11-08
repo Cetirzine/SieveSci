@@ -45,7 +45,7 @@ public final class LabNotebook: @unchecked Sendable {
         let ref = "§\(e.seq)"
         switch e.kind {
         case "user_turn" where e.actor == "user":
-            out += "\n**\(time)** · " + L10n.s("Request: %@", d.str("text").map { $0.truncated(400) } ?? "") + " \(ref)\n"
+            out += "\n**\(time)** · " + L10n.s("Request: %@", (d.str("shown") ?? d.str("text")).map { $0.truncated(400) } ?? "") + " \(ref)\n"
         case "tool_call":
             let tool = d.str("tool") ?? ""
             let ok = d.bool("success") == true

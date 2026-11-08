@@ -135,10 +135,13 @@ public final class AgentSession: @unchecked Sendable {
             var scale = TurnScale.classify(text)
             if scale != .chat && scale != .research && !services.research.snapshot.steps.isEmpty { scale = .research }
             services.research.turnScale = scale
-            // The first research request becomes the task's fixed objective, in the user's own words.
-            if !text.hasPrefix("<"), !text.hasPrefix("/") {
+            // The first research request becomes the task's fixed objective, in the user's own words: what they
+            // typed, without a slash command's name ("/brainstorm X" → "X"), not the prompt it expanded into.
+            typedText = services.takeTyped(text)
+            let own = typedText.map(Self.withoutCommand) ?? text
+            if !own.isEmpty, !own.hasPrefix("<"), !own.hasPrefix("/") {
                 let had = services.research.objective
-                services.research.recordUserRequest(text, scale: scale)
+                services.research.recordUserRequest(own, scale: scale)
                 if services.research.objective != had { services.emit(.planChanged(services.research.snapshot)) }
             }
         }
@@ -175,8 +178,22 @@ public final class AgentSession: @unchecked Sendable {
         }
         blocks = await services.vision.adapt(blocks, modelSupportsImages: services.supportsImages(role))
         append(Message(role: .user, blocks: blocks))
-        services.log("user_turn", actor: role == .main ? "user" : "host", ["text": .string(text.truncated(4000)), "agent": .string(id)])
+        // A turn the host started (a recovery note, a job wake-up, a goal round) is not the user's.
+        var entry: [String: JSON] = ["text": .string(text.truncated(4000)), "agent": .string(id)]
+        if role == .main, let shown = typedText { entry["shown"] = .string(shown.truncated(4000)) }
+        services.log("user_turn", actor: role == .main && !HostContext.isHostBlock(text) ? "user" : "host", .object(entry))
         return try await loop()
+    }
+
+    /// What the user typed for this turn, when the transcript holds the prompt it expanded into.
+    var typedText: String?
+
+    /// "/brainstorm novel enzymes" → "novel enzymes"; text that is not a command stays as it is.
+    static func withoutCommand(_ s: String) -> String {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.hasPrefix("/") else { return t }
+        guard let sp = t.firstIndex(where: { $0 == " " || $0 == "\n" }) else { return "" }
+        return t[sp...].trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func append(_ m: Message) {
@@ -188,6 +205,16 @@ public final class AgentSession: @unchecked Sendable {
 
     /// Queues a message for this turn's next step.
     public func insert(_ text: String) { insertLock.withLock { inserts.append(text) } }
+
+    /// Takes back an inserted message the agent has not read yet; false once it was delivered.
+    public func retractInsert(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return insertLock.withLock {
+            guard let i = inserts.firstIndex(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines) == t }) else { return false }
+            inserts.remove(at: i)
+            return true
+        }
+    }
 
     /// Takes the inserted messages not yet delivered.
     public func takeInserts() -> [String] { insertLock.withLock { defer { inserts = [] }; return inserts } }
@@ -723,6 +750,7 @@ public final class AgentSession: @unchecked Sendable {
         // Saved, so a reopened task continues from here instead of re-sending the whole history.
         if role == .main { SessionStore.shared.markCompaction(transcript, epoch: epoch, agent: id, dir: services.taskDir) }
         meter.lastPromptTokens = Self.estimate(system: system, tools: tools.map(\.spec), transcript)
+        if role == .main { services.emit(.usage(agentId: id, meter)) }   // the context ring drops at once
         services.emit(.notice(L10n.s("Context compacted (%@).", shown ?? L(reason))))
     }
 
@@ -787,6 +815,8 @@ public final class AgentSession: @unchecked Sendable {
                     if let a = t.range(of: "<user_messages>\n"), let z = t.range(of: "\n</user_messages>"), a.upperBound <= z.lowerBound {
                         out += t[a.upperBound..<z.lowerBound].components(separatedBy: "\n§\n").filter { !$0.isEmpty }
                     }
+                case .text(let t) where HostContext.insertedText(t) != nil:
+                    out.append(HostContext.insertedText(t)!)
                 case .text(let t) where !HostContext.isHostBlock(t):
                     let own = HostContext.userText(t).trimmingCharacters(in: .whitespacesAndNewlines)
                     if !own.isEmpty, !own.hasPrefix("[tool result") { out.append(own) }
@@ -848,7 +878,9 @@ public final class AgentSession: @unchecked Sendable {
     }
 
     /// Rewind: drops messages after `index` (user-initiated; this necessarily changes the prefix).
-    public func truncate(to index: Int) { if index < transcript.count { transcript = Array(transcript.prefix(index)) } }
+    /// A cut just before a message the user inserted mid-turn leaves the step's tool calls without results:
+    /// they are closed as a restored transcript's are, so the next request is still valid.
+    public func truncate(to index: Int) { if index < transcript.count { transcript = TranscriptRepair.repair(Array(transcript.prefix(index))).messages } }
 }
 
 /// Vendor prefix-cache retention, from Reasonix's cache policy (Anthropic and DashScope 5 min;

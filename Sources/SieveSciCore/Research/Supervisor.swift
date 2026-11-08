@@ -211,6 +211,7 @@ public final class Supervisor: @unchecked Sendable {
 
         let purpose = step.map { "Review checkpoint \($0.id): \($0.title)" } ?? "Review (\(kind)): " + signals.map(\.detail).joined(separator: "; ").truncated(160)
         let checker = services.makeSubagent(role: .checker, purpose: purpose)
+        checker.displayResult = Self.readable
         let outcome = await obtainVerdict(checker, role: .checker, purpose: purpose, prompt: dossier)
         if let unavailable = outcome.unavailable {
             // No review was obtained. Nothing is approved; the main agent must report it as such.
@@ -286,6 +287,7 @@ public final class Supervisor: @unchecked Sendable {
         // main agent's code). Its own code runs under a sandbox that enforces the same.
         let verifier = services.makeSubagent(role: .verifier, writeRoot: sandbox, blinded: blinded, readable: [sandbox.path] + data.sorted(),
                                              purpose: "Blind re-implementation of \(claim.id): \(claim.statement.truncated(140))")
+        verifier.displayResult = Self.readable
         let enforced = verifier.toolContext.blindingEnforced
         let blindNote = enforced ? "" : "\nBlinding was advisory only: this platform has no sandbox, so code the verifier ran could have read the main agent's files."
         let brief = """
@@ -370,6 +372,19 @@ public final class Supervisor: @unchecked Sendable {
     }
 
     /// Extracts the last top-level JSON object from a model reply (tolerates code fences / prose).
+    /// A reviewer's reply as its card shows it: the verdict or position in words, not the JSON the host
+    /// parses (issue #9; the review card below gives the details).
+    static func readable(_ reply: String) -> String {
+        guard let j = parseJSON(reply) else { return reply }
+        if let v = j.str("verdict") {
+            let issues = j["issues"]?.arrayValue ?? []
+            let first = issues.first.flatMap { $0.str("what") ?? $0.stringValue }
+            return L(v) + (issues.isEmpty ? "" : " · " + L10n.s("%@ issues", String(issues.count))) + (first.map { " — " + $0 } ?? (j.str("notes") ?? j.str("reasoning")).map { " — " + $0 } ?? "")
+        }
+        if let pos = j.str("position") { return L(pos) + ((j.str("reason")).map { " — " + $0 } ?? "") }
+        return reply
+    }
+
     static func parseJSON(_ s: String) -> JSON? {
         var depth = 0
         var start: String.Index?

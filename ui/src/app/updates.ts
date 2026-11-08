@@ -11,7 +11,22 @@ export type UpdateState =
   | { kind: "idle" } | { kind: "checking" } | { kind: "upToDate"; at: number }
   | { kind: "available"; version: string; url?: string }
   | { kind: "downloading"; version: string; progress: number }
-  | { kind: "ready"; version: string } | { kind: "installing" } | { kind: "failed"; message: string };
+  | { kind: "ready"; version: string } | { kind: "installing" } | { kind: "failed"; message: string; detail?: string };
+
+/** Where an update can always be downloaded by hand. */
+export const releasePage = "https://github.com/Cetirzine/SieveSci/releases/latest";
+
+/** The updater's own errors are English and say little ("Could not fetch a valid release JSON from the
+ *  remote" is any failure to reach GitHub, a proxy's 504 included): say what it means and what to do. */
+function failure(e: unknown): { kind: "failed"; message: string; detail: string } {
+  const detail = e instanceof Error ? e.message : String(e);
+  const network = /release json|error sending request|connect|timed? ?out|dns|proxy|tls|certificate|network|50[234]/i.test(detail);
+  return { kind: "failed", detail, message: network
+    ? L("Couldn't reach GitHub to check for updates. Check your network or proxy and try again, or download it from the release page.")
+    : detail };
+}
+
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let state: UpdateState = { kind: "idle" };
 /** The user asked for this download (the banner shows its progress), or put the banner away. */
@@ -31,14 +46,18 @@ export async function checkForUpdates(manual = true) {
   if (inTauri) {
     try {
       const { check } = await import("@tauri-apps/plugin-updater");
-      const u = await check();
+      // GitHub's download host, or the proxy in front of it, fails now and then for a moment: two more tries.
+      let u: Awaited<ReturnType<typeof check>> = null;
+      for (let attempt = 0; ; attempt++) {
+        try { u = await check({ timeout: 30_000 }); break; } catch (e) { if (attempt >= 2) throw e; await pause(attempt === 0 ? 3_000 : 8_000); }
+      }
       if (!u) { set({ kind: "upToDate", at: Date.now() }); return; }
       pending = u as never;
       set({ kind: "available", version: u.version });
       // Automatic installs download in the background and wait for a restart (installing on quit).
       if (!manual && getState().config.autoInstallUpdates) await download(false);
     } catch (e) {
-      set(manual ? { kind: "failed", message: e instanceof Error ? e.message : String(e) } : { kind: "idle" });
+      set(manual ? failure(e) : { kind: "idle" });
     }
     return;
   }
@@ -66,7 +85,7 @@ export async function download(byUser = true) {
     set({ kind: "ready", version });
     notify(L("SieveSci %@ is ready").replace("%@", version), L("Restart"), "update");
   } catch (e) {
-    set({ kind: "failed", message: e instanceof Error ? e.message : String(e) });
+    set(failure(e));
   }
 }
 
@@ -94,5 +113,5 @@ export async function checkFromMenu() {
   await checkForUpdates(true);
   const s = updateState();
   if (s.kind === "upToDate") await A.messageDialog(L("SieveSci is up to date"), L("You have the latest version") + ` (${getState().version}).`);
-  else if (s.kind === "failed") await A.messageDialog(L("Couldn't check for updates"), s.message, true);
+  else if (s.kind === "failed") await A.messageDialog(L("Couldn't check for updates"), s.message + (s.detail && s.detail !== s.message ? `\n\n(${s.detail})` : ""), true);
 }

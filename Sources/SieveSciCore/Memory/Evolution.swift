@@ -136,7 +136,7 @@ public final class EvolutionGovernor: @unchecked Sendable {
     /// What the user wrote in this task: their messages and their answers to questions.
     static func userWords(_ services: SessionServices) -> [String] {
         let entries = (try? AuditLog.read(services.audit.url, kinds: ["user_turn", "ask_answer"])) ?? []
-        return entries.filter { $0.actor == "user" }.map { $0.kind == "user_turn" ? ($0.data.str("text") ?? "") : ($0.data["answer"]?.canonical ?? "") }
+        return entries.filter { $0.actor == "user" }.map { $0.kind == "user_turn" ? (($0.data.str("shown").map { $0 + "\n" } ?? "") + ($0.data.str("text") ?? "")) : ($0.data["answer"]?.canonical ?? "") }
     }
 
     /// "user: <words>" whose words (spacing aside, at least 4 characters) appear in what the user wrote.

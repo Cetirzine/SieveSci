@@ -152,6 +152,8 @@ function Conversation({ items }: { items: TranscriptItem[] }) {
                 <span className="inserting-label t-mono-tiny">{L("Inserting")}</span>
                 <span className="inserting-text t-meta clip">{q}</span>
                 <span className="t-mono-tiny tertiary">{L("read at the next step")}</span>
+                <button type="button" className="plain queued-insert queued-remove" title={L("Take back")} aria-label={L("Take back")}
+                        onClick={() => void A.retractInsert(q)}><Symbol name="xmark" size={9} strokeWidth={3} /></button>
               </div>
             ))}
           </div>
@@ -165,6 +167,8 @@ function Conversation({ items }: { items: TranscriptItem[] }) {
                 {/* DeepSeek Harness's 插话发送: into the running turn instead of after it. */}
                 <button type="button" className="plain queued-insert" title={L("Insert into the running turn")} aria-label={L("Insert into the running turn")}
                         onClick={() => void A.insertQueued(i)}><Symbol name="arrow.up" size={9} strokeWidth={3} /></button>
+                <button type="button" className="plain queued-insert queued-remove" title={L("Remove from the queue")} aria-label={L("Remove from the queue")}
+                        onClick={() => void A.removeQueued(i)}><Symbol name="xmark" size={9} strokeWidth={3} /></button>
               </span>
             ))}
           </div>
@@ -339,6 +343,7 @@ function RowContent({ item, stream, showThinking, hovering }: { item: Transcript
         </div>
       );
     case "assistant":
+      if (protocolReply(k.text)) return <ProtocolReply text={k.text} />;
       return (
         <div className="assistant">
           <Markdown text={k.text} />
@@ -443,12 +448,45 @@ export function VerdictChip({ verdict }: { verdict: string }) {
 }
 
 /** Checker/verifier JSON rendered as issues and actions instead of raw JSON. */
+/** A reviewer's reply to the host — a verdict (`verdict`, `issues`) or a position in a deliberation
+ *  (`position`, `reason`) — is data the card below shows in words (issue #9). Recognised from its first
+ *  key, so a reply still streaming never spreads its JSON over the conversation. */
+export function protocolReply(text: string): boolean {
+  const t = text.trim().replace(/^```(?:json)?\s*/i, "");
+  return /^\{\s*"(verdict|issues|position|required_actions)"\s*:/.test(t);
+}
+
+function ProtocolReply({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  let parsed: Record<string, unknown> | null = null;
+  const a = text.indexOf("{"), b = text.lastIndexOf("}");
+  if (a >= 0 && b > a) { try { parsed = JSON.parse(text.slice(a, b + 1)); } catch { parsed = null; } }
+  const verdict = typeof parsed?.verdict === "string" ? parsed.verdict : null;
+  const position = typeof parsed?.position === "string" ? parsed.position : null;
+  const issues = Array.isArray(parsed?.issues) ? parsed!.issues.length : 0;
+  return (
+    <div className="protocol-reply">
+      <span className="protocol-line">
+        <Symbol name="checkmark.seal" size={11} />
+        <span>{parsed ? L("Structured reply, shown as a card") : L("Writing a structured reply…")}</span>
+        {verdict && <Chip text={L(verdict)} tint={verdict === "pass" ? "var(--ok)" : verdict === "block" ? "var(--bad)" : "var(--warn)"} />}
+        {position && <Chip text={L(position)} tint="var(--accent)" />}
+        {issues > 0 && <span className="tertiary">{L10n.f("%d issues", issues)}</span>}
+        <button type="button" className="link-button t-caption" onClick={() => setOpen(!open)}>{open ? L("Hide") : L("raw")}</button>
+      </span>
+      {open && <pre className="t-mono-tiny review-raw">{text}</pre>}
+    </div>
+  );
+}
+
 function ReviewBody({ text }: { text: string }) {
   const [raw, setRaw] = useState(false);
   let parsed: Record<string, unknown> | null = null;
   const a = text.indexOf("{"), b = text.lastIndexOf("}");
   if (a >= 0 && b > a) { try { parsed = JSON.parse(text.slice(a, b + 1)); } catch { parsed = null; } }
   const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  // Unparsed text is shown a few lines at a time (a reply can run to thousands of characters).
+  const long = text.split("\n").length > 6 || text.length > 600;
   return (
     <div className="review-body">
       {parsed && !raw ? (
@@ -466,8 +504,8 @@ function ReviewBody({ text }: { text: string }) {
           {strs(parsed.questions).map((x, i) => <div key={i} className="t-body secondary review-action"><Symbol name="questionmark.bubble" size={12} /> {x}</div>)}
           {typeof (parsed.reasoning ?? parsed.notes) === "string" && <div className="t-meta secondary">{String(parsed.reasoning ?? parsed.notes)}</div>}
         </>
-      ) : <pre className="t-mono-tiny review-raw">{text}</pre>}
-      <button type="button" className="link-button t-caption" onClick={() => setRaw(!raw)}>{raw ? L("formatted") : L("raw")}</button>
+      ) : <pre className={`t-mono-tiny review-raw ${!parsed && !raw && long ? "review-raw-short" : ""}`}>{text}</pre>}
+      {(parsed || long) && <button type="button" className="link-button t-caption" onClick={() => setRaw(!raw)}>{parsed ? (raw ? L("formatted") : L("raw")) : (raw ? L("Show less") : L("Show all"))}</button>}
     </div>
   );
 }
@@ -692,14 +730,20 @@ function PlanApprovalBar() {
 
 function ContestedBanner() {
   const contested = useApp((s) => s.contested);
+  // The user decides these, so every word can be read: three lines, then the rest on a click.
+  const [open, setOpen] = useState<Set<number>>(new Set());
+  const toggle = (i: number) => setOpen((o) => { const n = new Set(o); if (n.has(i)) n.delete(i); else n.add(i); return n; });
   return (
     <Box highlight="var(--warn)" provisional className="appear-pop">
       <div className="t-body-strong c-warn contested-title"><Symbol name="exclamationmark.bubble.fill" size={13} /> {L("Unresolved disagreements between agents — your call")}</div>
       {contested.map((c, i) => (
         <div key={i} className="contested-item">
           <div className="row-center gap-6"><span className="t-mono-tiny tertiary">{c.thread}</span><Chip text={L(c.kind)} tint="var(--warn)" /></div>
-          <div className="t-body">{c.issue.slice(0, 160)}</div>
-          <div className="t-meta secondary">{c.reason.slice(0, 120)}</div>
+          <div className={`t-body ${open.has(i) ? "" : "clamp-3"}`}>{c.issue}</div>
+          <div className={`t-meta secondary ${open.has(i) ? "" : "clamp-3"}`}>{c.reason}</div>
+          {(c.issue.length > 160 || c.reason.length > 160) && (
+            <button type="button" className="link-button t-caption" onClick={() => toggle(i)}>{open.has(i) ? L("Show less") : L("Show all")}</button>
+          )}
         </div>
       ))}
     </Box>
