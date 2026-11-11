@@ -1175,3 +1175,4 @@
 "Works now with the built-in search (DuckDuckGo, no key). In mainland China use a model with its own search (DeepSeek, GLM) or add a Bocha or Zhipu key." = "现在可用内置搜索（DuckDuckGo，无需密钥）。在中国大陆请使用自带搜索的模型（DeepSeek、GLM），或添加博查 / 智谱的搜索密钥。";
 "Built-in search (DuckDuckGo, no key). In mainland China use a model with its own search (DeepSeek, GLM) or a Bocha or Zhipu key." = "内置搜索（DuckDuckGo，无需密钥）。在中国大陆请使用自带搜索的模型（DeepSeek、GLM），或配置博查 / 智谱密钥。";
 "Built-in search needs no key (DuckDuckGo). It cannot be reached from mainland China without a proxy: there, a DeepSeek or GLM key searches natively, or choose Bocha or Zhipu here." = "内置搜索无需密钥（DuckDuckGo）。中国大陆不开代理时连不上：这种情况下，已配置的 DeepSeek 或 GLM 密钥会直接用模型自带的搜索，也可以在这里选择博查或智谱。";
+"Shared board" = "共享看板";

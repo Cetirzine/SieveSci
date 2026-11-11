@@ -80,7 +80,7 @@ const toolNames: Record<string, string> = {
   todo_write: "To-do", goal: "Goal", task: "Worker agent", dispatch: "Batch agents", skill: "Skill", skill_env: "Skill environment",
   receipt: "Receipt", job_output: "Job output", job_watch: "Watch job", respond_review: "Reply to review",
   verify_citation: "Verify citation", memory: "Memory", session_search: "Search past sessions", skill_manage: "Manage skills",
-  ask_user: "Question for you", brainstorm: "Brainstorm", idea: "Ideas", ideation_seeds: "Idea seeds",
+  ask_user: "Question for you", board: "Shared board", brainstorm: "Brainstorm", idea: "Ideas", ideation_seeds: "Idea seeds",
 };
 
 export function toolTitle(n: string): string {
@@ -141,7 +141,7 @@ export function toolIcon(n: string): string {
     case "job_output": case "job_watch": return "waveform";
     case "chem_lookup": return "atom";
     case "bio_tool_search": return "allergens";
-    case "memory": case "skill_manage": case "session_search": case "skill": case "skill_env": return "brain";
+    case "memory": case "board": case "skill_manage": case "session_search": case "skill": case "skill_env": return "brain";
     default: return n.startsWith("mcp__") ? "puzzlepiece.extension" : "wrench.and.screwdriver";
   }
 }
