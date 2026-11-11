@@ -152,6 +152,7 @@ struct DispatchTool: Tool {
         let header = "<batch label=\"\(label)\">\nInstructions (same for every item):\n\(instructions)\n</batch>\n"
         let results = await runPool(count: items.count, par: par) { i in
             let w = ctx.services.makeSubagent(role: .worker, purpose: "\(label) · item \(i + 1)/\(items.count)")
+            w.postsHandoff = false
             let reply = (try? await w.send(header + "\n<item index=\"\(i + 1)\">\n\(items[i])\n</item>\nReturn the result for this item only.")?.plainText) ?? "(worker failed)"
             return reply
         }
@@ -186,6 +187,7 @@ struct DispatchTool: Tool {
         let prompt = "<analysis>\n\(instructions)\n</analysis>\n\(task)\nWork independently. End with one JSON object: {\"results\": {\"name\": value, ...}, \"conclusion\": \"...\"}"
         let runs = await runPool(count: n, par: par) { i in
             let w = ctx.services.makeSubagent(role: .worker, purpose: "\(label) · independent trajectory \(i + 1)/\(n)")
+            w.postsHandoff = false
             return (try? await w.send(prompt)?.plainText) ?? ""
         }
         var table: [String: [String]] = [:]
@@ -216,6 +218,7 @@ struct DispatchTool: Tool {
         let verdicts = await runPool(count: pairs.count, par: par) { k in
             let (a, b) = pairs[k]
             let w = ctx.services.makeSubagent(role: .worker, purpose: "rank: comparison \(k + 1)/\(pairs.count)")
+            w.postsHandoff = false
             return (try? await w.send(header + "\nA:\n\(items[a])\n\nB:\n\(items[b])")?.plainText) ?? ""
         }
         var outcomes: [(winner: Int, loser: Int)] = []

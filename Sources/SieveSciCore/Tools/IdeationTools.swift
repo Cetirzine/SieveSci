@@ -383,7 +383,8 @@ struct IdeaTool: Tool {
             \(searches.joined(separator: "\n"))
             Check: do the cited results really show this approach working well on comparable problems (read them)? Are better \
             supported alternatives being passed over? Is the test feasible here and could the falsifier occur? Prior work is \
-            expected, not a fault. Use "block" if the support is unfounded, "revise" if more evidence or a sharper test is needed.
+            expected, not a fault. Use "block" if the support is unfounded; "revise" only for a named gap that decides whether this is worth testing (a missing \
+            source for the central support, a test that cannot be run here); otherwise pass and put improvements in the notes.
             """ : """
             Idea \(idea.id) is about to be registered as a hypothesis. Review its novelty check and testability.
             Statement: \(idea.statement)
@@ -396,7 +397,10 @@ struct IdeaTool: Tool {
             \(searches.joined(separator: "\n"))
             Check: do the queries cover synonyms, the mechanism, the method and the organism? Is the closest prior work really \
             different, or is this already published (search yourself)? Is the test feasible and could the falsifier actually occur? \
-            Use "block" if it is already published or the verdict is unsupported, "revise" if more searching or a sharper test is needed.
+            Use "block" if it is already published or the verdict is unsupported; "revise" only for a named gap that decides whether \
+            this is worth testing (a specific search that was not run and could overturn the verdict, a test that cannot be run \
+            here, a falsifier that cannot occur); otherwise pass and put improvements in the notes. The idea becomes a \
+            hypothesis to be tested, not a result: it does not have to be proven before the test.
             """
             // The reviewer judges the idea against what the user asked and chose, not in isolation: one review
             // after another can otherwise narrow an idea until it no longer answers the request.
@@ -404,9 +408,15 @@ struct IdeaTool: Tool {
             let anchored = anchor.isEmpty ? focus : focus + "\n\nThe task this idea must serve:\n" + anchor.joined(separator: "\n")
                 + "\nAlso check: does it still answer this objective and the direction the user chose? Ask for fixes that keep it "
                 + "serving them; if it has drifted away from them, say so as an issue."
-            let review = await s.supervisor.review(kind: "ideation",
+            let outcome = await s.supervisor.reviewOutcome(kind: "ideation",
                                                    signals: [IntegritySignal(kind: .ideation, severity: 2, detail: "idea \(idea.id) → hypothesis (\(fp.prefix(8)))", location: nil)],
-                                                   focus: anchored)
+                                                   focus: anchored, subject: idea.id)
+            var review: String?, passNotes = ""
+            switch outcome {
+            case .message(let m): review = m
+            case .passed(let notes): passNotes = notes.map { "\n" + $0 } ?? ""
+            case .skipped(let why): passNotes = "\n(Registered without a new review: \(why). Say so if you report this hypothesis.)"
+            }
             let verdict = review.map { $0.contains("verdict=\"block\"") ? "block" : $0.contains("verdict=\"unavailable\"") ? "unavailable" : "revise" } ?? "pass"
             led.setReview(id, verdict: verdict, fingerprint: fp)
             if let review {
@@ -422,7 +432,8 @@ struct IdeaTool: Tool {
             changed()
             s.emit(.planChanged(s.research.snapshot))
             s.log("idea", actor: "host", ["event": "promoted", "id": .string(id), "hypothesis": .string(h.id)])
-            return ToolOutput("\(idea.id) passed review and is registered as hypothesis \(h.id). Add plan steps that test it; any finding goes through `claim_finding`.")
+            let how = if case .skipped = outcome { "is registered" } else { "passed review and is registered" }
+            return ToolOutput("\(idea.id) \(how) as hypothesis \(h.id). Add plan steps that test it; any finding goes through `claim_finding`." + passNotes)
         default:
             return .error("Unknown action.")
         }

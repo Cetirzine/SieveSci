@@ -1168,3 +1168,10 @@
 "A turn is running: compact when it ends." = "A turn is running: compact when it ends.";
 "Take back" = "Take back";
 "%@ issues" = "%@ issues";
+"Built in (no key)" = "Built in (no key)";
+"Usage: /%@ <your message>" = "Usage: /%@ <your message>";
+"No board entry %@." = "No board entry %@.";
+"The board is empty: nothing has been recorded in this task yet." = "The board is empty: nothing has been recorded in this task yet.";
+"Works now with the built-in search (DuckDuckGo, no key). In mainland China use a model with its own search (DeepSeek, GLM) or add a Bocha or Zhipu key." = "Works now with the built-in search (DuckDuckGo, no key). In mainland China use a model with its own search (DeepSeek, GLM) or add a Bocha or Zhipu key.";
+"Built-in search (DuckDuckGo, no key). In mainland China use a model with its own search (DeepSeek, GLM) or a Bocha or Zhipu key." = "Built-in search (DuckDuckGo, no key). In mainland China use a model with its own search (DeepSeek, GLM) or a Bocha or Zhipu key.";
+"Built-in search needs no key (DuckDuckGo). It cannot be reached from mainland China without a proxy: there, a DeepSeek or GLM key searches natively, or choose Bocha or Zhipu here." = "Built-in search needs no key (DuckDuckGo). It cannot be reached from mainland China without a proxy: there, a DeepSeek or GLM key searches natively, or choose Bocha or Zhipu here.";

@@ -180,6 +180,9 @@ public final class ToolContext: @unchecked Sendable {
     }
 
     public func checkReadable(_ url: URL) throws {
+        // Nothing is hidden from an agent that is not blind: no path to resolve (this ran once per file
+        // of every search).
+        guard isBlind else { return }
         // Symlinks resolved, so a link the agent plants in its sandbox cannot reach a hidden file.
         let p = Self.real(url.path)
         let hidden = "\(url.lastPathComponent) is hidden from this agent so its check stays independent."

@@ -1168,3 +1168,10 @@
 "A turn is running: compact when it ends." = "Hay un turno en curso: compacta cuando termine.";
 "Take back" = "Retirar";
 "%@ issues" = "%@ problemas";
+"Built in (no key)" = "Integrada (sin clave)";
+"Usage: /%@ <your message>" = "Uso: /%@ <tu mensaje>";
+"No board entry %@." = "No hay entrada %@ en el tablero.";
+"The board is empty: nothing has been recorded in this task yet." = "El tablero está vacío: aún no se ha registrado nada en esta tarea.";
+"Works now with the built-in search (DuckDuckGo, no key). In mainland China use a model with its own search (DeepSeek, GLM) or add a Bocha or Zhipu key." = "Funciona ya con la búsqueda integrada (DuckDuckGo, sin clave). En China continental usa un modelo con búsqueda propia (DeepSeek, GLM) o añade una clave de Bocha o Zhipu.";
+"Built-in search (DuckDuckGo, no key). In mainland China use a model with its own search (DeepSeek, GLM) or a Bocha or Zhipu key." = "Búsqueda integrada (DuckDuckGo, sin clave). En China continental usa un modelo con búsqueda propia (DeepSeek, GLM) o una clave de Bocha o Zhipu.";
+"Built-in search needs no key (DuckDuckGo). It cannot be reached from mainland China without a proxy: there, a DeepSeek or GLM key searches natively, or choose Bocha or Zhipu here." = "La búsqueda integrada no necesita clave (DuckDuckGo). No es accesible desde China continental sin proxy: allí, una clave de DeepSeek o GLM busca de forma nativa, o elige Bocha o Zhipu aquí.";

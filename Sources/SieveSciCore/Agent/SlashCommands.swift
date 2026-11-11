@@ -44,6 +44,13 @@ public enum SlashCommands {
         .init(name: "cache", args: "[short|long]", summary: "Prompt-cache retention for new sessions", group: "Model"),
         // Modes & control
         .init(name: "plan", args: "", summary: "Plan mode: read-only research and planning", group: "Modes"),
+        .init(name: "quick", args: "<request>", summary: "Quick task: done directly and briefly, no plan or review", group: "Modes"),
+        .init(name: "lookup", args: "<topic>", summary: "Look it up: search papers and the web, then answer with sources", group: "Modes"),
+        .init(name: "learn", args: "<topic>", summary: "Learn: explained step by step with an example and questions to check", group: "Modes"),
+        .init(name: "read", args: "<doi|arXiv|url|file>", summary: "Read one paper closely: question, method, results, limits", group: "Modes"),
+        .init(name: "write", args: "<text>", summary: "Polish, translate or shorten your own text without changing its content", group: "Modes"),
+        .init(name: "deep", args: "<question>", summary: "Full research: searches, plan, checkpoints, independent review", group: "Modes"),
+        .init(name: "board", args: "[id]", summary: "The task's shared board: what its agents have established", group: "Research"),
         .init(name: "permissions", args: "[ask|acceptEdits|auto|plan]", summary: "Permission mode and allow rules", group: "Modes"),
         .init(name: "connect", args: "[connector]", summary: "Connect a scientific MCP server (ToolUniverse …)", group: "Extensions"),
         .init(name: "goal", args: "<objective> [--rounds N] | pause | resume | clear | status", summary: "Long-running goal with automatic continuation rounds", group: "Modes"),
@@ -354,6 +361,14 @@ public enum SlashCommands {
             bench.main.truncate(to: target)
             s.log("rewind", actor: "user", ["to_message": .int(target), "files": .array(files.map { .string($0) })])
             return ok(L10n.s("Rewound %@ turn(s). Restored files: %@", String(n), files.isEmpty ? L("none") : files.joined(separator: ", ")))
+        case "quick", "lookup", "learn", "read", "write", "deep":
+            guard !args.isEmpty, let scale = TurnScale.commands[name] else { return ok(L10n.s("Usage: /%@ <your message>", name)) }
+            s.research.forceNextScale(scale)
+            return .prompt(args)
+        case "board":
+            if !args.isEmpty { return ok(s.board.entry(args).map(SharedBoard.render) ?? L10n.s("No board entry %@.", args)) }
+            let idx = s.board.index(limit: 80)
+            return ok(idx.isEmpty ? L("The board is empty: nothing has been recorded in this task yet.") : idx)
         case "brainstorm":
             s.ideas.request(.user)
             return .prompt("Brainstorm" + (args.isEmpty ? " on the current task" : ": \(args)")

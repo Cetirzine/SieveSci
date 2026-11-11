@@ -59,6 +59,14 @@ public final class AgentSession: @unchecked Sendable {
     public var quiet = false
     /// How the card shows this agent's final reply (e.g. a reviewer's JSON verdict in words).
     public var displayResult: ((String) -> String)?
+    /// How long a subagent's turn may take before it is told to answer from what it has. A review that
+    /// keeps looking holds the main agent (and the user) for as long as it looks.
+    public var timeBudget: TimeInterval?
+    private var turnBegan = Date()
+    /// A worker's report goes on the shared board for whoever continues its work (not the many small
+    /// workers of one `dispatch`).
+    public var postsHandoff = true
+    private var turnReceiptMark = 0
 
     public init(id: String = UUID().uuidString, role: AgentRole, services: SessionServices, tools: [Tool],
                 lineageKey: String? = nil, writeRoot: URL? = nil, blindedPaths: [String] = [], readableRoots: [String]? = nil,
@@ -128,12 +136,16 @@ public final class AgentSession: @unchecked Sendable {
         cancelled = role == .main ? false : services.subagents.isStopped
         interventionsThisTurn = 0
         turnRequest = text
+        turnBegan = Date()
+        turnReceiptMark = ownReceipts.value.count
         // How much protocol this message needs; a plan written during the turn turns research back on.
         if role == .main {
             // Within research already under way (a plan exists), a short message ("继续", "ok, option 2") continues
             // that research under its rules; only greetings stay chat.
-            var scale = TurnScale.classify(text)
-            if scale != .chat && scale != .research && !services.research.snapshot.steps.isEmpty { scale = .research }
+            // A mode the user named (`/lookup …`) is theirs to choose; otherwise the host reads the message.
+            var scale = services.research.takeForcedScale() ?? TurnScale.classify(text)
+            // A question, a lesson or an edit stays what it is in the middle of a study; anything else continues the study.
+            if [.quick, .unclear].contains(scale) && !services.research.snapshot.steps.isEmpty { scale = .research }
             services.research.turnScale = scale
             // The first research request becomes the task's fixed objective, in the user's own words: what they
             // typed, without a slash command's name ("/brainstorm X" → "X"), not the prompt it expanded into.
@@ -162,14 +174,21 @@ public final class AgentSession: @unchecked Sendable {
                 hint("plan")
                 userText += "\n\n" + delegated
             } else if services.research.groundingRequired, services.research.snapshot.steps.isEmpty,
-                      HostDelegation.looksMultiPart(text) {
+                      ![.lookup, .learn, .read, .write].contains(services.research.turnScale), HostDelegation.looksMultiPart(text) {
                 userText += "\n\n" + HostDelegation.planFirstNote
             }
         }
         var blocks: [ContentBlock] = attachments
         if role != .main && transcript.isEmpty {
-            let intro = services.roleIntro(role)
+            let intro = services.roleIntro(role, task: text, blind: toolContext.isBlind)
             if !intro.isEmpty { blocks.append(.text(intro)) }
+        }
+        // A new task starts from what earlier tasks in this workspace established, not from nothing.
+        if role == .main && transcript.isEmpty {
+            let earlier = SharedBoard.carryOver(workspace: services.workspace, excluding: services.taskId)
+            if !earlier.isEmpty {
+                blocks.append(.text("<earlier_tasks note=\"What earlier tasks in this workspace recorded on their boards (newest first). Read one with `board` read <task>/<id> before redoing what it covers; treat them as leads to check, not as verified facts.\">\n\(earlier)\n</earlier_tasks>"))
+            }
         }
         blocks.append(.text(userText))
         if role == .main {
@@ -259,6 +278,14 @@ public final class AgentSession: @unchecked Sendable {
 
             let uses = resp.message.toolUses
             if !uses.isEmpty {
+                // Out of time and already told so: the calls are not run, and after two such rounds the turn ends.
+                let late = role != .main && (timeBudget.map { Date().timeIntervalSince(turnBegan) > $0 } ?? false)
+                if late && wrapUps > 0 {
+                    wrapUps += 1
+                    append(Message(role: .user, blocks: uses.map { .toolResult(ToolResult(toolUseId: $0.id, content: "Not run: your time is up. Give your final answer now, from what you have; say what you could not check.", isError: true)) }))
+                    if wrapUps > 2 { break }
+                    continue
+                }
                 var results = await services.vision.adapt(await runTools(uses), modelSupportsImages: services.supportsImages(role))
                 // Job events that arrived meanwhile ride along at the end (append-only: cache-safe).
                 let notes = services.jobs.drain(for: id)
@@ -272,9 +299,20 @@ public final class AgentSession: @unchecked Sendable {
                 }
                 if role == .main, let every = Self.refreshEvery(model), steps % every == 0 {
                     results.append(.text(TurnContext.refresh(services: services, request: turnRequest, steps: steps)))
+                } else if role == .worker, let every = Self.refreshEvery(model), steps % every == 0, steps < maxSteps - 2 {
+                    // A worker drifts in a long loop as the lead agent does, and used to run to its last step
+                    // with the report unwritten: its subtask and what is left of its budget, restated.
+                    let left = maxSteps - steps
+                    results.append(.text("<state_refresh>\nyour subtask: \(turnRequest.truncated(500, marker: "…"))\nsteps used: \(steps) of \(maxSteps)"
+                        + (left <= 24 ? " — \(left) left: finish what is under way, post what a successor needs with `board` (kind handoff), and keep the last steps for the report" : "")
+                        + "\nDo only this subtask; if it has grown beyond it, stop and report what remains.\n</state_refresh>"))
                 }
                 if role != .main && steps >= maxSteps - 2 {
                     results.append(.text("<step_budget>This is your last step: do not call more tools. Give your final answer now, from what you have.</step_budget>"))
+                } else if role != .main, wrapUps == 0, let budget = timeBudget, Date().timeIntervalSince(turnBegan) > budget {
+                    wrapUps = 1
+                    services.log("time_budget", actor: "host", ["agent": .string(id), "seconds": .int(Int(budget)), "steps": .int(steps)])
+                    results.append(.text("<time_budget>Your time for this is up: do not call more tools. Give your final answer now, from what you have, and name what you could not check.</time_budget>"))
                 }
                 append(Message(role: .user, blocks: results))
                 continue
@@ -303,6 +341,7 @@ public final class AgentSession: @unchecked Sendable {
                     continue
                 }
             }
+            commitTurn(resp.message)
             reported = true
             services.emit(.turnFinished(agentId: id, stop: resp.stopReason))
             return last
@@ -311,6 +350,28 @@ public final class AgentSession: @unchecked Sendable {
         services.emit(.turnFinished(agentId: id, stop: cancelled ? .pause : .endTurn))
         return last
     }
+
+    /// What a finished turn leaves on the shared board: a worker's report for whoever continues its work,
+    /// and where the main agent's research stood when it answered (MemT's rule: memory is written at the
+    /// end of a turn, from what the turn settled — not rebuilt later from the whole history).
+    func commitTurn(_ final: Message) {
+        let text = final.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let receipts = Array(ownReceipts.value.dropFirst(turnReceiptMark).suffix(24))
+        let files = Array(Set(receipts.compactMap { services.ledger.receipt($0) }.flatMap { $0.filesWritten.keys })).sorted()
+        switch role {
+        case .worker where postsHandoff && !quiet && text.count > 80:
+            services.board.post(kind: .handoff, title: purpose.isEmpty ? turnRequest.truncated(100, marker: "…") : purpose,
+                                summary: text.truncated(2000, marker: "…"), evidence: receipts, files: files, author: "worker")
+        case .main where [.research, .lookup, .read].contains(services.research.turnScale) && text.count > 600 && !receipts.isEmpty:
+            let ask = (typedText ?? turnRequest).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !ask.isEmpty, !ask.hasPrefix("<") else { return }
+            services.board.post(kind: .handoff, title: "Answered: " + ask.replacingOccurrences(of: "\n", with: " ").truncated(110, marker: "…"),
+                                summary: text.truncated(1600, marker: "…"), evidence: receipts, files: files, author: "main")
+        default: break
+        }
+    }
+
+    private var wrapUps = 0
 
     /// Tool rounds between restatements of the objective in one turn. Every model drifts in long loops
     /// (Arike et al. 2025, "Evaluating Goal Drift in Language Model Agents"; Laban et al. 2025, "LLMs Get
@@ -949,7 +1010,7 @@ public enum TurnContext {
         let open = s.claims.snapshot.filter { $0.status != .verified && $0.status != .refuted }
         if !open.isEmpty { lines.append("open claims: " + open.map { "\($0.id) [\($0.status.rawValue)]" }.joined(separator: ", ")) }
         if let goal = s.goal.current, goal.phase == .active { lines.append("goal: \(goal.objective) (round \(goal.roundsStarted))") }
-        if plan.steps.isEmpty, let scale = s.research.turnScale.contextLine { lines.append(scale) }
+        if plan.steps.isEmpty || s.research.turnScale.isLight, let scale = s.research.turnScale.contextLine { lines.append(scale) }
         // Changing course: the fixed objective, a review the host waits for, and the last lessons (short).
         if let o = plan.objective, !o.isEmpty { lines.append("objective (the user's request; fixed): " + o.truncated(240)) }
         let decided = (plan.decisions ?? []).suffix(ResearchProtocol.decisionsShown)

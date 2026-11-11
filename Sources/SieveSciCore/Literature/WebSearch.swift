@@ -14,13 +14,19 @@ public struct SearchHit: Codable, Sendable, Equatable {
 /// supplies the key for the one they use (SearXNG needs only a URL to a self-hosted instance).
 public enum WebSearchBackend: String, Codable, Sendable, CaseIterable {
     case brave, tavily, exa, googleCSE, searxng
+    /// Built in, no key (DuckDuckGo's page): best effort, and not reachable from mainland China without a proxy.
+    case builtin
+    /// Search APIs that answer from mainland China directly: Bocha, and Zhipu's Web Search (the GLM key).
+    case bocha, zhipu
+    /// Google results through Serper; Jina's search API.
+    case serper, jina
     /// Keyless HTML endpoint; best effort (rate-limited, blocks datacenter IPs). Not for heavy use.
     case duckduckgo
 }
 
 public struct WebSearchConfig: Codable, Sendable, Equatable {
-    public var backend: WebSearchBackend = .brave
-    public var apiKeyRef: String = "BRAVE_API_KEY"
+    public var backend: WebSearchBackend = .builtin
+    public var apiKeyRef: String = ""
     public var searxngURL: String = "http://localhost:8888"
     public var googleCX: String = ""
     /// Domains dropped from results by default: content farms and repost sites that are poor
@@ -48,11 +54,36 @@ public struct WebSearchClient: Sendable {
         return config.excludedDomains.contains { host == $0 || host.hasSuffix("." + $0) }
     }
 
-    /// The backend actually used: a keyed backend without its key falls back to keyless DuckDuckGo,
+    /// The backend actually used: a keyed backend without its key falls back to the built-in search,
     /// so research is not blocked before a search key is set up.
     public var effectiveBackend: WebSearchBackend {
-        let keyed: Set<WebSearchBackend> = [.brave, .tavily, .exa, .googleCSE]
-        return keyed.contains(config.backend) && secrets.secret(for: config.apiKeyRef) == nil ? .duckduckgo : config.backend
+        Self.keyRefs[config.backend] != nil && secrets.secret(for: config.apiKeyRef) == nil ? .builtin : config.backend
+    }
+
+    /// Backends that need a key, with the name the key is stored under.
+    public static let keyRefs: [WebSearchBackend: String] = [.brave: "BRAVE_API_KEY", .tavily: "TAVILY_API_KEY", .exa: "EXA_API_KEY", .googleCSE: "GOOGLE_CSE_KEY",
+                                                              .bocha: "BOCHA_API_KEY", .zhipu: "ZHIPU_API_KEY", .serper: "SERPER_API_KEY", .jina: "JINA_API_KEY"]
+
+    static let browserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+
+    func duckDuckGo(_ q: String, count: Int, timeout: TimeInterval) async throws -> [SearchHit] {
+        var req = URLRequest(url: try Self.url("https://html.duckduckgo.com/html/?q=\(q)&kl=wt-wt"))
+        req.setValue(Self.browserAgent, forHTTPHeaderField: "user-agent")
+        req.timeoutInterval = timeout
+        let (st, d) = try await http.send(req)
+        let html = String(decoding: d, as: UTF8.self)
+        guard st < 300, !html.contains("anomaly") else { throw ProviderError.http(status: st, body: "DuckDuckGo refused the request (rate limit / bot check).") }
+        return Self.parseDuckDuckGo(html).prefix(count).filter { !excluded($0.url) }
+    }
+
+    /// The built-in search: DuckDuckGo's keyless page. Where it cannot be reached (mainland China without a
+    /// proxy), the error says what works there instead of a bare timeout.
+    func builtinSearch(_ query: String, count: Int) async throws -> [SearchHit] {
+        do { return try await duckDuckGo(Self.enc(query), count: count, timeout: 12) } catch {
+            if error is CancellationError || Task.isCancelled { throw error }
+            throw ProviderError.protocolError("The built-in search (DuckDuckGo) could not be reached: \(error.localizedDescription.truncated(160, marker: "…")). "
+                + "In mainland China without a proxy, use a model with its own search (DeepSeek, GLM) or add a Bocha or Zhipu search key in Settings → Web search.")
+        }
     }
 
     /// Query-component encoding: `&`, `=`, `+` and `#` in a query or key must not split the URL.
@@ -98,13 +129,36 @@ public struct WebSearchClient: Sendable {
         case .searxng:
             let base = config.searxngURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             req = URLRequest(url: try Self.url("\(base)/search?q=\(q)&format=json&language=en"))
+        case .bocha:
+            guard let key else { throw ProviderError.missingAPIKey(config.apiKeyRef) }
+            req = URLRequest(url: try Self.url("https://api.bochaai.com/v1/web-search"))
+            req.httpMethod = "POST"
+            req.setValue("Bearer \(key)", forHTTPHeaderField: "authorization")
+            req.setValue("application/json", forHTTPHeaderField: "content-type")
+            req.httpBody = JSONCodec.canonicalData(["query": .string(query), "count": .int(count), "summary": true, "freshness": "noLimit"])
+        case .zhipu:
+            guard let key else { throw ProviderError.missingAPIKey(config.apiKeyRef) }
+            req = URLRequest(url: try Self.url("https://open.bigmodel.cn/api/paas/v4/web_search"))
+            req.httpMethod = "POST"
+            req.setValue("Bearer \(key)", forHTTPHeaderField: "authorization")
+            req.setValue("application/json", forHTTPHeaderField: "content-type")
+            req.httpBody = JSONCodec.canonicalData(["search_engine": "search_std", "search_query": .string(String(query.prefix(70))), "search_intent": false, "count": .int(count)])
+        case .serper:
+            guard let key else { throw ProviderError.missingAPIKey(config.apiKeyRef) }
+            req = URLRequest(url: try Self.url("https://google.serper.dev/search"))
+            req.httpMethod = "POST"
+            req.setValue(key, forHTTPHeaderField: "x-api-key")
+            req.setValue("application/json", forHTTPHeaderField: "content-type")
+            req.httpBody = JSONCodec.canonicalData(["q": .string(query), "num": .int(count)])
+        case .jina:
+            guard let key else { throw ProviderError.missingAPIKey(config.apiKeyRef) }
+            req = URLRequest(url: try Self.url("https://s.jina.ai/?q=\(q)"))
+            req.setValue("Bearer \(key)", forHTTPHeaderField: "authorization")
+            req.setValue("no-content", forHTTPHeaderField: "x-respond-with")
         case .duckduckgo:
-            req = URLRequest(url: try Self.url("https://html.duckduckgo.com/html/?q=\(q)&kl=wt-wt"))
-            req.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", forHTTPHeaderField: "user-agent")
-            let (st, d) = try await http.send(req)
-            let html = String(decoding: d, as: UTF8.self)
-            guard st < 300, !html.contains("anomaly") else { throw ProviderError.http(status: st, body: "DuckDuckGo refused the request (rate limit / bot check). Configure Brave, Tavily, Exa or SearXNG.") }
-            return Self.parseDuckDuckGo(html).prefix(count).filter { !excluded($0.url) }
+            return try await duckDuckGo(q, count: count, timeout: 30)
+        case .builtin:
+            return try await builtinSearch(query, count: count)
         }
         req.setValue("application/json", forHTTPHeaderField: "accept")
         req.timeoutInterval = 30
@@ -135,10 +189,26 @@ public struct WebSearchClient: Sendable {
             hits = (j["results"]?.arrayValue ?? []).map {
                 SearchHit(title: $0.str("title") ?? "", url: $0.str("url") ?? "", snippet: $0.str("content") ?? "", published: $0.str("publishedDate"))
             }
-        case .duckduckgo:
+        case .bocha:
+            hits = ((j["data"] ?? j)["webPages"]?["value"]?.arrayValue ?? []).map {
+                SearchHit(title: $0.str("name") ?? "", url: $0.str("url") ?? "", snippet: $0.str("summary") ?? $0.str("snippet") ?? "", published: $0.str("datePublished") ?? $0.str("dateLastCrawled"))
+            }
+        case .zhipu:
+            hits = (j["search_result"]?.arrayValue ?? []).map {
+                SearchHit(title: $0.str("title") ?? "", url: $0.str("link") ?? $0.str("url") ?? "", snippet: $0.str("content") ?? $0.str("snippet") ?? "", published: $0.str("publish_date"))
+            }
+        case .serper:
+            hits = (j["organic"]?.arrayValue ?? []).map {
+                SearchHit(title: $0.str("title") ?? "", url: $0.str("link") ?? "", snippet: $0.str("snippet") ?? "", published: $0.str("date"))
+            }
+        case .jina:
+            hits = (j["data"]?.arrayValue ?? []).map {
+                SearchHit(title: $0.str("title") ?? "", url: $0.str("url") ?? "", snippet: $0.str("description") ?? $0.str("content") ?? "", published: $0.str("date"))
+            }
+        case .duckduckgo, .builtin:
             hits = []  // handled above (HTML, not JSON)
         }
-        return hits.filter { !excluded($0.url) }
+        return hits.filter { !$0.url.isEmpty && !excluded($0.url) }
     }
 
     static func parseDuckDuckGo(_ html: String) -> [SearchHit] {

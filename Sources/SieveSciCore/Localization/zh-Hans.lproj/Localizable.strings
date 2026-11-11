@@ -1168,3 +1168,10 @@
 "A turn is running: compact when it ends." = "正在运行一轮对话，结束后再压缩。";
 "Take back" = "撤回";
 "%@ issues" = "%@ 个问题";
+"Built in (no key)" = "内置（无需密钥）";
+"Usage: /%@ <your message>" = "用法：/%@ <你的消息>";
+"No board entry %@." = "看板上没有条目 %@。";
+"The board is empty: nothing has been recorded in this task yet." = "看板为空：本任务还没有记录任何内容。";
+"Works now with the built-in search (DuckDuckGo, no key). In mainland China use a model with its own search (DeepSeek, GLM) or add a Bocha or Zhipu key." = "现在可用内置搜索（DuckDuckGo，无需密钥）。在中国大陆请使用自带搜索的模型（DeepSeek、GLM），或添加博查 / 智谱的搜索密钥。";
+"Built-in search (DuckDuckGo, no key). In mainland China use a model with its own search (DeepSeek, GLM) or a Bocha or Zhipu key." = "内置搜索（DuckDuckGo，无需密钥）。在中国大陆请使用自带搜索的模型（DeepSeek、GLM），或配置博查 / 智谱密钥。";
+"Built-in search needs no key (DuckDuckGo). It cannot be reached from mainland China without a proxy: there, a DeepSeek or GLM key searches natively, or choose Bocha or Zhipu here." = "内置搜索无需密钥（DuckDuckGo）。中国大陆不开代理时连不上：这种情况下，已配置的 DeepSeek 或 GLM 密钥会直接用模型自带的搜索，也可以在这里选择博查或智谱。";

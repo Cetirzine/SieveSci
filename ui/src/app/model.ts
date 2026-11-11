@@ -138,7 +138,7 @@ export interface Config {
 
 export const defaultConfig: Config = {
   providers: [], roles: { mode: "auto", custom: {} },
-  webSearch: { backend: "brave", apiKeyRef: "BRAVE_API_KEY", excludedDomains: [], googleCX: "", searxngURL: "http://localhost:8888" },
+  webSearch: { backend: "builtin", apiKeyRef: "", excludedDomains: [], googleCX: "", searxngURL: "http://localhost:8888" },
   permissionMode: "ask", retention: "short", effort: null, contactEmail: "", downloadOAPDFs: true, groundingRequired: true, visionHelper: null,
   recentWorkspaces: [], folderOpen: {}, maxReviewsPerSession: 24, maxDeliberationExchanges: 2, autoDelegate: true, maxParallelWorkers: 3,
   sandboxMode: "workspaceWrite", appearance: "system", autoWake: true, notifyJobs: true, notifyTurnFinished: true, notifyPermission: true,

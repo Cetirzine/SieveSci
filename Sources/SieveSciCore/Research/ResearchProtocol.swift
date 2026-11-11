@@ -170,6 +170,10 @@ public final class ResearchProtocol: @unchecked Sendable {
     /// What the user's current message needs (`TurnScale`): a chat or quick task runs without the
     /// pre-registration gate; a plan written during it switches the protocol back on.
     private var _turnScale: TurnScale = .research
+    private var _forcedScale: TurnScale?
+    /// The mode the user named for their next message (`/lookup`, `/learn` …).
+    public func forceNextScale(_ s: TurnScale) { lock.withLock { _forcedScale = s } }
+    func takeForcedScale() -> TurnScale? { lock.withLock { defer { _forcedScale = nil }; return _forcedScale } }
     public var turnScale: TurnScale {
         get { lock.withLock { _turnScale } }
         set { lock.withLock { _turnScale = newValue } }

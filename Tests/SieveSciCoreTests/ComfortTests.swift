@@ -27,11 +27,11 @@ import Testing
         func secret(for ref: String) -> String? { keys[ref] }
     }
 
-    @Test func keyedBackendWithoutKeyFallsBackToDuckDuckGo() {
+    @Test func keyedBackendWithoutKeyFallsBackToTheBuiltInSearch() {
         var c = WebSearchConfig()
         c.backend = .brave
         c.apiKeyRef = "SIEVESCI_TEST_NO_SUCH_KEY"
-        #expect(WebSearchClient(config: c, secrets: Keys(keys: [:])).effectiveBackend == .duckduckgo)
+        #expect(WebSearchClient(config: c, secrets: Keys(keys: [:])).effectiveBackend == .builtin)
         #expect(WebSearchClient(config: c, secrets: Keys(keys: ["SIEVESCI_TEST_NO_SUCH_KEY": "k"])).effectiveBackend == .brave)
         c.backend = .searxng
         #expect(WebSearchClient(config: c, secrets: Keys(keys: [:])).effectiveBackend == .searxng, "keyless backends are used as configured")
@@ -43,7 +43,7 @@ import Testing
         s.webSearch.config.backend = .brave
         s.webSearch.config.apiKeyRef = "SIEVESCI_TEST_NO_SUCH_KEY"
         let out = try await WebSearchTool().run(["query": "PARP BRCA1"], ctx)
-        #expect(out.text.hasPrefix("(DuckDuckGo, best effort: no key is set for brave)"), "\(out.text)")
+        #expect(out.text.hasPrefix("(built-in search via "), "\(out.text)")
     }
 }
 

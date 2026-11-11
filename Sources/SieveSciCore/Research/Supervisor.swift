@@ -17,6 +17,19 @@ public final class Supervisor: @unchecked Sendable {
     private var reviewCount = 0
     private var receiptMark = 0
     private var passedCheckpoints: [String] = []
+    /// What the last review of a subject (a checkpoint step, an idea) asked for, so its next review checks
+    /// those points instead of starting over.
+    private var earlierIssues: [String: [String]] = [:]
+
+    /// How a requested review ended. A review that did not run is never reported as a pass.
+    public enum Outcome: Sendable {
+        /// Reviewed and passed; `notes` are the reviewer's minor points and its view of the route, if any.
+        case passed(notes: String?)
+        /// Not run: this exact work was reviewed before, or the session's review budget is used up.
+        case skipped(reason: String)
+        /// A verdict other than pass (or none could be obtained): the message for the main agent.
+        case message(String)
+    }
 
     init(services: SessionServices) { self.services = services }
 
@@ -68,7 +81,8 @@ public final class Supervisor: @unchecked Sendable {
 
         // A chat reply (a greeting, "what can you do?") is not research output: nothing to review.
         let scale = services.research.turnScale
-        if scale == .chat { return nil }
+        // Nor is the user's own text handed back polished or translated.
+        if scale == .chat || scale == .write { return nil }
         var signals = NarrativeDetector.scan(text: text, recentReceipts: recent)
         let grounding = Grounding.check(text: text, library: services.library, evidenceCorpus: services.ledger.corpus())
         if !grounding.isClean {
@@ -80,6 +94,11 @@ public final class Supervisor: @unchecked Sendable {
         if services.research.groundingRequired && scale == .research && substantive && !(g.web && g.literature) {
             signals.append(IntegritySignal(kind: .ungrounded, severity: 3,
                                            detail: "substantive answer given before web and literature searches were run", location: nil))
+        }
+        // A lookup is an answer from sources: one without a single search is an answer from memory.
+        if services.research.groundingRequired && (scale == .lookup || scale == .read) && substantive && !(g.web || g.literature) {
+            signals.append(IntegritySignal(kind: .ungrounded, severity: 3,
+                                           detail: "an answer from sources was given without any search or fetch", location: nil))
         }
         // A report that leaves out what did not work: the task has reviews, the reply reads like a report,
         // and none of the reviewed items or a failure is mentioned. Selective reporting is cheating too.
@@ -116,7 +135,8 @@ public final class Supervisor: @unchecked Sendable {
 
         let serious = all.filter { $0.severity >= services.supervisorPolicy.minSeverity && $0.kind != .breakthrough && $0.kind != .checkpoint }
         guard !serious.isEmpty else { return nil }
-        return await review(kind: "integrity", signals: serious, focus: text)
+        if case .message(let m) = await reviewOutcome(kind: "integrity", signals: serious, focus: text) { return m }
+        return nil
     }
 
     // MARK: Reviews
@@ -182,18 +202,39 @@ public final class Supervisor: @unchecked Sendable {
         return VerdictOutcome(reply: e.detail, json: nil, unavailable: note)
     }
 
-    func canReview(_ fingerprint: String) -> Bool {
+    func canReview(_ fingerprint: String) -> Bool { reviewSlot(fingerprint) == nil }
+
+    /// Takes a review slot; nil when the review may run, otherwise why it does not.
+    func reviewSlot(_ fingerprint: String) -> String? {
         lock.lock(); defer { lock.unlock() }
-        guard reviewCount < services.supervisorPolicy.maxReviewsPerSession, !reviewed.contains(fingerprint) else { return false }
+        if reviewed.contains(fingerprint) { return "this exact work was already reviewed" }
+        if reviewCount >= services.supervisorPolicy.maxReviewsPerSession {
+            return "the review budget of this session (\(services.supervisorPolicy.maxReviewsPerSession)) is used up"
+        }
         reviewed.insert(fingerprint)
         reviewCount += 1
-        return true
+        return nil
     }
 
-    /// Dispatches the checker and returns its review as a message for the main agent.
-    public func review(kind: String, signals: [IntegritySignal], focus: String, step: PlanStep? = nil) async -> String? {
-        let fp = (kind + signals.map { $0.kind.rawValue + $0.detail }.sorted().joined() + (step?.id ?? "")).stableHash
-        guard canReview(fp) else { return nil }
+    /// Dispatches the checker and returns its review as a message for the main agent (nil: nothing to act on).
+    public func review(kind: String, signals: [IntegritySignal], focus: String, step: PlanStep? = nil, subject: String? = nil) async -> String? {
+        switch await reviewOutcome(kind: kind, signals: signals, focus: focus, step: step, subject: subject) {
+        case .passed(let notes): return notes
+        case .skipped: return nil
+        case .message(let m): return m
+        }
+    }
+
+    /// Dispatches the checker. `subject` names what is reviewed across rounds (a step id, an idea id).
+    public func reviewOutcome(kind: String, signals: [IntegritySignal], focus: String, step: PlanStep? = nil, subject: String? = nil) async -> Outcome {
+        // A checkpoint marked done again with other evidence or another note is new work to review.
+        let fp = (kind + signals.map { $0.kind.rawValue + $0.detail }.sorted().joined() + (step.map { $0.id + $0.evidence.joined(separator: ",") + $0.note } ?? "")).stableHash
+        if let why = reviewSlot(fp) {
+            services.log("review_skipped", actor: "host", ["kind": .string(kind), "reason": .string(why), "step": .string(step?.id ?? "")])
+            return .skipped(reason: why)
+        }
+        let subjectKey = subject ?? step?.id
+        let earlier: [String] = subjectKey.flatMap { k in lock.withLock { earlierIssues[kind + "/" + k] } } ?? []
         services.emit(.supervisorStarted(kind: kind, reason: signals.map(\.detail).joined(separator: "; ")))
 
         var dossier = "<review_request kind=\"\(kind)\">\n"
@@ -203,11 +244,21 @@ public final class Supervisor: @unchecked Sendable {
         if !signals.isEmpty {
             dossier += "Host-detected signals:\n" + signals.map { "- [\($0.kind.rawValue), sev \($0.severity)] \($0.detail)\($0.location.map { " @ \($0)" } ?? "")" }.joined(separator: "\n") + "\n\n"
         }
+        if !earlier.isEmpty {
+            dossier += "This is a re-review. The previous review asked for:\n" + earlier.map { "- " + $0 }.joined(separator: "\n")
+                + "\nCheck whether each was dealt with and whether the fix broke anything; do not start the review over or raise new minor points.\n\n"
+        }
+        // Where the cited results live, so the reviewer opens them instead of searching the workspace.
+        let cited = (step?.evidence ?? []).compactMap { services.ledger.receipt($0) }
+        let wrote = Array(Set(cited.flatMap { $0.filesWritten.keys })).sorted().prefix(30)
+        if !wrote.isEmpty { dossier += "Files the cited receipts wrote:\n" + wrote.map { "  " + $0 }.joined(separator: "\n") + "\n\n" }
+        let board = services.board.index(limit: 30)
+        if !board.isEmpty { dossier += "Shared board (facts and hand-offs recorded in this task; `board` read <id> for the evidence):\n" + board + "\n\n" }
         dossier += "Research plan:\n\(services.research.snapshot.markdown)\n"
         let receipts = services.ledger.all.suffix(25)
         dossier += "Recent receipts (id · tool · ok · args):\n" + receipts.map { "\($0.id) · \($0.tool) · \($0.success ? "ok" : "FAILED") · \($0.argsSummary.prefix(160))" }.joined(separator: "\n")
         dossier += "\n\nText under review:\n\"\"\"\n\(focus.truncated(12_000))\n\"\"\"\n"
-        dossier += "Use `receipt` to read any receipt's full output, and `read_file`/`grep` for code. Then answer with the JSON verdict.\n</review_request>"
+        dossier += "Open the cited receipts (`receipt`) and the files they wrote first, several in one step; search the workspace only for something specific, with `path` set. Then answer with the JSON verdict.\n</review_request>"
 
         let purpose = step.map { "Review checkpoint \($0.id): \($0.title)" } ?? "Review (\(kind)): " + signals.map(\.detail).joined(separator: "; ").truncated(160)
         let checker = services.makeSubagent(role: .checker, purpose: purpose)
@@ -215,11 +266,11 @@ public final class Supervisor: @unchecked Sendable {
         let outcome = await obtainVerdict(checker, role: .checker, purpose: purpose, prompt: dossier)
         if let unavailable = outcome.unavailable {
             // No review was obtained. Nothing is approved; the main agent must report it as such.
-            return """
+            return .message("""
             <supervisor_review kind="\(kind)" verdict="unavailable">
             \(unavailable)
             </supervisor_review>
-            """
+            """)
         }
         let reply = outcome.reply
         let verdict = outcome.json
@@ -236,17 +287,30 @@ public final class Supervisor: @unchecked Sendable {
         } else if kind == "checkpoint", v == "block" {
             services.research.requestReview(trigger: "the reviewer blocked \(step?.id ?? "the checkpoint")", subject: step?.id ?? "")
         }
-        if v == "pass" {
-            return directionLine.isEmpty ? nil : "<supervisor_review kind=\"\(kind)\" verdict=\"pass\">\n\(directionLine)\n</supervisor_review>"
-        }
         let rawIssues = verdict?["issues"]?.arrayValue ?? []
         let issueTexts = rawIssues.map { "[\($0.str("severity") ?? "?")] \($0.str("what") ?? "") (\($0.str("evidence") ?? ""))" }
         let questions = (verdict?["questions"]?.arrayValue ?? []).compactMap(\.stringValue)
         let actions = (verdict?["required_actions"]?.arrayValue ?? []).compactMap(\.stringValue).map { "- \($0)" }
+        if let k = subjectKey {
+            lock.withLock { earlierIssues[kind + "/" + k] = v == "pass" ? nil : Array((issueTexts + actions).prefix(12)) }
+        }
+        // The outcome goes on the shared board: later workers and reviewers read it there instead of
+        // working it out again.
+        if kind == "checkpoint", let step {
+            services.board.post(kind: .review, title: "Checkpoint \(step.id) reviewed: \(v)", summary: (verdict?.str("notes") ?? issueTexts.prefix(3).joined(separator: "; ")).truncated(600),
+                                evidence: step.evidence, author: "checker")
+        }
+        if v == "pass" {
+            // A pass is a pass: the reviewer's minor points ride along as notes and hold nothing up.
+            var notes: [String] = []
+            if !issueTexts.isEmpty { notes.append("Reviewer's notes (the work passed; none of these blocks it):\n" + issueTexts.prefix(6).map { "- " + $0 }.joined(separator: "\n")) }
+            if !directionLine.isEmpty { notes.append(directionLine) }
+            return .passed(notes: notes.isEmpty ? nil : "<supervisor_review kind=\"\(kind)\" verdict=\"pass\">\n\(notes.joined(separator: "\n"))\n</supervisor_review>")
+        }
         // The checker session stays alive as the other side of a bounded deliberation thread.
         let tid = services.deliberation.open(kind: kind, reviewer: checker, issues: issueTexts + questions.map { "Question: " + $0 })
         let numbered = (issueTexts + questions.map { "Question: " + $0 }).enumerated().map { "\($0.offset + 1). \($0.element)" }
-        return """
+        return .message("""
         <supervisor_review id="\(tid)" kind="\(kind)" verdict="\(v)">
         \(numbered.isEmpty ? reply.truncated(4000) : "Issues:\n" + numbered.joined(separator: "\n"))
         \(actions.isEmpty ? "" : "Required actions:\n" + actions.joined(separator: "\n"))
@@ -254,19 +318,27 @@ public final class Supervisor: @unchecked Sendable {
         \(v == "block" ? "Do not continue the analysis or state conclusions until these are resolved." : "")
         \(services.deliberation.instructions(tid))
         </supervisor_review>
-        """
+        """)
     }
 
     /// Checkpoint review, run synchronously from `update_plan` so its verdict is the tool result.
     public func reviewCheckpoint(_ step: PlanStep) async -> String {
         let text = step.evidence.compactMap { services.ledger.receipt($0).map { "[\($0.id)] \($0.outputExcerpt)" } }.joined(separator: "\n\n")
-        let r = await review(kind: "checkpoint", signals: [IntegritySignal(kind: .checkpoint, severity: 2, detail: "checkpoint \(step.id) reached", location: nil)],
-                             focus: text, step: step)
-        guard let r else { return "Checkpoint \(step.id) passed independent review." }
-        if r.contains("verdict=\"unavailable\"") {
-            return "Checkpoint \(step.id) is NOT reviewed — no independent verdict could be obtained.\n" + r
+        let outcome = await reviewOutcome(kind: "checkpoint", signals: [IntegritySignal(kind: .checkpoint, severity: 2, detail: "checkpoint \(step.id) reached", location: nil)],
+                                          focus: text, step: step)
+        switch outcome {
+        case .passed(let notes):
+            return "Checkpoint \(step.id) passed independent review." + (notes.map { "\n" + $0 } ?? "")
+        case .skipped(let why):
+            // Said as it is: nothing looked at this version of the step.
+            return "Checkpoint \(step.id) was NOT reviewed this time (\(why)). Its last verdict stands; if that was not a pass, "
+                + "report the step as unreviewed and say so in the final answer."
+        case .message(let r):
+            if r.contains("verdict=\"unavailable\"") {
+                return "Checkpoint \(step.id) is NOT reviewed — no independent verdict could be obtained.\n" + r
+            }
+            return r
         }
-        return r
     }
 
     /// Blind verification of a claim: the verifier works in its own sandbox and cannot read files
@@ -326,6 +398,8 @@ public final class Supervisor: @unchecked Sendable {
         services.log("verification", actor: "verifier", ["claim": .string(claim.id), "verdict": .string(verdict), "blinding_enforced": .bool(enforced),
                                                          "report": j ?? .string(reply.truncated(8000)), "receipts": .array(vReceipts.map { .string($0) })])
         services.emit(.supervisorReview(kind: "verification", verdict: verdict, body: reply))
+        services.board.post(kind: .fact, title: "Claim \(claim.id) \(verdict): \(claim.statement.truncated(100))",
+                            summary: (j?.str("reasoning") ?? reply).truncated(600), evidence: vReceipts, author: "verifier")
         calibrate(after: claim, verdict: verdict, reasoning: j?.str("reasoning") ?? "")
         let tid = services.deliberation.open(kind: "verification", reviewer: verifier,
                                              issues: ["Verifier verdict \(verdict): " + (j?.str("reasoning") ?? reply).truncated(600)], claimId: claim.id)

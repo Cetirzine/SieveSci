@@ -57,6 +57,14 @@ public enum ConfiguredModels {
         s.delegation.maxParallel = max(1, c.maxParallelWorkers)
         s.ideas.autoAllowed = c.autoBrainstorm
         if let v = c.visionHelper { s.vision.helper = provider(v, config: c, secrets: secrets) }
+        // The lead model has no search of its own, but another configured provider does (a DeepSeek or GLM
+        // key beside a relay or a CLI agent): its search is used — in mainland China it is the one that answers.
+        if s.nativeSearch == nil {
+            for p in usable(c, secrets: secrets) {
+                let m = p.defaultModel.isEmpty ? (p.models.first ?? "") : p.defaultModel
+                if let n = NativeWebSearch.forProfile(p, model: m, secrets: secrets) { s.nativeSearch = n; break }
+            }
+        }
     }
 
     /// Welcome checklist: which models are ready, in plain words.
@@ -82,8 +90,9 @@ public enum ConfiguredModels {
         }
         let client = WebSearchClient(config: c.webSearch, secrets: secrets)
         switch client.effectiveBackend {
-        case .duckduckgo where c.webSearch.backend != .duckduckgo:
-            return (false, L("Works now with DuckDuckGo (best effort, may be rate-limited). Add a Brave, Tavily or Exa key for reliable results."))
+        case .builtin where c.webSearch.backend != .builtin:
+            return (false, L("Works now with the built-in search (DuckDuckGo, no key). In mainland China use a model with its own search (DeepSeek, GLM) or add a Bocha or Zhipu key."))
+        case .builtin: return (true, L("Built-in search (DuckDuckGo, no key). In mainland China use a model with its own search (DeepSeek, GLM) or a Bocha or Zhipu key."))
         case .duckduckgo: return (true, L("DuckDuckGo (best effort, may be rate-limited)."))
         case .searxng: return (true, L10n.s("SearXNG at %@.", c.webSearch.searxngURL))
         case let b: return (true, L10n.s("%@ search API.", b.rawValue.capitalized))

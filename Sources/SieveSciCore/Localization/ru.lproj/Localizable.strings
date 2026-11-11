@@ -1168,3 +1168,10 @@
 "A turn is running: compact when it ends." = "Идёт ход: сожмите после его завершения.";
 "Take back" = "Отозвать";
 "%@ issues" = "Проблем: %@";
+"Built in (no key)" = "Встроенный (без ключа)";
+"Usage: /%@ <your message>" = "Использование: /%@ <ваше сообщение>";
+"No board entry %@." = "На доске нет записи %@.";
+"The board is empty: nothing has been recorded in this task yet." = "Доска пуста: в этой задаче пока ничего не записано.";
+"Works now with the built-in search (DuckDuckGo, no key). In mainland China use a model with its own search (DeepSeek, GLM) or add a Bocha or Zhipu key." = "Уже работает со встроенным поиском (DuckDuckGo, без ключа). В материковом Китае используйте модель с собственным поиском (DeepSeek, GLM) или добавьте ключ Bocha или Zhipu.";
+"Built-in search (DuckDuckGo, no key). In mainland China use a model with its own search (DeepSeek, GLM) or a Bocha or Zhipu key." = "Встроенный поиск (DuckDuckGo, без ключа). В материковом Китае используйте модель с собственным поиском (DeepSeek, GLM) или ключ Bocha или Zhipu.";
+"Built-in search needs no key (DuckDuckGo). It cannot be reached from mainland China without a proxy: there, a DeepSeek or GLM key searches natively, or choose Bocha or Zhipu here." = "Встроенному поиску не нужен ключ (DuckDuckGo). Из материкового Китая без прокси он недоступен: там ключ DeepSeek или GLM ищет сам, либо выберите здесь Bocha или Zhipu.";

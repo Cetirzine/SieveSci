@@ -122,7 +122,7 @@ func buildServices(_ o: Options, task: String) throws -> (SessionServices, (LLMP
     var search = WebSearchConfig()
     if let b = o.search {
         search.backend = b
-        search.apiKeyRef = ["brave": "BRAVE_API_KEY", "tavily": "TAVILY_API_KEY", "exa": "EXA_API_KEY", "googleCSE": "GOOGLE_CSE_KEY"][b.rawValue] ?? ""
+        search.apiKeyRef = WebSearchClient.keyRefs[b] ?? ""
     }
     search.searxngURL = ProcessInfo.processInfo.environment["SEARXNG_URL"] ?? search.searxngURL
     var worker: (LLMProvider, String)?

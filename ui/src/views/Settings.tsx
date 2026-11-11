@@ -864,7 +864,10 @@ function ModelsSettings() {
 
 // MARK: Web search
 
-const searchKeyRefs: Record<string, string> = { brave: "BRAVE_API_KEY", tavily: "TAVILY_API_KEY", exa: "EXA_API_KEY", googleCSE: "GOOGLE_CSE_KEY" };
+const searchKeyRefs: Record<string, string> = { brave: "BRAVE_API_KEY", tavily: "TAVILY_API_KEY", exa: "EXA_API_KEY", googleCSE: "GOOGLE_CSE_KEY",
+                                                 bocha: "BOCHA_API_KEY", zhipu: "ZHIPU_API_KEY", serper: "SERPER_API_KEY", jina: "JINA_API_KEY" };
+const searchLabels: Record<string, string> = { bocha: "Bocha 博查", zhipu: "Zhipu 智谱 Web Search", serper: "Serper (Google)", jina: "Jina", googleCSE: "Google CSE", searxng: "SearXNG",
+                                               brave: "Brave", tavily: "Tavily", exa: "Exa", duckduckgo: "DuckDuckGo" };
 
 function SearchSettings() {
   const ws = useApp((s) => s.config.webSearch);
@@ -877,7 +880,8 @@ function SearchSettings() {
     <Form>
       <Section label={L("Search engine")}>
         <Picker label={L("Backend")} value={ws.backend} onChange={(b) => set({ backend: b, apiKeyRef: searchKeyRefs[b] ?? "" })}
-                options={["brave", "tavily", "exa", "googleCSE", "searxng", "duckduckgo"].map((b) => ({ value: b, label: b }))} />
+                options={["builtin", "bocha", "zhipu", "brave", "tavily", "exa", "serper", "jina", "googleCSE", "searxng"].map((b) => ({ value: b, label: b === "builtin" ? L("Built in (no key)") : searchLabels[b] ?? b }))} />
+        {ws.backend === "builtin" && <Caption>{L("Built-in search needs no key (DuckDuckGo). It cannot be reached from mainland China without a proxy: there, a DeepSeek or GLM key searches natively, or choose Bocha or Zhipu here.")}</Caption>}
         {ws.apiKeyRef && (
           <div className="lc">
             <span className="hstack">{L("API key")} <Chip text={saved ? L("Saved") : L("Not set")} tint={saved ? "var(--ok)" : "var(--secondary)"} /></span>

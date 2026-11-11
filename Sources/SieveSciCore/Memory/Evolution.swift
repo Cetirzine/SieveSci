@@ -187,6 +187,9 @@ public final class EvolutionGovernor: @unchecked Sendable {
         let reviewer = services.makeSubagent(role: .checker,
                                              purpose: L10n.s("Reviewing what the %@ wants to learn (%@)", L(p.role.rawValue), L(p.target)),
                                              parent: p.role.rawValue)
+        // The proposal and its rubric are in the prompt: a few looks at the cited receipts, then a verdict.
+        reviewer.maxSteps = 5
+        reviewer.timeBudget = 90
         reviewer.displayResult = { reply in
             guard let j = Supervisor.parseJSON(reply) else { return reply }
             let reason = j.str("reason") ?? ""

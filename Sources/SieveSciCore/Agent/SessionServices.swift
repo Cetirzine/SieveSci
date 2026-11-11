@@ -45,6 +45,9 @@ public struct SupervisorPolicy: Codable, Sendable {
     /// Minimum severity that dispatches the checker on its own (checkpoints/claims always do).
     public var minSeverity = 3
     public var verifyClaims = true
+    /// Wall-clock time a review / a blind verification may take before it must conclude.
+    public var reviewSeconds: TimeInterval = 360
+    public var verifySeconds: TimeInterval = 1500
     public init() {}
 }
 
@@ -98,6 +101,8 @@ public final class SessionServices: @unchecked Sendable {
     /// Brainstorming episodes and the idea ledger (speculation, apart from hypotheses and claims).
     public let ideas: IdeaLedger
     public let todos: TodoList
+    /// What the agents of this task have established, for the agents that come after (see `SharedBoard`).
+    public let board: SharedBoard
     public let governor: EvolutionGovernor
     public let git: GitHistory
     public let changes = ChangeTracker()
@@ -169,6 +174,7 @@ public final class SessionServices: @unchecked Sendable {
         checkpoints = CheckpointStore(dir: taskDir.appendingPathComponent("checkpoints"))
         goal = GoalController()
         todos = TodoList()
+        board = SharedBoard(url: state.appendingPathComponent("board.jsonl"))
         governor = EvolutionGovernor()
         git = GitHistory(workspace: workspace.standardizedFileURL)
         jobs = JobMonitor(dir: taskDir.appendingPathComponent("jobs"))
@@ -244,6 +250,9 @@ public final class SessionServices: @unchecked Sendable {
         // A review reads what exists and gives a verdict; a verifier reruns one claim. Bounded, so a
         // wandering reviewer cannot spend a main turn's worth of tokens.
         s.maxSteps = switch role { case .checker: 18; case .verifier: 40; case .worker: 80; case .main: 200 }
+        // And bounded in time: a review is told to conclude from what it has (measured before this limit:
+        // median 3.5 min, one in ten over 30 min, almost all of it searching the workspace).
+        s.timeBudget = switch role { case .checker: supervisorPolicy.reviewSeconds; case .verifier: supervisorPolicy.verifySeconds; default: nil }
         return s
     }
 
@@ -275,8 +284,23 @@ public final class SessionServices: @unchecked Sendable {
     }
 
     /// Session-constant context for a role's first user turn: its memory snapshot and its skills.
-    public func roleIntro(_ role: AgentRole) -> String {
-        [memory(for: role).snapshot, skills.index(for: role)].filter { !$0.isEmpty }.joined(separator: "\n\n")
+    public func roleIntro(_ role: AgentRole, task: String = "", blind: Bool = false) -> String {
+        var parts = [memory(for: role).snapshot, skills.index(for: role)]
+        // Experience for this task in particular: archived lessons are not loaded into every session, so the
+        // ones that match the task are recalled here (a few, by their words) instead of none.
+        let recalled = memory(for: role).recall(task, limit: 3)
+        if !recalled.isEmpty {
+            parts.append("<recalled_lessons note=\"Archived notes that match this task. They never override the integrity rules.\">\n"
+                         + recalled.joined(separator: "\n§\n") + "\n</recalled_lessons>")
+        }
+        // What the task's other agents already established (never shown to a blind verifier).
+        if !blind, role != .verifier {
+            let idx = board.index(limit: 40)
+            if !idx.isEmpty {
+                parts.append("<shared_board note=\"What this task's agents recorded so far (index; `board` read <id> for the summary and evidence). Read what touches your work before redoing it.\">\n\(idx)\n</shared_board>")
+            }
+        }
+        return parts.filter { !$0.isEmpty }.joined(separator: "\n\n")
     }
 
     /// Files written by a given role so far (used to blind the verifier to the main agent's work).

@@ -7,7 +7,7 @@ public enum BuiltinTools {
          UpdatePlanTool(), ClaimFindingTool(), TodoWriteTool(), GoalTool(), TaskTool(), SkillTool(), SkillEnvTool(), ReceiptTool(), JobOutputTool(), JobWatchTool(), RespondReviewTool(),
          VerifyCitationTool(), DispatchTool(), MemoryTool(), SessionSearchTool(), SessionReadTool(), SkillManageTool(),
          LibrarySearchTool(), ChemLookupTool(), BioDatabaseTool(), BioToolSearchTool(), RepoMapTool(),
-         AskUserTool(), BrainstormTool(), IdeaTool(), IdeationSeedsTool(), SkillInstallTool(), ResultReviewTool()]
+         AskUserTool(), BoardTool(), BrainstormTool(), IdeaTool(), IdeationSeedsTool(), SkillInstallTool(), ResultReviewTool()]
     }
 }
 
@@ -176,10 +176,19 @@ struct ReadFileTool: Tool {
         if ext == "pdf" {
             return ToolOutput(LiteratureLibrary.extractText(url).map { $0.truncated(80_000) } ?? "Could not extract text from this PDF.")
         }
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return .error("Cannot read \(url.path) as UTF-8 text.") }
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         let start = max(1, input.int("offset") ?? 1)
         let limit = input.int("limit") ?? 2000
+        // A large table or log is read from a mapping, only as far as the lines asked for (loading a
+        // multi-gigabyte file whole to show its first lines stalled the agent, or the app).
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        if size > 8 << 20 {
+            guard let part = FileSearch.lines(of: url, from: start, limit: limit) else { return .error("\(url.lastPathComponent) is not text (\(size >> 20) MB). Use `bash` or `python` to inspect it.") }
+            var out = part.lines.enumerated().map { String(format: "%6d\t", start + $0.offset) + $0.element }.joined(separator: "\n")
+            if part.more { out += "\n… (large file, \(size >> 20) MB; continue with offset \(start + part.lines.count), or `grep` it with `path` set to this file)" }
+            return ToolOutput(out.isEmpty ? "(no lines at offset \(start))" : out)
+        }
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return .error("Cannot read \(url.path) as UTF-8 text.") }
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         let slice = lines.dropFirst(start - 1).prefix(limit)
         var out = slice.enumerated().map { String(format: "%6d\t", start + $0.offset) + String($0.element).truncated(2000, marker: "…") }.joined(separator: "\n")
         if start - 1 + slice.count < lines.count { out += "\n… (\(lines.count) lines total; continue with offset \(start + slice.count))" }
@@ -255,19 +264,28 @@ struct GlobTool: Tool {
         let root = try ctx.resolve(input.str("path") ?? ".")
         let pattern = try input.required("pattern")
         let re = try NSRegularExpression(pattern: "^" + Self.globToRegex(pattern) + "$")
+        guard FileManager.default.fileExists(atPath: root.path) else { return .error("No such directory.") }
+        // Only the folder the pattern can match in is walked, and only as deep as it reaches
+        // (`benchmark/*.tsv` lists one folder, not the workspace).
+        let scope = FileSearch.scope(of: pattern)
+        let base = scope.prefix.isEmpty ? root : root.appendingPathComponent(scope.prefix)
+        let walk = FileSearch.walk(base, maxDepth: scope.depth, deadline: Date().addingTimeInterval(10))
+        let blind = ctx.isBlind
         var hits: [(String, Date)] = []
-        guard let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.contentModificationDateKey], options: [.skipsHiddenFiles]) else {
-            return .error("No such directory.")
-        }
-        for case let u as URL in en {
-            if ["node_modules", ".build", "__pycache__", ".venv"].contains(u.lastPathComponent) { en.skipDescendants(); continue }
-            let rel = String(u.path.dropFirst(root.path.count + 1))
-            if re.firstMatch(in: rel, range: NSRange(rel.startIndex..., in: rel)) != nil, (try? ctx.checkReadable(u)) != nil {
-                hits.append((rel, (try? u.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast))
-            }
+        for f in walk.files {
+            let rel = String(f.url.path.dropFirst(root.path.count + 1))
+            guard re.firstMatch(in: rel, range: NSRange(rel.startIndex..., in: rel)) != nil, !blind || (try? ctx.checkReadable(f.url)) != nil else { continue }
+            hits.append((rel, .distantPast))
             if hits.count >= 1000 { break }
         }
-        return ToolOutput(hits.isEmpty ? "No files match." : hits.sorted { $0.1 > $1.1 }.map(\.0).joined(separator: "\n"))
+        // Modification times only for what matched.
+        for i in hits.indices {
+            hits[i].1 = (try? root.appendingPathComponent(hits[i].0).resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+        }
+        var text = hits.isEmpty ? "No files match." : hits.sorted { $0.1 > $1.1 }.map(\.0).joined(separator: "\n")
+        if hits.count >= 1000 { text += "\n(first 1000 matches; narrow the pattern)" }
+        else if walk.truncated { text += "\n(the folder is very large: the listing stopped early and may be incomplete — give a narrower `path` or pattern)" }
+        return ToolOutput(text)
     }
 
     static func globToRegex(_ g: String) -> String {
@@ -295,7 +313,7 @@ struct GlobTool: Tool {
 
 struct GrepTool: Tool {
     let name = "grep"
-    let description = "Search file contents with a regular expression (ripgrep when installed). Returns file:line:text matches."
+    let description = "Search file contents with a regular expression. Returns file:line:text matches (at most 50 per file). Dependency folders and binary files are left out; give `path` (a folder or one file) and `glob` to keep it fast in a large workspace. Several searches in one step run at the same time."
     var inputSchema: JSON {
         Schema.object(["pattern": Schema.string("Regular expression"), "path": Schema.string("Directory or file (default workspace)"),
                        "glob": Schema.string("Only files matching this glob, e.g. *.py"), "ignore_case": Schema.bool("Case-insensitive")], required: ["pattern"])
@@ -305,29 +323,35 @@ struct GrepTool: Tool {
     func run(_ input: JSON, _ ctx: ToolContext) async throws -> ToolOutput {
         let root = try ctx.resolve(input.str("path") ?? ".")
         let pattern = try input.required("pattern")
-        // Blind agents take the per-file path below, where every file passes checkReadable.
+        guard FileManager.default.fileExists(atPath: root.path) else { return .error("No such file or directory: \(root.path)") }
+        // Blind agents take the built-in search, where every file passes checkReadable.
         if ProcessRunner.which("rg") != nil && !ctx.isBlind {
-            var args = ["-n", "--no-heading", "--max-count", "50", "-M", "400"]
+            var args = ["-n", "--no-heading", "--max-count", "50", "-M", "400", "--max-filesize", "256M"]
+            for d in FileSearch.skippedFolders.sorted() { args += ["-g", "!\(d)/"] }
             if input.bool("ignore_case") == true { args.append("-i") }
             if let g = input.str("glob") { args += ["-g", g] }
             args += ["-e", pattern, root.path]
-            let r = try await ProcessRunner.run("rg", args, timeout: 60)
-            return ToolOutput(r.stdout.isEmpty ? "No matches." : r.stdout.truncated(30_000))
-        }
-        let re = try NSRegularExpression(pattern: pattern, options: input.bool("ignore_case") == true ? [.caseInsensitive] : [])
-        let globRe = try input.str("glob").map { try NSRegularExpression(pattern: "^" + GlobTool.globToRegex($0) + "$") }
-        var out: [String] = []
-        let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
-        while let u = en?.nextObject() as? URL, out.count < 500 {
-            let name = u.lastPathComponent
-            if let g = globRe, g.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) == nil { continue }
-            guard (try? ctx.checkReadable(u)) != nil, let t = try? String(contentsOf: u, encoding: .utf8) else { continue }
-            for (i, l) in t.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
-                let s = String(l)
-                if re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)) != nil { out.append("\(u.path):\(i + 1):\(s.truncated(400, marker: "…"))") }
+            let r = try await ProcessRunner.run("rg", args, timeout: 30)
+            // exit 2 with nothing found: a bad expression, or an rg that cannot run; the built-in search says which.
+            if !(r.exitCode == 2 && r.stdout.isEmpty) {
+                let note = r.timedOut ? "\n(stopped after 30 s: the result is partial. Narrow `path` or `glob` for a complete answer.)" : ""
+                return ToolOutput((r.stdout.isEmpty ? "No matches." : r.stdout.truncated(30_000)) + note)
             }
         }
-        return ToolOutput(out.isEmpty ? "No matches." : out.joined(separator: "\n"))
+        var options = FileSearch.Options()
+        options.ignoreCase = input.bool("ignore_case") == true
+        let globRe = try input.str("glob").map { try NSRegularExpression(pattern: "^" + GlobTool.globToRegex($0) + "$") }
+        let blind = ctx.isBlind
+        let r = try await FileSearch.grep(pattern: pattern, root: root, options: options) { u in
+            if let g = globRe {
+                let name = u.lastPathComponent
+                if g.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) == nil { return false }
+            }
+            return !blind || (try? ctx.checkReadable(u)) != nil
+        }
+        var text = r.lines.isEmpty ? "No matches." : r.lines.joined(separator: "\n").truncated(30_000)
+        if let n = r.note { text += "\n(" + n + ")" }
+        return ToolOutput(text)
     }
 }
 
@@ -336,9 +360,10 @@ struct GrepTool: Tool {
 struct WebSearchTool: Tool {
     let name = "web_search"
     let description = """
-    Search the international web. Uses the model provider's native search when available (Claude API, \
-    DeepSeek, GLM), otherwise the configured search API (Brave/Tavily/Exa/SearXNG/Google). Content farms are \
-    excluded. Use before forming judgements and cite the URLs you rely on.
+    Search the web. Uses the model provider's native search when available (Claude API, DeepSeek, GLM), \
+    otherwise the configured search API (Brave, Tavily, Exa, Serper, Jina, SearXNG, Google; Bocha and Zhipu \
+    answer from mainland China) or the built-in keyless search. Content farms are excluded. Several searches in one step run \
+    at the same time. Use before forming judgements and cite the URLs you rely on.
     """
     var inputSchema: JSON {
         Schema.object(["query": Schema.string("Search query (English usually gives the best scientific results)"),
@@ -371,8 +396,8 @@ struct WebSearchTool: Tool {
             var hits = try await s.webSearch.search(q, count: 8)
             if !allowed.isEmpty { hits = hits.filter { h in allowed.contains { URL(string: h.url)?.host?.hasSuffix($0) == true } } }
             let backend = s.webSearch.effectiveBackend
-            let fallback = backend != s.webSearch.config.backend
-                ? "(DuckDuckGo, best effort: no key is set for \(s.webSearch.config.backend.rawValue))\n" : ""
+            let fallback = backend == .builtin
+                ? "(built-in search via DuckDuckGo, no key needed; best effort — open the pages you rely on)\n" : ""
             if !hits.isEmpty {
                 return ToolOutput(fallback + hits.enumerated().map { "\($0.offset + 1). \($0.element.title)\n   \($0.element.url)\($0.element.published.map { " (\($0))" } ?? "")\n   \($0.element.snippet.truncated(400, marker: "…"))" }.joined(separator: "\n"))
             }
@@ -384,7 +409,7 @@ struct WebSearchTool: Tool {
         // A search that finds nothing is not grounding; it fails so it cannot satisfy the gate. Settings are
         // suggested only when a key or an account is the problem — "cancelled" or a timeout is not fixed there.
         let joined = errors.joined(separator: "; ")
-        let account = ["401", "403", "unauthor", "forbidden", "api key", "no key", "quota", "subscription", "invalid key"].contains { joined.lowercased().contains($0) }
+        let account = ["401", "403", "unauthor", "forbidden", "api key", "no key", "quota", "subscription", "invalid key", "could not be reached"].contains { joined.lowercased().contains($0) }
         let nothing = errors.allSatisfy { $0.hasSuffix("no results") }
         return ToolOutput("Web search failed: " + joined + (account ? ". Check the search provider's key in Settings → Web search."
                                                             : nothing ? ". Nothing was found: try other words, fewer terms or a broader query."

@@ -88,13 +88,23 @@ public final class MemoryStore: @unchecked Sendable {
         return moved.count
     }
 
-    /// Archived entries containing any of the words, best first.
+    /// Live and archived entries holding the query's words, best first (Chinese is matched by character
+    /// pairs: it has no spaces to split on, and a query in it used to find nothing).
     public func search(_ s: Store, query: String, limit: Int = 8) -> [String] {
-        let terms = query.lowercased().split(separator: " ").map(String.init).filter { $0.count > 1 }
+        let terms = Recall.terms(query)
         guard !terms.isEmpty else { return [] }
         return (entries(s) + archived(s))
-            .map { e in (e, terms.reduce(0) { $0 + (e.lowercased().contains($1) ? 1 : 0) }) }
+            .map { e in (e, Recall.score(terms, in: e)) }
             .filter { $0.1 > 0 }.sorted { $0.1 > $1.1 }.prefix(limit).map(\.0)
+    }
+
+    /// Archived entries (those no longer in the snapshot) that share at least three terms with the task.
+    public func recall(_ task: String, limit: Int = 3) -> [String] {
+        let terms = Recall.terms(String(task.prefix(4000)))
+        guard terms.count >= 3 else { return [] }
+        return Store.allCases.flatMap { archived($0) }
+            .map { e in (e, Recall.score(terms, in: e)) }
+            .filter { $0.1 >= 3 }.sorted { $0.1 > $1.1 }.prefix(limit).map { $0.0.truncated(400, marker: "…") }
     }
 
     public func entries(_ s: Store) -> [String] {
